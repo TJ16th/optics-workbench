@@ -214,6 +214,7 @@ def forward(payload: dict):
         "status": trace.status.tolist(),
         "sensor_y_mm": trace.sensor_y_mm.tolist(),
         "sensor_z_mm": trace.sensor_z_mm.tolist(),
+        "paths": trace.paths,
         "metadata": trace.metadata,
     }
 

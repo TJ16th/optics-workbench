@@ -88,6 +88,15 @@ async function mockEngine(
         status: Array.from({ length: total }, () => 'alive'),
         sensor_y_mm: Array.from({ length: total }, (_, index) => index / 100),
         sensor_z_mm: Array.from({ length: total }, (_, index) => -index / 100),
+        paths: Array.from({ length: total }, (_, index) => {
+          const y = (index % 5 - 2) * 1.5
+          return [
+            { surface_id: 'STOP', point_mm: [0, y, 0], local_point_mm: [0, y, 0] },
+            { surface_id: 'S1', point_mm: [1.5, y, 0], local_point_mm: [0, y, 0] },
+            { surface_id: 'S2', point_mm: [5.5, y * 0.7, 0], local_point_mm: [0, y * 0.7, 0] },
+            { surface_id: 'IMG', point_mm: [103.5, index / 100, -index / 100], local_point_mm: [0, index / 100, -index / 100] },
+          ]
+        }),
         metadata: {
           evaluated_fields: evaluatedFields,
           wavelengths_nm: wavelengths,
@@ -271,6 +280,20 @@ test('layout view draws spherical surfaces as signed curves', async ({ page }) =
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByText('P003 Achromat Doublet 100mm Demo').click()
   await expect(page.locator('#layout-svg path.surface-refractive')).toHaveCount(3)
+})
+
+test('layout view uses trace path polylines when preview returns surface hits', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
+  await page.getByText('P002 N-BK7 Biconvex Singlet 50mm Demo').click()
+  await page.getByRole('button', { name: 'Run Preview' }).click()
+
+  const rayPaths = page.locator('#layout-svg path.ray-line')
+  await expect(rayPaths.first()).toBeVisible()
+  const d = (await rayPaths.first().getAttribute('d')) ?? ''
+  expect(d.split('L')).toHaveLength(4)
+  await expect(page.locator('#layout-svg line.ray-line')).toHaveCount(0)
 })
 
 test('layout view fixture draws even-aspheric sag differently from a sphere', async ({ page }) => {

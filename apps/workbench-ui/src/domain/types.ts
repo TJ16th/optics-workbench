@@ -187,6 +187,15 @@ export type TraceResponse = {
   status: string[]
   sensor_y_mm: number[]
   sensor_z_mm: number[]
+  paths?: Array<
+    Array<{
+      surface_id: string
+      point_mm: [number, number, number] | number[]
+      local_point_mm?: [number, number, number] | number[]
+      direction?: [number, number, number] | number[]
+      status?: string
+    }>
+  >
   metadata: {
     evaluated_fields?: AnalysisField[]
     wavelengths_nm?: number[]

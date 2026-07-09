@@ -612,6 +612,14 @@ function surfaceProfilePath(surface: Surface, vertexX: number, sy: number, h: nu
   return points.join(' ')
 }
 
+function rayPathD(path: NonNullable<TraceResponse['paths']>[number], xScale: (x: number) => number, centerY: number, yScale: number) {
+  const points = path
+    .map((entry) => entry.point_mm)
+    .filter((point) => point.length >= 3 && point.every((value) => Number.isFinite(value)))
+  if (points.length < 2) return null
+  return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${xScale(point[0])} ${centerY - point[1] * yScale}`).join(' ')
+}
+
 function LayoutView({
   system,
   trace,
@@ -633,6 +641,7 @@ function LayoutView({
   const span = Math.max(1, maxX - minX)
   const xScale = (x: number) => 36 + ((x - minX) / span) * 648
   const centerY = 170
+  const rayYScale = 4
   const apertureY = (semiD?: number | string) => {
     const value = typeof semiD === 'number' ? semiD : 8
     return Math.max(20, Math.min(92, value * 4))
@@ -640,6 +649,10 @@ function LayoutView({
   const tracePoints = trace?.sensor_y_mm
     ?.map((y, index) => ({ y, z: trace.sensor_z_mm[index], status: trace.status[index] }))
     .filter((point) => Number.isFinite(point.y) && point.status === 'alive')
+    .slice(0, 80)
+  const tracePaths = trace?.paths
+    ?.map((path, index) => ({ path, status: trace.status[index] }))
+    .filter((item) => item.status === 'alive' && item.path.length >= 2)
     .slice(0, 80)
 
   return (
@@ -683,11 +696,16 @@ function LayoutView({
           </text>
         </g>
       ) : null}
-      {tracePoints?.map((point, index) => {
-        const sensorX = xScale(positions[positions.length - 1]?.x ?? maxX)
-        const py = centerY - Math.max(-80, Math.min(80, point.y * 8))
-        return <line key={index} x1={xScale(positions[0]?.x ?? minX)} y1={centerY + (index % 7 - 3) * 7} x2={sensorX} y2={py} className="ray-line" />
-      })}
+      {tracePaths?.length
+        ? tracePaths.map(({ path }, index) => {
+            const d = rayPathD(path, xScale, centerY, rayYScale)
+            return d ? <path key={index} d={d} className="ray-line" fill="none" /> : null
+          })
+        : tracePoints?.map((point, index) => {
+            const sensorX = xScale(positions[positions.length - 1]?.x ?? maxX)
+            const py = centerY - Math.max(-80, Math.min(80, point.y * 8))
+            return <line key={index} x1={xScale(positions[0]?.x ?? minX)} y1={centerY + (index % 7 - 3) * 7} x2={sensorX} y2={py} className="ray-line" />
+          })}
     </svg>
   )
 }

@@ -73,6 +73,58 @@ def cassegrain_v2_1_system():
     )
 
 
+def p002_singlet_system():
+    return load_system(
+        {
+            "name": "P002 N-BK7 Biconvex Singlet",
+            "wavelengths_nm": {"primary": 587.56, "samples": [587.56]},
+            "materials": [
+                {"id": "AIR", "type": "constant", "n": 1.0},
+                {
+                    "id": "N-BK7",
+                    "type": "sellmeier",
+                    "B": [1.03961212, 0.231792344, 1.01046945],
+                    "C": [0.00600069867, 0.0200179144, 103.560653],
+                },
+            ],
+            "surfaces": [
+                {
+                    "id": "STOP",
+                    "kind": "aperture_stop",
+                    "surface_type": "plane",
+                    "thickness_after_mm": 2.0,
+                    "semi_diameter_mm": 8.0,
+                    "aperture": {"shape": "circle", "semi_diameter_mm": 8.0},
+                },
+                {
+                    "id": "S1",
+                    "kind": "refractive",
+                    "surface_type": "spherical",
+                    "radius_mm": 50.0,
+                    "thickness_after_mm": 5.0,
+                    "material_after": "N-BK7",
+                    "semi_diameter_mm": 15.0,
+                },
+                {
+                    "id": "S2",
+                    "kind": "refractive",
+                    "surface_type": "spherical",
+                    "radius_mm": -50.0,
+                    "thickness_after_mm": 46.5,
+                    "material_after": "AIR",
+                    "semi_diameter_mm": 15.0,
+                },
+                {"id": "IMG", "kind": "sensor", "surface_type": "plane", "sensor": {"width_mm": 36.0, "height_mm": 24.0}},
+            ],
+        }
+    )
+
+
+def path_segment_slopes_y(path):
+    points = [entry["point_mm"] for entry in path]
+    return [(right[1] - left[1]) / (right[0] - left[0]) for left, right in zip(points, points[1:])]
+
+
 def test_health_and_meta_payloads_advertise_v2_3_capabilities_and_enumerations():
     assert health_payload() == {"status": "ok"}
     meta = meta_payload()
@@ -88,6 +140,27 @@ def test_health_and_meta_payloads_advertise_v2_3_capabilities_and_enumerations()
     assert "missing_aperture_stop" in meta["enumerations"]["warning_codes"]
     assert "aiming_failed" in meta["enumerations"]["ray_status_codes"]
     assert "{surface_id}_curvature" in meta["enumerations"]["variable_key_patterns"]
+
+
+def test_trace_paths_include_singlet_surface_hits_and_refraction_slopes():
+    compiled = compile_system(p002_singlet_system())
+    trace = trace_forward(
+        compiled,
+        [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}],
+        {"samples_per_field": 3, "pupil_distribution": "fan_y", "ray_aiming": {"mode": "paraxial"}},
+        [587.56],
+        {"store_path": True},
+    )
+    marginal = trace.paths[2]
+    assert [entry["surface_id"] for entry in marginal] == ["STOP", "S1", "S2", "IMG"]
+    assert [entry["point_mm"][0] for entry in marginal] == pytest.approx([0.0, 2.644149, 6.388831, 53.5], abs=1.0e-6)
+
+    slopes = path_segment_slopes_y(marginal)
+    assert slopes[0] == pytest.approx(0.0, abs=1.0e-12)
+    assert slopes[1] == pytest.approx(-0.05506437, abs=1.0e-6)
+    assert slopes[2] == pytest.approx(-0.16916736, abs=1.0e-6)
+    assert abs(slopes[1]) > abs(slopes[0])
+    assert abs(slopes[2]) > abs(slopes[1])
 
 
 def _runtime_iris_system():
@@ -520,6 +593,22 @@ def test_http_api_v2_1_smoke_with_artifact_fetch():
     artifact = client.get(f"/v1/artifacts/{category}/{artifact_id}")
     assert artifact.status_code == 200
     assert artifact.headers["content-type"].startswith("application/json")
+
+    p002_payload = p002_singlet_system().model_dump(mode="json")
+    p002_id = client.post("/v1/systems/register", json=p002_payload).json()["system_id"]
+    trace = client.post(
+        "/v1/trace/forward",
+        json={
+            "system_id": p002_id,
+            "fields": [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}],
+            "ray_sampling": {"samples_per_field": 3, "pupil_distribution": "fan_y", "ray_aiming": {"mode": "paraxial"}},
+            "wavelengths_nm": [587.56],
+            "options": {"store_path": True},
+        },
+    )
+    assert trace.status_code == 200
+    trace_json = trace.json()
+    assert [entry["surface_id"] for entry in trace_json["paths"][2]] == ["STOP", "S1", "S2", "IMG"]
 
     material = client.post(
         "/v1/materials/refractive-index",
