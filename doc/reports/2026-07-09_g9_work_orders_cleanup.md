@@ -58,7 +58,7 @@ done/
 
 ```text
 codex_github_publication_work_order.md
-codex_performance_work_order.md
+codex_p0-7_performance_work_order.md
 ```
 
 `doc/work_orders/done/` にはG6/G7/G8/G8-push/G9の完了済み指示書を集約した。

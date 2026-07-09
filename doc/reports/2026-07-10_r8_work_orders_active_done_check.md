@@ -15,7 +15,7 @@
 
 - 対応する `doc/reports/` の完了報告が存在するものは `done/` へ移動した。
 - 大きい統合指示書は、配下タスクの完了報告と対応コミットが揃っている場合のみ `done/` へ移動した。
-- `codex_performance_work_order.md` は、性能改善タスク0-7の本体が未完であり、既存レポートでも今後作業として参照されているため `active/` に残した。
+- `codex_p0-7_performance_work_order.md` は、性能改善タスク0-7の本体が未完であり、既存レポートでも今後作業として参照されているため `active/` に残した。
 
 ## done へ移動した指示書
 
@@ -45,7 +45,7 @@
 
 | 指示書 | 理由 |
 |---|---|
-| `codex_performance_work_order.md` | 性能改善タスク0-7の本体が未完。`issues_backlog.md` や過去レポートでも今後作業として参照されている。 |
+| `codex_p0-7_performance_work_order.md` | 性能改善タスク0-7の本体が未完。`issues_backlog.md` や過去レポートでも今後作業として参照されている。 |
 
 ## AGENTS.md 確認
 
@@ -59,6 +59,6 @@ AGENTS.md には既に以下の趣旨のルールが存在したため、追加�
 
 ## 最終状態
 
-- `active/` には未完了の `codex_performance_work_order.md` のみが残る想定。
+- `active/` には未完了の `codex_p0-7_performance_work_order.md` のみが残る想定。
 - `done/` には完了済み指示書を集約済み。
 - 本作業はドキュメント整理のみであり、エンジン/API/UIの実行コード変更はない。

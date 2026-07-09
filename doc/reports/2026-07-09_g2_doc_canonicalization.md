@@ -18,7 +18,7 @@ G2 from `doc/work_orders/active/codex_github_publication_work_order.md` reorgani
 | Status | File | Rationale |
 | --- | --- | --- |
 | active | `doc/work_orders/active/codex_github_publication_work_order.md` | G1 complete; G2-G5 remain in this publication sequence. |
-| active | `doc/work_orders/active/codex_performance_work_order.md` | Performance follow-up work remains actionable. |
+| active | `doc/work_orders/active/codex_p0-7_performance_work_order.md` | Performance follow-up work remains actionable. |
 | done | `doc/work_orders/done/codex_engine_api_addendum_work_order.md` | A0-A3 are completed and reported in `doc/reports/engine_api_addendum_a0_a3_report.md`. |
 | done | `doc/work_orders/done/codex_ui_i18n_work_order.md` | U1-U5 are completed and reported in `doc/reports/implementation_status_v2_3_ui_i18n.md`. |
 | done | `doc/work_orders/done/codex_ui_phase2_work_order.md` | P2-0 through P2-5 are completed and reported in `doc/reports/ui_phase2_acceptance_report.md`. |
@@ -60,7 +60,7 @@ doc/
   work_orders/
     active/
       codex_github_publication_work_order.md
-      codex_performance_work_order.md
+      codex_p0-7_performance_work_order.md
     done/
       codex_engine_api_addendum_work_order.md
       codex_ui_i18n_work_order.md

@@ -17,7 +17,7 @@ Only work orders in `doc/work_orders/active/` are actionable. Work orders in `do
 
 | Status | File | Notes |
 | --- | --- | --- |
-| active | `doc/work_orders/active/codex_performance_work_order.md` | Performance and optimization follow-up work. |
+| active | `doc/work_orders/active/codex_p0-7_performance_work_order.md` | Performance and optimization follow-up work. |
 | done | `doc/work_orders/done/codex_engine_api_addendum_work_order.md` | A0-A3 completed; see `doc/reports/engine_api_addendum_a0_a3_report.md`. |
 | done | `doc/work_orders/done/codex_ui_i18n_work_order.md` | U1-U5 completed; see `doc/reports/implementation_status_v2_3_ui_i18n.md`. |
 | done | `doc/work_orders/done/codex_ui_phase2_work_order.md` | P2-0 through P2-5 completed; see `doc/reports/ui_phase2_acceptance_report.md`. |

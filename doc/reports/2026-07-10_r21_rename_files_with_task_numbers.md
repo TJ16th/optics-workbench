@@ -32,7 +32,7 @@
 ## 対象外
 
 - `codex_misc_light_fixes_batch1.md` and `codex_backlog_batch_registration_2.md` were listed in the work order, but no matching files existed in `active/`, `done/`, or `reports/`.
-- `codex_performance_work_order.md` remains in `active/`. No task ledger file was present in this repository, and the current work order did not provide a concrete replacement name for this active performance task. It was therefore left unchanged rather than assigning an inferred number.
+- `codex_p0-7_performance_work_order.md` remains in `active/`. No task ledger file was present in this repository, and the current work order did not provide a concrete replacement name for this active performance task. It was therefore left unchanged rather than assigning an inferred number.
 
 ## 参照更新
 
@@ -43,5 +43,5 @@
 ## 検証
 
 - 旧Q/R対象名が残っていないことを `rg` で確認した。
-- `active/` には未完了の `codex_performance_work_order.md` のみが残る想定。
+- `active/` には未完了の `codex_p0-7_performance_work_order.md` のみが残る想定。
 - 本作業はファイル名・参照・ドキュメント規約のみの変更であり、エンジン/API/UIのコード変更はない。

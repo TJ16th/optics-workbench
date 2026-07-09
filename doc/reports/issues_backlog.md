@@ -4,7 +4,7 @@ G5時点のGitHub Issue草案です。現在の `doc/work_orders/active/` で直
 
 ## Active指示書でカバー済みのためIssue化しない項目
 
-以下は `doc/work_orders/active/codex_performance_work_order.md` で扱うため、このbacklogではIssue化しません。
+以下は `doc/work_orders/active/codex_p0-7_performance_work_order.md` で扱うため、このbacklogではIssue化しません。
 
 - spec-like benchmark履歴化と性能推移レポート
 - Golden Test追加

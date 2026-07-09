@@ -45,7 +45,7 @@ Issue草案:
 
 Issue化しない項目:
 
-- 性能改善・Golden Test・batch kernel・aiming cache・profiling metadata・Numba条件付き対応は `doc/work_orders/active/codex_performance_work_order.md` でカバー済み。
+- 性能改善・Golden Test・batch kernel・aiming cache・profiling metadata・Numba条件付き対応は `doc/work_orders/active/codex_p0-7_performance_work_order.md` でカバー済み。
 - `<REPO_NAME>` / `<COPYRIGHT_HOLDER>`、GitHub repo作成、pushは人間側作業。
 
 ## Push前チェックリスト

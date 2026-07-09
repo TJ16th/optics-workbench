@@ -73,7 +73,7 @@ The following are still intentionally outside the implemented v2.1 build, becaus
 - Diffraction PSF / wavefront FFT.
 - Async jobs / persistent external artifact store.
 - Full material catalog database beyond built-in `N-BK7` / `BK7`.
-- High-performance vectorized/Numba batch kernel work from `doc/codex_performance_work_order.md`.
+- High-performance vectorized/Numba batch kernel work from `doc/work_orders/active/codex_p0-7_performance_work_order.md`.
 
 ## Changed Areas
 
