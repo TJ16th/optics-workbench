@@ -1,0 +1,22 @@
+{
+  "task": "A1",
+  "name": "image_plane_policy best_focus_rms speed budget",
+  "date": "2026-07-09",
+  "system": "thin_lens_100mm_sensor_95mm",
+  "sampling": {
+    "samples_per_field": 9,
+    "pupil_distribution": "grid",
+    "ray_aiming": "paraxial"
+  },
+  "iterations": 100,
+  "fixed_sensor_ms": 0.570,
+  "best_focus_rms_ms": 1.313,
+  "ratio": 2.30,
+  "requirement": "best_focus_rms analysis must complete within 3x fixed_sensor analysis",
+  "status": "pass",
+  "notes": [
+    "The previous implementation retraced rays for each focus evaluation and measured approximately 23.50x.",
+    "A1 now traces once for evaluation_plane searches and projects arrived rays onto shifted evaluation planes.",
+    "focus_group apply_to still retraces because moving an optical group changes the optical path."
+  ]
+}

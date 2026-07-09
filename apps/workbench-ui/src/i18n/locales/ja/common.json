@@ -1,0 +1,77 @@
+{
+  "common": {
+    "app": {
+      "prefix": "Optics",
+      "name": "Workbench",
+      "aria": "Optics Workbench"
+    },
+    "status": {
+      "engine_ok": "engine OK",
+      "engine_offline": "engine offline",
+      "api": "api {{version}}",
+      "unknown": "不明",
+      "not_validated": "未検証",
+      "system_dirty": "system dirty"
+    },
+    "tabs": {
+      "system": "System",
+      "preview": "Preview",
+      "analysis": "Analysis",
+      "compare": "Compare",
+      "debug": "Debug"
+    },
+    "buttons": {
+      "validate": "検証",
+      "register": "登録",
+      "run_preview": "プレビュー実行",
+      "save_snapshot": "Snapshot保存",
+      "details": "詳しく",
+      "close": "閉じる"
+    },
+    "language": {
+      "label": "言語",
+      "ja": "日本語",
+      "en": "English",
+      "pseudo": "Pseudo"
+    },
+    "preset": {
+      "label": "プリセット",
+      "items": {
+        "P001": {
+          "name": "理想薄レンズ 50mm F4",
+          "summary": "近軸、preview、spot、focus policy確認用の薄レンズ基準系。"
+        },
+        "P002": {
+          "name": "N-BK7 両凸単レンズ 50mm デモ",
+          "summary": "基本収差と色収差挙動を見るための単純な球面単レンズ。"
+        },
+        "P005": {
+          "name": "同軸カセグレン望遠鏡デモ",
+          "summary": "EFL約3000mm / F15のv2.1補正済み同軸2ミラー望遠鏡。"
+        },
+        "P003": {
+          "name": "アクロマートダブレット 100mm デモ",
+          "summary": "BK7/F2アクロマートで色収差、ray fan、MTF、歪曲、像面湾曲を確認します。"
+        },
+        "P006": {
+          "name": "ケプラー式afocal望遠鏡デモ",
+          "summary": "終端にeye_referenceを持つafocal望遠鏡。像面ポリシー操作は無効化されます。"
+        }
+      }
+    },
+    "system": {
+      "title": "System",
+      "name": "名称",
+      "type": "Type",
+      "surfaces": "面数",
+      "system_id": "system_id"
+    },
+    "debug": {
+      "request": "Request",
+      "response": "Response"
+    },
+    "empty": {
+      "dash": "-"
+    }
+  }
+}

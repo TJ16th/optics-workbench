@@ -1,0 +1,696 @@
+{
+  "$schema_version": "0.1.0",
+  "language": "ja",
+  "terms": {
+    "radius_mm": {
+      "label": "曲率半径",
+      "en_term": "Radius of Curvature",
+      "short": "面の球面半径。R>0は曲率中心が+X側、R<0は-X側。R=0は平面を意味する。",
+      "long": "本エンジンではradius_mm=0を平面として扱う（一般的なソフトの「∞」に相当）。UIでは平面を「∞」と表示するが、内部値・API送信は0である。最適化では曲率c=1/Rを変数にする方が平面をまたぐ探索で安定する。",
+      "see_also": [
+        "curvature",
+        "conic"
+      ],
+      "lesson_mode": null
+    },
+    "curvature": {
+      "label": "曲率",
+      "en_term": "Curvature",
+      "short": "曲率半径の逆数 c=1/R。c=0は平面。最適化変数として推奨される空間。",
+      "formula": "c = 1 / R",
+      "see_also": [
+        "radius_mm"
+      ],
+      "lesson_mode": null
+    },
+    "conic": {
+      "label": "コーニック定数",
+      "en_term": "Conic Constant",
+      "short": "2次曲面の形状を決める定数k。k=0:球面、k=-1:放物面、k<-1:双曲面、-1<k<0:扁長楕円面。",
+      "see_also": [
+        "asphere_coefficients"
+      ],
+      "lesson_mode": null
+    },
+    "asphere_coefficients": {
+      "label": "非球面係数",
+      "en_term": "Aspheric Coefficients",
+      "short": "偶数次非球面のA4, A6, A8…。ベース円錐面からのずれを多項式で加える。",
+      "long": "非球面は球面収差やコマの補正に強力だが、係数の絶対値が大きいと交点計算の反復が不安定になる。周辺光線がnumerical_errorになる場合は係数や有効径を見直す。",
+      "see_also": [
+        "conic"
+      ],
+      "lesson_mode": null
+    },
+    "thickness_after_mm": {
+      "label": "面後間隔",
+      "en_term": "Thickness After",
+      "short": "この面の頂点から次面頂点までの光路に沿った距離。ミラー反射後の区間は負値で記述する。",
+      "see_also": [
+        "propagation_sign"
+      ],
+      "lesson_mode": null
+    },
+    "material": {
+      "label": "硝材",
+      "en_term": "Material",
+      "short": "この面の後ろの媒質。AIR、カタログ硝材、Sellmeier定義など。",
+      "see_also": [
+        "sellmeier",
+        "abbe_number"
+      ],
+      "lesson_mode": null
+    },
+    "semi_diameter_mm": {
+      "label": "有効半径",
+      "en_term": "Semi-Diameter",
+      "short": "面の有効開口の半径。これを超える光線は遮光される。",
+      "see_also": [
+        "vignetting"
+      ],
+      "lesson_mode": null
+    },
+    "aperture_stop": {
+      "label": "開口絞り",
+      "en_term": "Aperture Stop",
+      "short": "系の光束径を決める絞り。系にちょうど1つ必要で、瞳・F値・ray aimingの基準になる。",
+      "long": "開口絞りの位置は収差バランス（特にコマ・歪曲・倍率色収差）と周辺光量に強く影響する。絞りを動かして各収差図の変化を見るのは良い学習課題である。",
+      "see_also": [
+        "entrance_pupil",
+        "exit_pupil",
+        "f_number"
+      ],
+      "lesson_mode": "aperture_effect"
+    },
+    "annulus": {
+      "label": "円環開口",
+      "en_term": "Annular Aperture",
+      "short": "中央が遮蔽された輪帯状の開口。反射望遠鏡の副鏡遮蔽を表す。",
+      "see_also": [
+        "central_obstruction"
+      ],
+      "lesson_mode": null
+    },
+    "thin_lens": {
+      "label": "理想薄レンズ",
+      "en_term": "Ideal Thin Lens",
+      "short": "厚みゼロで焦点距離だけを持つ理想化レンズ。教育・概略検討用。",
+      "lesson_mode": null
+    },
+    "sensor": {
+      "label": "センサー",
+      "en_term": "Sensor",
+      "short": "像を受ける撮像面。焦点系（focal）の終端要素。",
+      "see_also": [
+        "eye_reference",
+        "evaluation_plane"
+      ],
+      "lesson_mode": null
+    },
+    "eye_reference": {
+      "label": "眼基準面",
+      "en_term": "Eye Reference",
+      "short": "アフォーカル系（双眼鏡・望遠鏡）の終端要素。仮想的な眼の瞳を表し、角度像を評価する。",
+      "see_also": [
+        "exit_pupil",
+        "eye_relief"
+      ],
+      "lesson_mode": null
+    },
+    "mirror": {
+      "label": "ミラー面",
+      "en_term": "Mirror",
+      "short": "反射のみを行う面。反射後は伝播方向が反転し、以降の面間隔は負値で書く。",
+      "see_also": [
+        "propagation_sign",
+        "thickness_after_mm"
+      ],
+      "lesson_mode": null
+    },
+    "propagation_sign": {
+      "label": "伝播方向符号",
+      "en_term": "Propagation Sign",
+      "short": "光線が+X方向(+1)か-X方向(-1)に進んでいるかを示す内部状態。ミラーごとに反転する。",
+      "lesson_mode": null
+    },
+    "field": {
+      "label": "画角（field）",
+      "en_term": "Field",
+      "short": "物体側の方向・位置の指定。無限遠では角度(θy, θz)で表す。",
+      "see_also": [
+        "chief_ray"
+      ],
+      "lesson_mode": null
+    },
+    "chief_ray": {
+      "label": "主光線",
+      "en_term": "Chief Ray",
+      "short": "物点から出て開口絞りの中心を通る光線。像高・歪曲・CRAの基準になる。",
+      "see_also": [
+        "marginal_ray",
+        "ray_aiming"
+      ],
+      "lesson_mode": null
+    },
+    "marginal_ray": {
+      "label": "マージナル光線",
+      "en_term": "Marginal Ray",
+      "short": "軸上物点から絞りの縁を通る光線。F値・球面収差の基準になる。",
+      "see_also": [
+        "chief_ray"
+      ],
+      "lesson_mode": null
+    },
+    "entrance_pupil": {
+      "label": "入射瞳",
+      "en_term": "Entrance Pupil",
+      "short": "物体側から見た開口絞りの像。光がここを通るように見える仮想開口。",
+      "see_also": [
+        "exit_pupil",
+        "aperture_stop"
+      ],
+      "lesson_mode": null
+    },
+    "exit_pupil": {
+      "label": "射出瞳",
+      "en_term": "Exit Pupil",
+      "short": "像側（眼側）から見た開口絞りの像。双眼鏡では眼を置くべき位置と径を決める。",
+      "long": "射出瞳径 = 対物有効径 / 倍率。眼の瞳孔径（明所2〜3mm、暗所5〜7mm）より小さいと像が暗く、大きいと光を捨てる。射出瞳位置（アイレリーフ）とあわせて覗きやすさを決める。",
+      "formula": "D_exit = D_objective / M",
+      "see_also": [
+        "eye_relief",
+        "eye_box"
+      ],
+      "lesson_mode": null
+    },
+    "ray_aiming": {
+      "label": "レイエイミング",
+      "en_term": "Ray Aiming",
+      "short": "光線が開口絞りの狙った位置を正確に通るよう、射出方向を反復探索する処理。広角・偏芯系で必須。",
+      "see_also": [
+        "aiming_failed",
+        "pupil_sampling"
+      ],
+      "lesson_mode": null
+    },
+    "pupil_sampling": {
+      "label": "瞳サンプリング",
+      "en_term": "Pupil Sampling",
+      "short": "光線束を瞳上にどう配置するか。hexapolar（解析用）、gaussian_quadrature（最適化用の少数高精度）など。",
+      "lesson_mode": null
+    },
+    "paraxial": {
+      "label": "近軸",
+      "en_term": "Paraxial",
+      "short": "光軸近傍の1次近似。EFL・瞳・像位置などの基本量はここから定義される。",
+      "see_also": [
+        "effective_focal_length"
+      ],
+      "lesson_mode": null
+    },
+    "effective_focal_length": {
+      "label": "実効焦点距離（EFL）",
+      "en_term": "Effective Focal Length (EFL)",
+      "short": "系全体の焦点距離。画角と像倍率を決める最重要仕様。",
+      "formula": "h = f · tan(θ)",
+      "see_also": [
+        "back_focal_length",
+        "f_number"
+      ],
+      "lesson_mode": null
+    },
+    "back_focal_length": {
+      "label": "バックフォーカス（BFL）",
+      "en_term": "Back Focal Length (BFL)",
+      "short": "最終面から近軸像面までの距離。ミラーレス/一眼レフ設計の重要制約。",
+      "see_also": [
+        "effective_focal_length"
+      ],
+      "lesson_mode": null
+    },
+    "f_number": {
+      "label": "F値",
+      "en_term": "F-Number",
+      "short": "EFL/入射瞳径。小さいほど明るいが収差補正が難しい。",
+      "formula": "F# = f / D_EP",
+      "see_also": [
+        "entrance_pupil"
+      ],
+      "lesson_mode": null
+    },
+    "sellmeier": {
+      "label": "Sellmeier式",
+      "en_term": "Sellmeier Equation",
+      "short": "硝材の屈折率の波長依存（分散）を表す標準式。",
+      "see_also": [
+        "abbe_number"
+      ],
+      "lesson_mode": null
+    },
+    "abbe_number": {
+      "label": "アッベ数（νd）",
+      "en_term": "Abbe Number (Vd)",
+      "short": "分散の小ささを表す指標。大きいほど色収差を出しにくい。クラウン系は高く、フリント系は低い。",
+      "see_also": [
+        "axial_color",
+        "lateral_color"
+      ],
+      "lesson_mode": null
+    },
+    "wavelength_FdC": {
+      "label": "F・d・C線",
+      "en_term": "F, d, C Lines",
+      "short": "標準波長：F線486nm（青）、d線588nm（黄）、C線656nm（赤）。色収差評価の基準。",
+      "lesson_mode": null
+    },
+    "zoom_group": {
+      "label": "ズーム群",
+      "en_term": "Zoom Group",
+      "short": "焦点距離を変えるために光軸方向へ移動するレンズ群。",
+      "lesson_mode": "zoom_motion"
+    },
+    "focus_group": {
+      "label": "フォーカス群",
+      "en_term": "Focus Group",
+      "short": "合焦のために移動するレンズ群。",
+      "lesson_mode": "focus_motion"
+    },
+    "decenter": {
+      "label": "偏芯（シフト）",
+      "en_term": "Decenter (Shift)",
+      "short": "面や群を光軸に垂直（Y/Z）に平行移動させること。手ブレ補正や公差の模擬に使う。",
+      "see_also": [
+        "tilt"
+      ],
+      "lesson_mode": null
+    },
+    "tilt": {
+      "label": "チルト",
+      "en_term": "Tilt",
+      "short": "面や群を回転中心まわりに傾けること。像面の傾き・非対称収差を生む。",
+      "see_also": [
+        "decenter"
+      ],
+      "lesson_mode": null
+    },
+    "afocal": {
+      "label": "アフォーカル系",
+      "en_term": "Afocal System",
+      "short": "平行光を平行光として出す系（双眼鏡・望遠鏡＋接眼）。像は位置でなく角度で評価する。",
+      "see_also": [
+        "eye_reference",
+        "angular_mtf",
+        "diopter"
+      ],
+      "lesson_mode": null
+    },
+    "spot_diagram": {
+      "label": "スポットダイアグラム",
+      "en_term": "Spot Diagram",
+      "short": "1つの物点からの光線群がセンサー上に作る点の分布。収差の直観的な指標。",
+      "long": "点が小さくまとまるほど像はシャープ。形にも情報がある：彗星状ならコマ、方向により伸びが違えば非点収差、波長で位置が違えば色収差。",
+      "see_also": [
+        "rms_spot_radius",
+        "ray_fan"
+      ],
+      "lesson_mode": null
+    },
+    "rms_spot_radius": {
+      "label": "RMSスポット半径",
+      "en_term": "RMS Spot Radius",
+      "short": "スポットの重心からの二乗平均平方根の広がり。小さいほどシャープ。",
+      "formula": "sqrt(mean(r_i^2))",
+      "see_also": [
+        "spot_diagram",
+        "encircled_energy_radius"
+      ],
+      "lesson_mode": null
+    },
+    "encircled_energy_radius": {
+      "label": "包含エネルギー半径",
+      "en_term": "Encircled Energy Radius",
+      "short": "指定割合（例80%）のエネルギーを含む円の半径。",
+      "see_also": [
+        "rms_spot_radius"
+      ],
+      "lesson_mode": null
+    },
+    "ray_fan": {
+      "label": "レイファン",
+      "en_term": "Ray Fan",
+      "short": "瞳座標に対する横収差のプロット。収差の種類を曲線の形から診断できる。",
+      "long": "傾き＝デフォーカス、S字＝球面収差、非対称＝コマ、Y断面とZ断面の差＝非点収差。設計者が最初に見る診断図。",
+      "see_also": [
+        "spot_diagram"
+      ],
+      "lesson_mode": null
+    },
+    "longitudinal_aberration": {
+      "label": "縦収差",
+      "en_term": "Longitudinal Aberration",
+      "short": "瞳高さごとの焦点位置の光軸方向ずれ。球面収差の表示に使う。",
+      "lesson_mode": null
+    },
+    "spherical_aberration": {
+      "label": "球面収差",
+      "en_term": "Spherical Aberration",
+      "short": "瞳の外側を通る光線ほど焦点が手前/奥にずれる収差。絞ると減る。",
+      "lesson_mode": "aperture_effect"
+    },
+    "coma": {
+      "label": "コマ収差",
+      "en_term": "Coma",
+      "short": "軸外の点像が彗星状に流れる収差。絞り位置と対称性に敏感。",
+      "lesson_mode": null
+    },
+    "astigmatism": {
+      "label": "非点収差",
+      "en_term": "Astigmatism",
+      "short": "メリディオナル方向とサジタル方向で焦点位置が異なる収差。M/S像面の差として現れる。",
+      "see_also": [
+        "ms_image_surface",
+        "field_curvature"
+      ],
+      "lesson_mode": null
+    },
+    "field_curvature": {
+      "label": "像面湾曲",
+      "en_term": "Field Curvature",
+      "short": "最良像面が平面でなく湾曲する収差。周辺でピントが外れる。",
+      "see_also": [
+        "astigmatism",
+        "ms_image_surface"
+      ],
+      "lesson_mode": null
+    },
+    "ms_image_surface": {
+      "label": "M/S像面",
+      "en_term": "M/S Image Surfaces",
+      "short": "メリディオナル(M)・サジタル(S)それぞれの最良像面。両者の差が非点収差量。",
+      "see_also": [
+        "astigmatism",
+        "field_curvature"
+      ],
+      "lesson_mode": null
+    },
+    "distortion": {
+      "label": "歪曲収差",
+      "en_term": "Distortion",
+      "short": "像高が理想値 f·tan(θ) からずれる収差。糸巻き型（+）と樽型（−）。像は流れず形だけ変わる。",
+      "formula": "100·(h_actual − h_ideal)/h_ideal",
+      "see_also": [
+        "effective_focal_length"
+      ],
+      "lesson_mode": null
+    },
+    "axial_color": {
+      "label": "軸上色収差",
+      "en_term": "Axial (Longitudinal) Chromatic Aberration",
+      "short": "波長によって焦点位置が光軸方向にずれる色収差。",
+      "see_also": [
+        "lateral_color",
+        "abbe_number"
+      ],
+      "lesson_mode": null
+    },
+    "lateral_color": {
+      "label": "倍率色収差",
+      "en_term": "Lateral Chromatic Aberration",
+      "short": "波長によって像高（倍率）が変わる色収差。画面周辺の色ずれとして見える。",
+      "see_also": [
+        "axial_color"
+      ],
+      "lesson_mode": null
+    },
+    "psf": {
+      "label": "点像分布関数（PSF）",
+      "en_term": "Point Spread Function (PSF)",
+      "short": "点光源が像面上に作る強度分布。初期版は光線密度による幾何PSF（回折を含まない）。",
+      "see_also": [
+        "mtf",
+        "spot_diagram"
+      ],
+      "lesson_mode": null
+    },
+    "mtf": {
+      "label": "MTF",
+      "en_term": "MTF",
+      "short": "空間周波数ごとのコントラスト伝達率。レンズの解像性能の標準指標。",
+      "long": "横軸lp/mm、縦軸0〜1。低周波はコントラスト、高周波は解像感に対応する。幾何MTFは回折を含まないため、高F値・高周波では実際より楽観的になる点に注意。",
+      "see_also": [
+        "psf",
+        "angular_mtf"
+      ],
+      "lesson_mode": null
+    },
+    "relative_illumination": {
+      "label": "周辺光量",
+      "en_term": "Relative Illumination",
+      "short": "中心を100%とした像面周辺の明るさ。ケラレとcos⁴則で低下する。",
+      "see_also": [
+        "vignetting",
+        "cos4_law"
+      ],
+      "lesson_mode": null
+    },
+    "vignetting": {
+      "label": "ケラレ（口径食）",
+      "en_term": "Vignetting",
+      "short": "絞り以外の縁（レンズ径・鏡筒）が周辺光束を遮ること。",
+      "see_also": [
+        "relative_illumination"
+      ],
+      "lesson_mode": null
+    },
+    "cos4_law": {
+      "label": "cos⁴則",
+      "en_term": "Cosine-Fourth Law",
+      "short": "ケラレが無くても斜め入射の幾何だけで周辺光量がcos⁴θに落ちる法則。",
+      "see_also": [
+        "relative_illumination"
+      ],
+      "lesson_mode": null
+    },
+    "chief_ray_angle": {
+      "label": "センサー入射角（CRA）",
+      "en_term": "Chief Ray Angle (CRA)",
+      "short": "主光線がセンサーへ入射する角度。センサーのマイクロレンズ特性との整合に重要。",
+      "lesson_mode": null
+    },
+    "edge_thickness": {
+      "label": "エッジ厚",
+      "en_term": "Edge Thickness",
+      "short": "レンズ周縁での厚み（頂点間隔にsagを加味）。負や極小は製造不能。",
+      "lesson_mode": null
+    },
+    "total_track_length": {
+      "label": "光学全長",
+      "en_term": "Total Track Length",
+      "short": "第1面から像面までの全長。小型化の指標。",
+      "lesson_mode": null
+    },
+    "evaluation_plane": {
+      "label": "評価面",
+      "en_term": "Evaluation Plane",
+      "short": "spot/PSF/MTFを計算する仮想像面。物理センサーとは独立に動かせる。",
+      "see_also": [
+        "best_focus",
+        "image_plane_policy"
+      ],
+      "lesson_mode": null
+    },
+    "best_focus": {
+      "label": "ベストフォーカス",
+      "en_term": "Best Focus",
+      "short": "指定基準（RMS最小・MTF最大等）で最良となる像面位置。",
+      "see_also": [
+        "evaluation_plane"
+      ],
+      "lesson_mode": null
+    },
+    "image_plane_policy": {
+      "label": "像面ポリシー",
+      "en_term": "Image Plane Policy",
+      "short": "評価面の決め方（センサー固定/近軸像面/ベストフォーカス/掃引など）の指定。",
+      "see_also": [
+        "evaluation_plane",
+        "best_focus"
+      ],
+      "lesson_mode": null
+    },
+    "operand": {
+      "label": "オペランド",
+      "en_term": "Operand",
+      "short": "最適化の1評価項目。metric・対象field/波長・目標値(target)・許容幅(tolerance)の組。",
+      "see_also": [
+        "merit",
+        "residual"
+      ],
+      "lesson_mode": null
+    },
+    "residual": {
+      "label": "残差",
+      "en_term": "Residual",
+      "short": "(実測値−目標値)/許容幅。許容幅ぶん外れると残差1。最適化はこの二乗和を最小化する。",
+      "formula": "r = w·(value − target)/tolerance",
+      "see_also": [
+        "operand",
+        "merit"
+      ],
+      "lesson_mode": null
+    },
+    "merit": {
+      "label": "メリット関数",
+      "en_term": "Merit Function",
+      "short": "残差二乗和＋ペナルティ。小さいほど良い設計。",
+      "see_also": [
+        "operand",
+        "residual"
+      ],
+      "lesson_mode": null
+    },
+    "magnification": {
+      "label": "倍率",
+      "en_term": "Magnification",
+      "short": "望遠鏡・双眼鏡の角倍率。対物焦点距離/接眼焦点距離。",
+      "formula": "M = f_obj / f_eye",
+      "see_also": [
+        "exit_pupil"
+      ],
+      "lesson_mode": null
+    },
+    "true_field_of_view": {
+      "label": "実視界",
+      "en_term": "True Field of View",
+      "short": "器械を動かさずに見える物体側の角度範囲。",
+      "see_also": [
+        "apparent_field_of_view"
+      ],
+      "lesson_mode": null
+    },
+    "apparent_field_of_view": {
+      "label": "見かけ視界",
+      "en_term": "Apparent Field of View",
+      "short": "接眼側で観察者が感じる視界の広さ（角度）。",
+      "see_also": [
+        "true_field_of_view"
+      ],
+      "lesson_mode": null
+    },
+    "eye_relief": {
+      "label": "アイレリーフ",
+      "en_term": "Eye Relief",
+      "short": "接眼レンズ最終面から射出瞳までの距離。長いほど眼鏡使用者に優しい。",
+      "see_also": [
+        "exit_pupil",
+        "eye_box"
+      ],
+      "lesson_mode": null
+    },
+    "eye_box": {
+      "label": "アイボックス",
+      "en_term": "Eye Box",
+      "short": "像が欠けずに見える眼位置の許容範囲。狭いとブラックアウトしやすい。",
+      "see_also": [
+        "eye_relief",
+        "blackout"
+      ],
+      "lesson_mode": null
+    },
+    "blackout": {
+      "label": "ブラックアウト",
+      "en_term": "Blackout",
+      "short": "眼位置のずれで視野が部分的・全体的に暗転する現象。",
+      "see_also": [
+        "eye_box"
+      ],
+      "lesson_mode": null
+    },
+    "diopter": {
+      "label": "ディオプター",
+      "en_term": "Diopter",
+      "short": "光束の発散/収束の度合い（1/m）。アフォーカル系の合焦残差の単位。",
+      "see_also": [
+        "afocal"
+      ],
+      "lesson_mode": null
+    },
+    "angular_mtf": {
+      "label": "角度MTF",
+      "en_term": "Angular MTF",
+      "short": "アフォーカル系のMTF。cycles/degree（視野角あたりの縞数）で表す。",
+      "see_also": [
+        "mtf",
+        "afocal"
+      ],
+      "lesson_mode": null
+    },
+    "central_obstruction": {
+      "label": "中央遮蔽",
+      "en_term": "Central Obstruction",
+      "short": "反射望遠鏡で副鏡が光路中央を遮ること。コントラストと光量に影響。",
+      "see_also": [
+        "annulus"
+      ],
+      "lesson_mode": null
+    },
+    "collimation": {
+      "label": "コリメーション（光軸平行度）",
+      "en_term": "Collimation",
+      "short": "双眼鏡の左右光軸の平行度。狂うと像が融合できず疲労や複視を招く。",
+      "lesson_mode": null
+    }
+  },
+  "errors": {
+    "negative_air_gap": {
+      "label": "空気間隔が負",
+      "message": "{surface_ids}間の空気間隔が負になっています（{gap_mm} mm）。",
+      "action": "群位置またはthickness_after_mmを見直してください。"
+    },
+    "group_overlap": {
+      "label": "群の交差",
+      "message": "群{group_ids}の面順序が移動により逆転しています。",
+      "action": "ズーム/フォーカス位置の移動量を見直してください。"
+    },
+    "missing_aperture_stop": {
+      "label": "開口絞り未定義",
+      "message": "系に開口絞り（aperture_stop）がありません。ちょうど1つ必要です。",
+      "action": "いずれかの面をaperture_stopに指定してください。"
+    },
+    "aiming_failed": {
+      "label": "レイエイミング不収束",
+      "message": "{count}本（{ratio}%）の光線でray aimingが収束しませんでした。",
+      "action": "広角・強偏芯の可能性があります。field角や偏芯量を確認してください。該当光線は統計から除外されています。"
+    },
+    "total_internal_reflection": {
+      "label": "全反射",
+      "message": "一部の光線が面で全反射しました。",
+      "action": "入射角が臨界角を超えています。曲率・硝材・field角を確認してください。"
+    },
+    "no_valid_rays": {
+      "label": "有効光線なし",
+      "message": "センサーに到達した光線がありません。",
+      "action": "有効径・絞り径・field角の設定を確認してください。"
+    },
+    "solve_not_converged": {
+      "label": "solve不収束",
+      "message": "像面探索が範囲内で収束しませんでした。範囲端の値を返しています。",
+      "action": "探索範囲(range_mm)を広げるか、系の結像性を確認してください。"
+    },
+    "artifact_expired": {
+      "label": "artifact期限切れ",
+      "message": "要求されたデータは保存期限が切れています。",
+      "action": "解析を再実行してください。保存が必要な結果はSnapshotに埋め込まれます。"
+    },
+    "infeasible": {
+      "label": "実行不能な構成",
+      "message": "この構成は物理的に成立しないため、光線追跡を実行しませんでした。",
+      "action": "violationsの各項目を修正してください。"
+    },
+    "radius_key_deprecated": {
+      "label": "radius変数キーは非推奨",
+      "message": "最適化変数に{key}が使われています。",
+      "action": "平面近傍で不安定になります。curvatureキーの使用を推奨します。"
+    }
+  }
+}

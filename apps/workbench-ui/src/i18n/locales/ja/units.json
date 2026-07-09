@@ -1,0 +1,10 @@
+{
+  "units": {
+    "ms": "ms",
+    "mm": "mm",
+    "um": "µm",
+    "deg": "deg",
+    "lp_per_mm": "lp/mm",
+    "cycles_per_degree": "cycles/degree"
+  }
+}

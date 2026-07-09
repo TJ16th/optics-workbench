@@ -1,0 +1,101 @@
+import math
+
+import pytest
+
+from optics_engine import (
+    analyze_geometric_mtf,
+    analyze_geometric_psf,
+    analyze_relative_illumination,
+    analyze_white_mtf,
+    analyze_white_psf,
+    compile_system,
+    load_system,
+    trace_forward,
+)
+
+
+def phase6_thin_lens(sensor_x=95.0, aperture=5.0):
+    return load_system(
+        {
+            "name": "phase6_thin_lens",
+            "wavelengths_nm": {"primary": 587.56, "samples": [486.13, 587.56, 656.27]},
+            "materials": [{"id": "AIR", "type": "constant", "n": 1.0}],
+            "surfaces": [
+                {
+                    "id": "STOP",
+                    "kind": "aperture_stop",
+                    "aperture": {"shape": "circle", "semi_diameter_mm": aperture},
+                    "thickness_after_mm": 0.0,
+                },
+                {
+                    "id": "TL",
+                    "kind": "thin_lens",
+                    "focal_length_mm": 100.0,
+                    "semi_diameter_mm": aperture,
+                    "thickness_after_mm": sensor_x,
+                },
+                {"id": "IMG", "kind": "sensor", "sensor": {"width_mm": 40.0, "height_mm": 30.0}},
+            ],
+        }
+    )
+
+
+def phase6_trace(sensor_x=95.0):
+    compiled = compile_system(phase6_thin_lens(sensor_x=sensor_x))
+    return compiled, trace_forward(
+        compiled,
+        [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}],
+        {"samples_per_field": 49, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}},
+        [587.56],
+    )
+
+
+def test_geometric_psf_is_normalized_and_encircled_energy_is_monotonic():
+    _, trace = phase6_trace()
+    psf = analyze_geometric_psf(trace, grid_size=16)
+    assert psf.total_energy > 0
+    assert sum(sum(row) for row in psf.grid) == pytest.approx(1.0)
+    energies = [point.energy_fraction for point in psf.encircled_energy]
+    assert energies == sorted(energies)
+    assert energies[-1] == pytest.approx(1.0)
+
+
+def test_geometric_mtf_has_unity_zero_frequency_and_rolls_off_for_blur():
+    _, trace = phase6_trace(sensor_x=90.0)
+    mtf = analyze_geometric_mtf(trace, [0.0, 10.0])
+    assert mtf.points[0].mtf_y == pytest.approx(1.0)
+    assert mtf.points[0].mtf_z == pytest.approx(1.0)
+    assert mtf.points[1].mtf_radial < 1.0
+
+
+def test_relative_illumination_matches_cos4_for_unvignetted_thin_lens():
+    compiled = compile_system(phase6_thin_lens(sensor_x=100.0, aperture=10.0))
+    fields = [
+        {"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0},
+        {"id": "edge", "type": "angular", "theta_y_deg": 10.0, "theta_z_deg": 0.0},
+    ]
+    result = analyze_relative_illumination(
+        compiled,
+        fields,
+        {"samples_per_field": 9, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}},
+        [587.56],
+    )
+    assert result.rows[0].relative_illumination == pytest.approx(1.0)
+    expected = math.cos(math.radians(10.0)) ** 4
+    assert result.rows[1].relative_illumination == pytest.approx(expected, rel=1e-6)
+    assert result.metadata["method"] == "ray_throughput_times_cos4"
+
+
+def test_white_psf_and_white_mtf_normalize_wavelength_weights():
+    compiled = compile_system(phase6_thin_lens(sensor_x=95.0))
+    fields = [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}]
+    sampling = {"samples_per_field": 9, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}}
+    weights = {486.13: 1.0, 587.56: 2.0, 656.27: 1.0}
+
+    white_psf = analyze_white_psf(compiled, fields, sampling, weights)
+    assert sum(white_psf.wavelength_weights.values()) == pytest.approx(1.0)
+    assert white_psf.psf.total_energy > 0
+
+    white_mtf = analyze_white_mtf(compiled, fields, sampling, weights, [0.0, 5.0])
+    assert sum(white_mtf.wavelength_weights.values()) == pytest.approx(1.0)
+    assert white_mtf.mtf.points[0].mtf_radial == pytest.approx(1.0)

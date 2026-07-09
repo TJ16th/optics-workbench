@@ -1,0 +1,77 @@
+{
+  "common": {
+    "app": {
+      "prefix": "Optics",
+      "name": "Workbench",
+      "aria": "Optics Workbench"
+    },
+    "status": {
+      "engine_ok": "engine ok",
+      "engine_offline": "engine offline",
+      "api": "api {{version}}",
+      "unknown": "unknown",
+      "not_validated": "not validated",
+      "system_dirty": "system dirty"
+    },
+    "tabs": {
+      "system": "System",
+      "preview": "Preview",
+      "analysis": "Analysis",
+      "compare": "Compare",
+      "debug": "Debug"
+    },
+    "buttons": {
+      "validate": "Validate",
+      "register": "Register",
+      "run_preview": "Run Preview",
+      "save_snapshot": "Save Snapshot",
+      "details": "Details",
+      "close": "Close"
+    },
+    "language": {
+      "label": "Language",
+      "ja": "Japanese",
+      "en": "English",
+      "pseudo": "Pseudo"
+    },
+    "preset": {
+      "label": "Preset",
+      "items": {
+        "P001": {
+          "name": "Ideal Thin Lens 50mm F4",
+          "summary": "Thin lens baseline for paraxial, preview, spot, and focus policy checks."
+        },
+        "P002": {
+          "name": "N-BK7 Biconvex Singlet 50mm Demo",
+          "summary": "Simple spherical singlet for basic aberration and chromatic behavior."
+        },
+        "P005": {
+          "name": "Coaxial Cassegrain Telescope Demo",
+          "summary": "v2.1 corrected coaxial two-mirror telescope: EFL about 3000mm and F/15."
+        },
+        "P003": {
+          "name": "Achromat Doublet 100mm Demo",
+          "summary": "BK7/F2 achromat for chromatic, ray fan, MTF, distortion, and field curvature views."
+        },
+        "P006": {
+          "name": "Keplerian Afocal Telescope Demo",
+          "summary": "Afocal telescope with an eye_reference terminal plane; image-plane policy controls are intentionally disabled."
+        }
+      }
+    },
+    "system": {
+      "title": "System",
+      "name": "Name",
+      "type": "Type",
+      "surfaces": "Surfaces",
+      "system_id": "system_id"
+    },
+    "debug": {
+      "request": "Request",
+      "response": "Response"
+    },
+    "empty": {
+      "dash": "-"
+    }
+  }
+}

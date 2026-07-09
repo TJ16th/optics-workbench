@@ -1,0 +1,18 @@
+{
+  "surfaceTable": {
+    "columns": {
+      "id": "ID",
+      "kind": "Kind",
+      "surface_type": "Surface",
+      "radius_mm": "曲率半径",
+      "thickness_after_mm": "面後間隔",
+      "material": "硝材",
+      "semi_diameter_mm": "有効半径"
+    },
+    "help": {
+      "id": "エンジンの面識別子。翻訳せず、そのままAPIへ送信する。",
+      "kind": "エンジンの面種別。モデル識別子なので翻訳しない。",
+      "surface_type": "plane、spherical、aspherical_evenなどの面形状識別子。"
+    }
+  }
+}

@@ -1,0 +1,173 @@
+{
+  "$schema_version": "0.1.0",
+  "language": "ja",
+  "terms": {
+    "alive": {
+      "label": "有効",
+      "en_term": "Alive",
+      "short": "追跡後も有効な光線を示すステータス。"
+    },
+    "blocked": {
+      "label": "遮光",
+      "en_term": "Blocked",
+      "short": "絞りまたは有効径で止められた光線を示すステータス。"
+    },
+    "missed": {
+      "label": "未交差",
+      "en_term": "Missed",
+      "short": "必要な面と交差しなかった光線を示すステータス。"
+    },
+    "geometric_mtf": {
+      "label": "幾何MTF",
+      "en_term": "Geometric MTF",
+      "short": "幾何光線のスポットデータから推定するMTF。"
+    },
+    "relative_illumination_loss": {
+      "label": "周辺光量損失",
+      "en_term": "Relative Illumination Loss",
+      "short": "周辺光量低下から導くmerit項。"
+    },
+    "constraint_penalty": {
+      "label": "制約ペナルティ",
+      "en_term": "Constraint Penalty",
+      "short": "光学制約違反時に加えるペナルティ。"
+    },
+    "score": {
+      "label": "スコア",
+      "en_term": "Score",
+      "short": "簡易比較に使うスカラーmerit値。"
+    }
+  },
+  "errors": {
+    "artifact_not_found": {
+      "label": "Artifactが見つからない",
+      "message": "Artifact {category}/{id} が見つからないか期限切れです。",
+      "action": "解析を再実行し、必要ならsnapshotを作り直してください。"
+    },
+    "duplicate_surface_id": {
+      "label": "Surface ID重複",
+      "message": "Surface ID {surface_id} が重複しています。",
+      "action": "各面に一意のIDを割り当ててください。"
+    },
+    "edge_thickness_below_min": {
+      "label": "エッジ厚不足",
+      "message": "エッジ厚が最小条件を下回っています。",
+      "action": "厚みを増やす、有効径を小さくする、または曲率を見直してください。"
+    },
+    "invalid_asphere_surface": {
+      "label": "非球面指定が不正",
+      "message": "{surface_id} は未対応の面種別にaspherical_evenを指定しています。",
+      "action": "aspherical_evenは屈折面またはミラー面だけに使ってください。"
+    },
+    "invalid_group_range": {
+      "label": "Group範囲が不正",
+      "message": "Group {group_id} の面範囲が不正です。",
+      "action": "from_surfaceがto_surfaceより前になるようにしてください。"
+    },
+    "invalid_tilt_range": {
+      "label": "Tilt範囲が不正",
+      "message": "Tilt範囲が不正です。",
+      "action": "tiltのfrom_surfaceがto_surfaceより前になるようにしてください。"
+    },
+    "material_not_found": {
+      "label": "硝材が見つからない",
+      "message": "硝材 {material_id} が見つかりません。",
+      "action": "硝材定義を追加するか、既知の硝材を選択してください。"
+    },
+    "min_air_gap": {
+      "label": "空気間隔が最小値未満",
+      "message": "{surface_ids}間の空気間隔が {gap_mm} mm で、最小値 {min_air_gap_mm} mm を下回っています。",
+      "action": "群位置またはthickness_after_mmを見直してください。"
+    },
+    "mirror_thickness_sign": {
+      "label": "ミラー後間隔の符号不一致",
+      "message": "面 {surface_id} のthickness符号が伝播方向と一致しません。",
+      "action": "ミラー反射後のthickness_after_mmの符号を確認してください。"
+    },
+    "missing_eye_reference": {
+      "label": "Eye reference設定不足",
+      "message": "Eye reference面 {surface_id} にeye設定がありません。",
+      "action": "eye設定を追加するか、面種別を変更してください。"
+    },
+    "missing_focal_length": {
+      "label": "焦点距離不足",
+      "message": "薄レンズ {surface_id} にはfocal_length_mmが必要です。",
+      "action": "focal_length_mmを入力してください。"
+    },
+    "missing_sensor": {
+      "label": "センサー設定不足",
+      "message": "センサー面 {surface_id} にはセンサー寸法が必要です。",
+      "action": "センサー幅と高さを入力してください。"
+    },
+    "missing_terminal_eye_reference": {
+      "label": "終端Eye reference不足",
+      "message": "Afocal系はeye_reference面で終端する必要があります。",
+      "action": "末尾にeye_reference面を追加してください。"
+    },
+    "missing_terminal_sensor": {
+      "label": "終端センサー不足",
+      "message": "Focal系はセンサー面で終端する必要があります。",
+      "action": "末尾にセンサー面を追加してください。"
+    },
+    "multiple_aperture_stops": {
+      "label": "開口絞りが複数",
+      "message": "系に {count} 個の開口絞りがあります。",
+      "action": "aperture_stopは1つだけにしてください。"
+    },
+    "optics_value_error": {
+      "label": "光学値エラー",
+      "message": "{message_en}",
+      "action": "リクエスト条件を見直してください。"
+    },
+    "system_not_found": {
+      "label": "Systemが見つからない",
+      "message": "System {system_id} は不明または期限切れです。",
+      "action": "光学系を再登録してください。"
+    },
+    "unknown_focus_group": {
+      "label": "未知のfocus group",
+      "message": "Focus group {focus_group_id} が不明です。",
+      "action": "定義済みのfocus groupを選択してください。"
+    },
+    "unknown_group": {
+      "label": "未知のgroup",
+      "message": "Group {group_id} が不明です。",
+      "action": "group IDを確認してください。"
+    },
+    "unknown_group_surface": {
+      "label": "未知のgroup面",
+      "message": "Group {group_id} が未知の面 {surface_id} を参照しています。",
+      "action": "groupの面参照を確認してください。"
+    },
+    "unknown_image_plane_policy": {
+      "label": "未知の像面ポリシー",
+      "message": "image_plane_policyが不明です。",
+      "action": "対応しているimage_plane_policy modeを指定してください。"
+    },
+    "image_plane_policy_not_applicable": {
+      "label": "像面ポリシー対象外",
+      "message": "image_plane_policyは{system_type}系には適用できません。",
+      "action": "focal系で評価像面を指定するか、この解析では像面ポリシーを無効にしてください。"
+    },
+    "unknown_material": {
+      "label": "未知の硝材",
+      "message": "硝材が不明です。",
+      "action": "硝材定義を追加するかAIRを使ってください。"
+    },
+    "unknown_tilt_target": {
+      "label": "未知のtilt対象",
+      "message": "Tilt entryが未知の対象を参照しています。",
+      "action": "既知のgroupまたは面範囲を使ってください。"
+    },
+    "unknown_zoom_group": {
+      "label": "未知のzoom group",
+      "message": "Zoom position {zoom_position_id} が未知のgroup {group_id} を参照しています。",
+      "action": "zoomのgroup IDを確認してください。"
+    },
+    "unknown_zoom_position": {
+      "label": "未知のzoom position",
+      "message": "Zoom position {zoom_position_id} が不明です。",
+      "action": "定義済みのzoom positionを選択してください。"
+    }
+  }
+}

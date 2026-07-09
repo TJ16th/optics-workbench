@@ -1,0 +1,696 @@
+{
+  "$schema_version": "0.1.0",
+  "language": "en",
+  "terms": {
+    "radius_mm": {
+      "label": "Radius of Curvature",
+      "en_term": "Radius of Curvature",
+      "short": "Spherical radius of the surface. R>0 puts the center of curvature on the +X side, R<0 on the -X side. R=0 denotes a flat surface.",
+      "long": "This engine treats radius_mm=0 as a flat surface (equivalent to the conventional infinity). The UI displays flats as infinity while storing and sending 0. For optimization, using curvature c=1/R as the variable is more stable when a surface may cross through flat.",
+      "see_also": [
+        "curvature",
+        "conic"
+      ],
+      "lesson_mode": null
+    },
+    "curvature": {
+      "label": "Curvature",
+      "en_term": "Curvature",
+      "short": "Reciprocal of the radius, c=1/R. c=0 is a flat surface and the recommended variable space for optimization.",
+      "formula": "c = 1 / R",
+      "see_also": [
+        "radius_mm"
+      ],
+      "lesson_mode": null
+    },
+    "conic": {
+      "label": "Conic Constant",
+      "en_term": "Conic Constant",
+      "short": "Constant k defining a conic section surface. k=0: sphere, k=-1: paraboloid, k<-1: hyperboloid, -1<k<0: prolate ellipsoid.",
+      "see_also": [
+        "asphere_coefficients"
+      ],
+      "lesson_mode": null
+    },
+    "asphere_coefficients": {
+      "label": "Aspheric Coefficients",
+      "en_term": "Aspheric Coefficients",
+      "short": "Even-order aspheric terms A4, A6, A8… added as polynomial departure from the base conic surface.",
+      "long": "Aspheres are powerful for correcting spherical aberration and coma, but large coefficients can destabilize the iterative intersection solve. If marginal rays fail with numerical_error, review the coefficients and clear aperture.",
+      "see_also": [
+        "conic"
+      ],
+      "lesson_mode": null
+    },
+    "thickness_after_mm": {
+      "label": "Thickness After",
+      "en_term": "Thickness After",
+      "short": "Distance from this surface vertex to the next along the propagation path. Negative after a mirror reflection.",
+      "see_also": [
+        "propagation_sign"
+      ],
+      "lesson_mode": null
+    },
+    "material": {
+      "label": "Material",
+      "en_term": "Material",
+      "short": "Medium following this surface: AIR, a catalog glass, or a Sellmeier definition.",
+      "see_also": [
+        "sellmeier",
+        "abbe_number"
+      ],
+      "lesson_mode": null
+    },
+    "semi_diameter_mm": {
+      "label": "Semi-Diameter",
+      "en_term": "Semi-Diameter",
+      "short": "Radius of the clear aperture. Rays beyond it are blocked.",
+      "see_also": [
+        "vignetting"
+      ],
+      "lesson_mode": null
+    },
+    "aperture_stop": {
+      "label": "Aperture Stop",
+      "en_term": "Aperture Stop",
+      "short": "The stop that limits the axial beam. Exactly one per system; it defines the pupils, F-number, and the ray-aiming target.",
+      "long": "Stop position strongly affects the aberration balance (notably coma, distortion, lateral color) and relative illumination. Moving the stop and watching the aberration plots change is an instructive exercise.",
+      "see_also": [
+        "entrance_pupil",
+        "exit_pupil",
+        "f_number"
+      ],
+      "lesson_mode": "aperture_effect"
+    },
+    "annulus": {
+      "label": "Annular Aperture",
+      "en_term": "Annular Aperture",
+      "short": "Ring-shaped aperture with a central obstruction, used to model a reflector's secondary mirror shadow.",
+      "see_also": [
+        "central_obstruction"
+      ],
+      "lesson_mode": null
+    },
+    "thin_lens": {
+      "label": "Ideal Thin Lens",
+      "en_term": "Ideal Thin Lens",
+      "short": "Zero-thickness idealized lens defined only by its focal length; for teaching and quick studies.",
+      "lesson_mode": null
+    },
+    "sensor": {
+      "label": "Sensor",
+      "en_term": "Sensor",
+      "short": "Image-recording plane; the terminal element of a focal system.",
+      "see_also": [
+        "eye_reference",
+        "evaluation_plane"
+      ],
+      "lesson_mode": null
+    },
+    "eye_reference": {
+      "label": "Eye Reference",
+      "en_term": "Eye Reference",
+      "short": "Terminal element of an afocal system, representing a virtual eye pupil where the angular image is evaluated.",
+      "see_also": [
+        "exit_pupil",
+        "eye_relief"
+      ],
+      "lesson_mode": null
+    },
+    "mirror": {
+      "label": "Mirror",
+      "en_term": "Mirror",
+      "short": "Reflecting surface. Propagation reverses after it; subsequent thicknesses are written negative.",
+      "see_also": [
+        "propagation_sign",
+        "thickness_after_mm"
+      ],
+      "lesson_mode": null
+    },
+    "propagation_sign": {
+      "label": "Propagation Sign",
+      "en_term": "Propagation Sign",
+      "short": "Internal flag telling whether a ray travels toward +X (+1) or -X (-1); flips at each mirror.",
+      "lesson_mode": null
+    },
+    "field": {
+      "label": "Field",
+      "en_term": "Field",
+      "short": "Object-side direction or position; for infinite objects, given as angles (θy, θz).",
+      "see_also": [
+        "chief_ray"
+      ],
+      "lesson_mode": null
+    },
+    "chief_ray": {
+      "label": "Chief Ray",
+      "en_term": "Chief Ray",
+      "short": "Ray from the object point through the center of the aperture stop; reference for image height, distortion, and CRA.",
+      "see_also": [
+        "marginal_ray",
+        "ray_aiming"
+      ],
+      "lesson_mode": null
+    },
+    "marginal_ray": {
+      "label": "Marginal Ray",
+      "en_term": "Marginal Ray",
+      "short": "Ray from the axial object point through the stop edge; sets the F-number and reveals spherical aberration.",
+      "see_also": [
+        "chief_ray"
+      ],
+      "lesson_mode": null
+    },
+    "entrance_pupil": {
+      "label": "Entrance Pupil",
+      "en_term": "Entrance Pupil",
+      "short": "Image of the aperture stop seen from object space; the apparent aperture the light enters.",
+      "see_also": [
+        "exit_pupil",
+        "aperture_stop"
+      ],
+      "lesson_mode": null
+    },
+    "exit_pupil": {
+      "label": "Exit Pupil",
+      "en_term": "Exit Pupil",
+      "short": "Image of the stop seen from the image (eye) side. In binoculars it sets where and how large the eye's pupil should be.",
+      "long": "Exit pupil diameter = objective aperture / magnification. Smaller than the eye's pupil (2-3 mm in daylight, 5-7 mm in the dark) the view dims; larger and light is wasted. Together with eye relief it determines viewing comfort.",
+      "formula": "D_exit = D_objective / M",
+      "see_also": [
+        "eye_relief",
+        "eye_box"
+      ],
+      "lesson_mode": null
+    },
+    "ray_aiming": {
+      "label": "Ray Aiming",
+      "en_term": "Ray Aiming",
+      "short": "Iterative adjustment of launch direction so each ray passes through its intended point on the stop; essential for wide-angle and decentered systems.",
+      "see_also": [
+        "aiming_failed",
+        "pupil_sampling"
+      ],
+      "lesson_mode": null
+    },
+    "pupil_sampling": {
+      "label": "Pupil Sampling",
+      "en_term": "Pupil Sampling",
+      "short": "How the ray bundle is distributed over the pupil: hexapolar for analysis, gaussian_quadrature for accurate few-ray optimization, etc.",
+      "lesson_mode": null
+    },
+    "paraxial": {
+      "label": "Paraxial",
+      "en_term": "Paraxial",
+      "short": "First-order approximation near the axis; EFL, pupils, and image locations are defined from it.",
+      "see_also": [
+        "effective_focal_length"
+      ],
+      "lesson_mode": null
+    },
+    "effective_focal_length": {
+      "label": "Effective Focal Length (EFL)",
+      "en_term": "Effective Focal Length (EFL)",
+      "short": "Focal length of the whole system; the primary spec determining field of view and image scale.",
+      "formula": "h = f · tan(θ)",
+      "see_also": [
+        "back_focal_length",
+        "f_number"
+      ],
+      "lesson_mode": null
+    },
+    "back_focal_length": {
+      "label": "Back Focal Length (BFL)",
+      "en_term": "Back Focal Length (BFL)",
+      "short": "Distance from the last surface to the paraxial image; a key packaging constraint.",
+      "see_also": [
+        "effective_focal_length"
+      ],
+      "lesson_mode": null
+    },
+    "f_number": {
+      "label": "F-Number",
+      "en_term": "F-Number",
+      "short": "EFL divided by entrance pupil diameter. Lower is brighter but harder to correct.",
+      "formula": "F# = f / D_EP",
+      "see_also": [
+        "entrance_pupil"
+      ],
+      "lesson_mode": null
+    },
+    "sellmeier": {
+      "label": "Sellmeier Equation",
+      "en_term": "Sellmeier Equation",
+      "short": "Standard dispersion formula giving a glass's refractive index versus wavelength.",
+      "see_also": [
+        "abbe_number"
+      ],
+      "lesson_mode": null
+    },
+    "abbe_number": {
+      "label": "Abbe Number (Vd)",
+      "en_term": "Abbe Number (Vd)",
+      "short": "Measure of low dispersion; higher means less chromatic spread. Crowns are high, flints low.",
+      "see_also": [
+        "axial_color",
+        "lateral_color"
+      ],
+      "lesson_mode": null
+    },
+    "wavelength_FdC": {
+      "label": "F, d, C Lines",
+      "en_term": "F, d, C Lines",
+      "short": "Standard wavelengths: F 486 nm (blue), d 588 nm (yellow), C 656 nm (red); thereference set for chromatic evaluation.",
+      "lesson_mode": null
+    },
+    "zoom_group": {
+      "label": "Zoom Group",
+      "en_term": "Zoom Group",
+      "short": "Lens group translated along the axis to change focal length.",
+      "lesson_mode": "zoom_motion"
+    },
+    "focus_group": {
+      "label": "Focus Group",
+      "en_term": "Focus Group",
+      "short": "Lens group moved to focus the system.",
+      "lesson_mode": "focus_motion"
+    },
+    "decenter": {
+      "label": "Decenter (Shift)",
+      "en_term": "Decenter (Shift)",
+      "short": "Lateral (Y/Z) displacement of surfaces or groups; models image stabilization and tolerances.",
+      "see_also": [
+        "tilt"
+      ],
+      "lesson_mode": null
+    },
+    "tilt": {
+      "label": "Tilt",
+      "en_term": "Tilt",
+      "short": "Rotation of surfaces or groups about a pivot; introduces image-plane tilt and asymmetric aberrations.",
+      "see_also": [
+        "decenter"
+      ],
+      "lesson_mode": null
+    },
+    "afocal": {
+      "label": "Afocal System",
+      "en_term": "Afocal System",
+      "short": "System taking collimated light to collimated light (binoculars, telescope with eyepiece); evaluated in angle, not position.",
+      "see_also": [
+        "eye_reference",
+        "angular_mtf",
+        "diopter"
+      ],
+      "lesson_mode": null
+    },
+    "spot_diagram": {
+      "label": "Spot Diagram",
+      "en_term": "Spot Diagram",
+      "short": "Pattern of ray intersections on the sensor from a single object point; an intuitive picture of aberrations.",
+      "long": "Tighter clusters mean sharper images. The shape is diagnostic: comet-like flare indicates coma, direction-dependent elongation astigmatism, wavelength-dependent offsets chromatic aberration.",
+      "see_also": [
+        "rms_spot_radius",
+        "ray_fan"
+      ],
+      "lesson_mode": null
+    },
+    "rms_spot_radius": {
+      "label": "RMS Spot Radius",
+      "en_term": "RMS Spot Radius",
+      "short": "Root-mean-square radius of the spot about its centroid; smaller is sharper.",
+      "formula": "sqrt(mean(r_i^2))",
+      "see_also": [
+        "spot_diagram",
+        "encircled_energy_radius"
+      ],
+      "lesson_mode": null
+    },
+    "encircled_energy_radius": {
+      "label": "Encircled Energy Radius",
+      "en_term": "Encircled Energy Radius",
+      "short": "Radius of the circle containing a given fraction (e.g. 80%) of the energy.",
+      "see_also": [
+        "rms_spot_radius"
+      ],
+      "lesson_mode": null
+    },
+    "ray_fan": {
+      "label": "Ray Fan",
+      "en_term": "Ray Fan",
+      "short": "Transverse aberration plotted against pupil coordinate; the curve shape identifies each aberration type.",
+      "long": "Slope means defocus, an S-curve spherical aberration, asymmetry coma, and a difference between the tangential and sagittal fans astigmatism. It is the designer's first diagnostic plot.",
+      "see_also": [
+        "spot_diagram"
+      ],
+      "lesson_mode": null
+    },
+    "longitudinal_aberration": {
+      "label": "Longitudinal Aberration",
+      "en_term": "Longitudinal Aberration",
+      "short": "Axial shift of focus versus pupil height; the classic display of spherical aberration.",
+      "lesson_mode": null
+    },
+    "spherical_aberration": {
+      "label": "Spherical Aberration",
+      "en_term": "Spherical Aberration",
+      "short": "Focus error growing with pupil height; rays through the pupil edge focus at a different depth. Stopping down reduces it.",
+      "lesson_mode": "aperture_effect"
+    },
+    "coma": {
+      "label": "Coma",
+      "en_term": "Coma",
+      "short": "Off-axis aberration smearing point images into comet shapes; sensitive to stop position and symmetry.",
+      "lesson_mode": null
+    },
+    "astigmatism": {
+      "label": "Astigmatism",
+      "en_term": "Astigmatism",
+      "short": "Different focus for tangential and sagittal ray fans, seen as the separation of the M and S image surfaces.",
+      "see_also": [
+        "ms_image_surface",
+        "field_curvature"
+      ],
+      "lesson_mode": null
+    },
+    "field_curvature": {
+      "label": "Field Curvature",
+      "en_term": "Field Curvature",
+      "short": "Curvature of the best-focus surface; the periphery defocuses on a flat sensor.",
+      "see_also": [
+        "astigmatism",
+        "ms_image_surface"
+      ],
+      "lesson_mode": null
+    },
+    "ms_image_surface": {
+      "label": "M/S Image Surfaces",
+      "en_term": "M/S Image Surfaces",
+      "short": "Best-focus surfaces for meridional (M) and sagittal (S) fans; their separation quantifies astigmatism.",
+      "see_also": [
+        "astigmatism",
+        "field_curvature"
+      ],
+      "lesson_mode": null
+    },
+    "distortion": {
+      "label": "Distortion",
+      "en_term": "Distortion",
+      "short": "Departure of image height from the ideal f·tan(θ): pincushion (+) or barrel (−). It warps geometry without blurring.",
+      "formula": "100·(h_actual − h_ideal)/h_ideal",
+      "see_also": [
+        "effective_focal_length"
+      ],
+      "lesson_mode": null
+    },
+    "axial_color": {
+      "label": "Axial (Longitudinal) Chromatic Aberration",
+      "en_term": "Axial (Longitudinal) Chromatic Aberration",
+      "short": "Wavelength-dependent shift of focus along the axis.",
+      "see_also": [
+        "lateral_color",
+        "abbe_number"
+      ],
+      "lesson_mode": null
+    },
+    "lateral_color": {
+      "label": "Lateral Chromatic Aberration",
+      "en_term": "Lateral Chromatic Aberration",
+      "short": "Wavelength-dependent image height (magnification), seen as color fringing toward the field edge.",
+      "see_also": [
+        "axial_color"
+      ],
+      "lesson_mode": null
+    },
+    "psf": {
+      "label": "Point Spread Function (PSF)",
+      "en_term": "Point Spread Function (PSF)",
+      "short": "Intensity pattern a point source forms on the image plane. The initial version is geometric (ray-density based, no diffraction).",
+      "see_also": [
+        "mtf",
+        "spot_diagram"
+      ],
+      "lesson_mode": null
+    },
+    "mtf": {
+      "label": "MTF",
+      "en_term": "MTF",
+      "short": "Contrast transfer versus spatial frequency; the standard measure of resolving performance.",
+      "long": "Frequency in lp/mm, response from 0 to 1. Low frequencies relate to contrast, high frequencies to fine detail. Geometric MTF omits diffraction, so it is optimistic at high F-numbers and high frequencies.",
+      "see_also": [
+        "psf",
+        "angular_mtf"
+      ],
+      "lesson_mode": null
+    },
+    "relative_illumination": {
+      "label": "Relative Illumination",
+      "en_term": "Relative Illumination",
+      "short": "Image brightness versus field, normalized to 100% on axis; falls off via vignetting and the cos⁴ law.",
+      "see_also": [
+        "vignetting",
+        "cos4_law"
+      ],
+      "lesson_mode": null
+    },
+    "vignetting": {
+      "label": "Vignetting",
+      "en_term": "Vignetting",
+      "short": "Blocking of off-axis beams by apertures other than the stop (lens rims, barrel).",
+      "see_also": [
+        "relative_illumination"
+      ],
+      "lesson_mode": null
+    },
+    "cos4_law": {
+      "label": "Cosine-Fourth Law",
+      "en_term": "Cosine-Fourth Law",
+      "short": "Even without vignetting, oblique-beam geometry alone reduces illumination as cos⁴θ.",
+      "see_also": [
+        "relative_illumination"
+      ],
+      "lesson_mode": null
+    },
+    "chief_ray_angle": {
+      "label": "Chief Ray Angle (CRA)",
+      "en_term": "Chief Ray Angle (CRA)",
+      "short": "Angle at which the chief ray meets the sensor; must match the sensor's microlens design.",
+      "lesson_mode": null
+    },
+    "edge_thickness": {
+      "label": "Edge Thickness",
+      "en_term": "Edge Thickness",
+      "short": "Thickness at the lens rim (vertex gap adjusted by sag). Negative or tiny values are unmanufacturable.",
+      "lesson_mode": null
+    },
+    "total_track_length": {
+      "label": "Total Track Length",
+      "en_term": "Total Track Length",
+      "short": "Overall length from the first surface to the image plane; a compactness metric.",
+      "lesson_mode": null
+    },
+    "evaluation_plane": {
+      "label": "Evaluation Plane",
+      "en_term": "Evaluation Plane",
+      "short": "Virtual plane where spot/PSF/MTF are computed; movable independently of the physical sensor.",
+      "see_also": [
+        "best_focus",
+        "image_plane_policy"
+      ],
+      "lesson_mode": null
+    },
+    "best_focus": {
+      "label": "Best Focus",
+      "en_term": "Best Focus",
+      "short": "Image-plane position optimizing a chosen criterion (min RMS, max MTF, etc.).",
+      "see_also": [
+        "evaluation_plane"
+      ],
+      "lesson_mode": null
+    },
+    "image_plane_policy": {
+      "label": "Image Plane Policy",
+      "en_term": "Image Plane Policy",
+      "short": "How the evaluation plane is chosen: fixed sensor, paraxial image, best focus, sweep, etc.",
+      "see_also": [
+        "evaluation_plane",
+        "best_focus"
+      ],
+      "lesson_mode": null
+    },
+    "operand": {
+      "label": "Operand",
+      "en_term": "Operand",
+      "short": "One optimization item: a metric with its field/wavelength, target, and tolerance.",
+      "see_also": [
+        "merit",
+        "residual"
+      ],
+      "lesson_mode": null
+    },
+    "residual": {
+      "label": "Residual",
+      "en_term": "Residual",
+      "short": "(value − target)/tolerance; equals 1 when off by one tolerance. Optimization minimizes the sum of squares.",
+      "formula": "r = w·(value − target)/tolerance",
+      "see_also": [
+        "operand",
+        "merit"
+      ],
+      "lesson_mode": null
+    },
+    "merit": {
+      "label": "Merit Function",
+      "en_term": "Merit Function",
+      "short": "Sum of squared residuals plus penalties; lower is better.",
+      "see_also": [
+        "operand",
+        "residual"
+      ],
+      "lesson_mode": null
+    },
+    "magnification": {
+      "label": "Magnification",
+      "en_term": "Magnification",
+      "short": "Angular magnification of a telescope or binocular: objective focal length over eyepiece focal length.",
+      "formula": "M = f_obj / f_eye",
+      "see_also": [
+        "exit_pupil"
+      ],
+      "lesson_mode": null
+    },
+    "true_field_of_view": {
+      "label": "True Field of View",
+      "en_term": "True Field of View",
+      "short": "Object-side angular extent visible without moving the instrument.",
+      "see_also": [
+        "apparent_field_of_view"
+      ],
+      "lesson_mode": null
+    },
+    "apparent_field_of_view": {
+      "label": "Apparent Field of View",
+      "en_term": "Apparent Field of View",
+      "short": "Angular width of the view as perceived through the eyepiece.",
+      "see_also": [
+        "true_field_of_view"
+      ],
+      "lesson_mode": null
+    },
+    "eye_relief": {
+      "label": "Eye Relief",
+      "en_term": "Eye Relief",
+      "short": "Distance from the last eyepiece surface to the exit pupil; longer is friendlier to eyeglass wearers.",
+      "see_also": [
+        "exit_pupil",
+        "eye_box"
+      ],
+      "lesson_mode": null
+    },
+    "eye_box": {
+      "label": "Eye Box",
+      "en_term": "Eye Box",
+      "short": "Tolerance volume for eye placement before the view degrades; a small one causes frequent blackouts.",
+      "see_also": [
+        "eye_relief",
+        "blackout"
+      ],
+      "lesson_mode": null
+    },
+    "blackout": {
+      "label": "Blackout",
+      "en_term": "Blackout",
+      "short": "Partial or total darkening of the view when the eye moves off the exit pupil.",
+      "see_also": [
+        "eye_box"
+      ],
+      "lesson_mode": null
+    },
+    "diopter": {
+      "label": "Diopter",
+      "en_term": "Diopter",
+      "short": "Vergence in 1/m; the unit for residual focus error of an afocal system.",
+      "see_also": [
+        "afocal"
+      ],
+      "lesson_mode": null
+    },
+    "angular_mtf": {
+      "label": "Angular MTF",
+      "en_term": "Angular MTF",
+      "short": "MTF of an afocal system, expressed in cycles per degree of the apparent field.",
+      "see_also": [
+        "mtf",
+        "afocal"
+      ],
+      "lesson_mode": null
+    },
+    "central_obstruction": {
+      "label": "Central Obstruction",
+      "en_term": "Central Obstruction",
+      "short": "Blocking of the central beam by a reflector's secondary mirror; affects contrast and throughput.",
+      "see_also": [
+        "annulus"
+      ],
+      "lesson_mode": null
+    },
+    "collimation": {
+      "label": "Collimation",
+      "en_term": "Collimation",
+      "short": "Parallelism of the two optical axes of a binocular; misalignment prevents image fusion and causes strain.",
+      "lesson_mode": null
+    }
+  },
+  "errors": {
+    "negative_air_gap": {
+      "label": "Negative Air Gap",
+      "message": "Air gap between {surface_ids} is negative ({gap_mm} mm).",
+      "action": "Review the group positions or thickness_after_mm."
+    },
+    "group_overlap": {
+      "label": "Group Overlap",
+      "message": "Groups {group_ids} overlap after the applied motion.",
+      "action": "Review the zoom/focus travel amounts."
+    },
+    "missing_aperture_stop": {
+      "label": "Missing Aperture Stop",
+      "message": "The system has no aperture stop; exactly one is required.",
+      "action": "Designate one surface as the aperture stop."
+    },
+    "aiming_failed": {
+      "label": "Ray Aiming Failed",
+      "message": "Ray aiming failed to converge for {count} rays ({ratio}%).",
+      "action": "Likely extreme field angles or decentering. Check them; the affected rays are excluded from statistics."
+    },
+    "total_internal_reflection": {
+      "label": "Total Internal Reflection",
+      "message": "Some rays underwent total internal reflection.",
+      "action": "Incidence exceeds the critical angle; check curvatures, glasses, and field angles."
+    },
+    "no_valid_rays": {
+      "label": "No Valid Rays",
+      "message": "No rays reached the sensor.",
+      "action": "Check clear apertures, stop size, and field angles."
+    },
+    "solve_not_converged": {
+      "label": "Solve Not Converged",
+      "message": "The focus solve did not converge within the range; the range-end value is returned.",
+      "action": "Widen range_mm or verify the system forms an image."
+    },
+    "artifact_expired": {
+      "label": "Artifact Expired",
+      "message": "The requested artifact has expired.",
+      "action": "Re-run the analysis. Results you need to keep are embedded in snapshots."
+    },
+    "infeasible": {
+      "label": "Infeasible Configuration",
+      "message": "This configuration is physically invalid; tracing was skipped.",
+      "action": "Fix each item listed in violations."
+    },
+    "radius_key_deprecated": {
+      "label": "Radius Key Deprecated",
+      "message": "Variable {key} uses the radius space.",
+      "action": "It is unstable near flat surfaces; prefer the curvature key."
+    }
+  }
+}

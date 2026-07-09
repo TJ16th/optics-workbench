@@ -1,0 +1,8 @@
+{
+  "layoutView": {
+    "optical_layout": "Optical Layout",
+    "optical_layout_aria": "Optical layout preview",
+    "spot_diagram": "Spot Diagram",
+    "spot_diagram_aria": "Spot diagram"
+  }
+}

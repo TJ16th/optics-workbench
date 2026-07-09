@@ -1,0 +1,27 @@
+# .github/workflows/bench.yml
+# 手動起動のベンチマーク（smoke）。結果はActions artifactとして保存し、リポジトリへはコミットしない。
+name: Benchmark (smoke)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      # TODO(codex): 依存インストールをci.ymlと揃える
+      - name: Install
+        run: pip install -e ".[dev]" || pip install -r requirements.txt
+      - name: Run smoke benchmark
+        run: python benchmarks/spec_like_benchmark.py --profile smoke
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-smoke-${{ github.sha }}
+          path: bench_results/*.json
+          if-no-files-found: error

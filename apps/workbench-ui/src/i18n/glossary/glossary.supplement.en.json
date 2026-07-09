@@ -1,0 +1,173 @@
+{
+  "$schema_version": "0.1.0",
+  "language": "en",
+  "terms": {
+    "alive": {
+      "label": "Alive",
+      "en_term": "Alive",
+      "short": "Ray status indicating the ray is still valid after tracing."
+    },
+    "blocked": {
+      "label": "Blocked",
+      "en_term": "Blocked",
+      "short": "Ray status indicating the ray was stopped by an aperture or clear-aperture limit."
+    },
+    "missed": {
+      "label": "Missed",
+      "en_term": "Missed",
+      "short": "Ray status indicating the ray did not intersect the required surface."
+    },
+    "geometric_mtf": {
+      "label": "Geometric MTF",
+      "en_term": "Geometric MTF",
+      "short": "MTF estimated from geometric ray spot data."
+    },
+    "relative_illumination_loss": {
+      "label": "Relative Illumination Loss",
+      "en_term": "Relative Illumination Loss",
+      "short": "Merit term derived from loss of relative illumination."
+    },
+    "constraint_penalty": {
+      "label": "Constraint Penalty",
+      "en_term": "Constraint Penalty",
+      "short": "Penalty added when a configuration violates hard optical constraints."
+    },
+    "score": {
+      "label": "Score",
+      "en_term": "Score",
+      "short": "Scalar merit value used for quick comparison."
+    }
+  },
+  "errors": {
+    "artifact_not_found": {
+      "label": "Artifact not found",
+      "message": "The artifact {category}/{id} was not found or has expired.",
+      "action": "Re-run the analysis and create a new snapshot if needed."
+    },
+    "duplicate_surface_id": {
+      "label": "Duplicate surface ID",
+      "message": "Surface ID {surface_id} is duplicated.",
+      "action": "Assign a unique ID to every surface."
+    },
+    "edge_thickness_below_min": {
+      "label": "Edge thickness below minimum",
+      "message": "Edge thickness is below the minimum requirement.",
+      "action": "Increase thickness, reduce aperture, or revise curvature."
+    },
+    "invalid_asphere_surface": {
+      "label": "Invalid asphere surface",
+      "message": "{surface_id} uses aspherical_even on an unsupported surface kind.",
+      "action": "Use aspherical_even only for refractive or mirror surfaces."
+    },
+    "invalid_group_range": {
+      "label": "Invalid group range",
+      "message": "Group {group_id} has an invalid surface range.",
+      "action": "Make from_surface precede to_surface."
+    },
+    "invalid_tilt_range": {
+      "label": "Invalid tilt range",
+      "message": "The tilt range is invalid.",
+      "action": "Make the tilt from_surface precede to_surface."
+    },
+    "material_not_found": {
+      "label": "Material not found",
+      "message": "Material {material_id} was not found.",
+      "action": "Add the material definition or select a known material."
+    },
+    "min_air_gap": {
+      "label": "Air gap below minimum",
+      "message": "The air gap between {surface_ids} is {gap_mm} mm, below the minimum {min_air_gap_mm} mm.",
+      "action": "Move the group or increase thickness_after_mm."
+    },
+    "mirror_thickness_sign": {
+      "label": "Mirror thickness sign mismatch",
+      "message": "Surface {surface_id} has a thickness sign that does not match propagation.",
+      "action": "Check the sign of thickness_after_mm after mirror reflection."
+    },
+    "missing_eye_reference": {
+      "label": "Missing eye reference",
+      "message": "Eye reference surface {surface_id} has no eye settings.",
+      "action": "Add eye settings or change the surface kind."
+    },
+    "missing_focal_length": {
+      "label": "Missing focal length",
+      "message": "Thin lens {surface_id} requires focal_length_mm.",
+      "action": "Enter focal_length_mm."
+    },
+    "missing_sensor": {
+      "label": "Missing sensor",
+      "message": "Sensor surface {surface_id} requires sensor dimensions.",
+      "action": "Enter sensor width and height."
+    },
+    "missing_terminal_eye_reference": {
+      "label": "Missing terminal eye reference",
+      "message": "Afocal systems must end with an eye_reference surface.",
+      "action": "Add an eye_reference surface at the end."
+    },
+    "missing_terminal_sensor": {
+      "label": "Missing terminal sensor",
+      "message": "Focal systems must end with a sensor surface.",
+      "action": "Add a sensor surface at the end."
+    },
+    "multiple_aperture_stops": {
+      "label": "Multiple aperture stops",
+      "message": "The system contains {count} aperture stops.",
+      "action": "Keep exactly one aperture_stop."
+    },
+    "optics_value_error": {
+      "label": "Optics value error",
+      "message": "{message_en}",
+      "action": "Review the request parameters."
+    },
+    "system_not_found": {
+      "label": "System not found",
+      "message": "System {system_id} is unknown or expired.",
+      "action": "Register the system again."
+    },
+    "unknown_focus_group": {
+      "label": "Unknown focus group",
+      "message": "Focus group {focus_group_id} is unknown.",
+      "action": "Select a defined focus group."
+    },
+    "unknown_group": {
+      "label": "Unknown group",
+      "message": "Group {group_id} is unknown.",
+      "action": "Check the group ID."
+    },
+    "unknown_group_surface": {
+      "label": "Unknown group surface",
+      "message": "Group {group_id} references unknown surface {surface_id}.",
+      "action": "Check group surface references."
+    },
+    "unknown_image_plane_policy": {
+      "label": "Unknown image-plane policy",
+      "message": "Image-plane policy is unknown.",
+      "action": "Use a supported image_plane_policy mode."
+    },
+    "image_plane_policy_not_applicable": {
+      "label": "Image-plane policy not applicable",
+      "message": "image_plane_policy cannot be applied to {system_type} systems.",
+      "action": "Use image-plane policy with focal systems, or disable it for this analysis."
+    },
+    "unknown_material": {
+      "label": "Unknown material",
+      "message": "Material is unknown.",
+      "action": "Add a material definition or use AIR."
+    },
+    "unknown_tilt_target": {
+      "label": "Unknown tilt target",
+      "message": "Tilt entry references an unknown target.",
+      "action": "Use a known group or surface range."
+    },
+    "unknown_zoom_group": {
+      "label": "Unknown zoom group",
+      "message": "Zoom position {zoom_position_id} references unknown group {group_id}.",
+      "action": "Check zoom group IDs."
+    },
+    "unknown_zoom_position": {
+      "label": "Unknown zoom position",
+      "message": "Zoom position {zoom_position_id} is unknown.",
+      "action": "Select a defined zoom position."
+    }
+  }
+}

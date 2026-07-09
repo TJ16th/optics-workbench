@@ -1,0 +1,158 @@
+import type { Preset } from './types'
+
+const commonMaterials = [
+  { id: 'AIR', type: 'constant' as const, n: 1.0 },
+  {
+    id: 'N-BK7',
+    type: 'sellmeier' as const,
+    B: [1.03961212, 0.231792344, 1.01046945],
+    C: [0.00600069867, 0.0200179144, 103.560653],
+  },
+  {
+    id: 'N-F2',
+    type: 'sellmeier' as const,
+    B: [1.34533359, 0.209073176, 0.937357162],
+    C: [0.00997743871, 0.0470450767, 111.886764],
+  },
+]
+
+export const presets: Preset[] = [
+  {
+    id: 'P001',
+    name: 'Ideal Thin Lens 50mm F4',
+    summary: 'Thin lens baseline for paraxial, preview, spot, and focus policy checks.',
+    recommendedAnalysis: ['preview', 'spot', 'paraxial'],
+    system: {
+      name: 'P001 Ideal Thin Lens 50mm F4',
+      units: 'mm',
+      optical_axis: '+X',
+      system_type: 'focal',
+      wavelengths_nm: { primary: 587.56, samples: [587.56] },
+      materials: commonMaterials,
+      surfaces: [
+        {
+          id: 'STOP',
+          kind: 'aperture_stop',
+          surface_type: 'plane',
+          thickness_after_mm: 0,
+          semi_diameter_mm: 6.25,
+          aperture: { shape: 'circle', semi_diameter_mm: 6.25 },
+        },
+        {
+          id: 'TL1',
+          kind: 'thin_lens',
+          surface_type: 'plane',
+          focal_length_mm: 50,
+          thickness_after_mm: 50,
+          semi_diameter_mm: 12.5,
+        },
+        { id: 'IMG', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 36, height_mm: 24 } },
+      ],
+    },
+  },
+  {
+    id: 'P002',
+    name: 'N-BK7 Biconvex Singlet 50mm Demo',
+    summary: 'Simple spherical singlet for basic aberration and chromatic behavior.',
+    recommendedAnalysis: ['preview', 'spot', 'chromatic'],
+    system: {
+      name: 'P002 N-BK7 Biconvex Singlet',
+      units: 'mm',
+      optical_axis: '+X',
+      system_type: 'focal',
+      wavelengths_nm: { primary: 587.56, samples: [486.13, 587.56, 656.27] },
+      materials: commonMaterials,
+      surfaces: [
+        {
+          id: 'STOP',
+          kind: 'aperture_stop',
+          surface_type: 'plane',
+          thickness_after_mm: 2,
+          semi_diameter_mm: 8,
+          aperture: { shape: 'circle', semi_diameter_mm: 8 },
+        },
+        { id: 'S1', kind: 'refractive', surface_type: 'spherical', radius_mm: 50, thickness_after_mm: 5, material_after: 'N-BK7', semi_diameter_mm: 15 },
+        { id: 'S2', kind: 'refractive', surface_type: 'spherical', radius_mm: -50, thickness_after_mm: 46.5, material_after: 'AIR', semi_diameter_mm: 15 },
+        { id: 'IMG', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 36, height_mm: 24 } },
+      ],
+    },
+  },
+  {
+    id: 'P005',
+    name: 'Coaxial Cassegrain Telescope Demo',
+    summary: 'v2.1 corrected coaxial two-mirror telescope: EFL about 3000mm and F/15.',
+    recommendedAnalysis: ['paraxial', 'preview'],
+    system: {
+      name: 'P005 Coaxial Cassegrain v2.1',
+      units: 'mm',
+      optical_axis: '+X',
+      system_type: 'focal',
+      wavelengths_nm: { primary: 587.56, samples: [587.56] },
+      materials: [{ id: 'AIR', type: 'constant', n: 1.0 }],
+      surfaces: [
+        { id: 'M1', kind: 'mirror', surface_type: 'spherical', radius_mm: -2000, thickness_after_mm: -650, semi_diameter_mm: 100 },
+        { id: 'M2', kind: 'mirror', surface_type: 'spherical', radius_mm: -1050, thickness_after_mm: 1050, semi_diameter_mm: 40 },
+        { id: 'IMG', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 30, height_mm: 30 } },
+      ],
+    },
+  },
+  {
+    id: 'P003',
+    name: 'Achromat Doublet 100mm Demo',
+    summary: 'BK7/F2 achromat for chromatic, ray fan, MTF, distortion, and field curvature views.',
+    recommendedAnalysis: ['preview', 'ray_fan', 'mtf', 'distortion', 'field_curvature'],
+    system: {
+      name: 'P003 Achromat Doublet 100mm',
+      units: 'mm',
+      optical_axis: '+X',
+      system_type: 'focal',
+      wavelengths_nm: { primary: 587.56, samples: [486.13, 587.56, 656.27] },
+      materials: commonMaterials,
+      surfaces: [
+        {
+          id: 'STOP',
+          kind: 'aperture_stop',
+          surface_type: 'plane',
+          thickness_after_mm: 1.5,
+          semi_diameter_mm: 10,
+          aperture: { shape: 'circle', semi_diameter_mm: 10 },
+        },
+        { id: 'S1', kind: 'refractive', surface_type: 'spherical', radius_mm: 62.5, thickness_after_mm: 4.0, material_after: 'N-BK7', semi_diameter_mm: 14 },
+        { id: 'S2', kind: 'refractive', surface_type: 'spherical', radius_mm: -43.0, thickness_after_mm: 2.0, material_after: 'N-F2', semi_diameter_mm: 14 },
+        { id: 'S3', kind: 'refractive', surface_type: 'spherical', radius_mm: -125.0, thickness_after_mm: 96.0, material_after: 'AIR', semi_diameter_mm: 14 },
+        { id: 'IMG', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 36, height_mm: 24 } },
+      ],
+    },
+  },
+  {
+    id: 'P006',
+    name: 'Keplerian Afocal Telescope Demo',
+    summary: 'Afocal telescope with an eye_reference terminal plane; image-plane policy controls are intentionally disabled.',
+    recommendedAnalysis: ['afocal', 'exit_pupil', 'telescope'],
+    system: {
+      name: 'P006 Keplerian Afocal Telescope',
+      units: 'mm',
+      optical_axis: '+X',
+      system_type: 'afocal',
+      wavelengths_nm: { primary: 587.56, samples: [587.56] },
+      materials: [{ id: 'AIR', type: 'constant', n: 1.0 }],
+      surfaces: [
+        {
+          id: 'STOP',
+          kind: 'aperture_stop',
+          surface_type: 'plane',
+          thickness_after_mm: 0,
+          semi_diameter_mm: 25,
+          aperture: { shape: 'circle', semi_diameter_mm: 25 },
+        },
+        { id: 'OBJ', kind: 'thin_lens', surface_type: 'plane', focal_length_mm: 100, thickness_after_mm: 120, semi_diameter_mm: 25 },
+        { id: 'EYEPIECE', kind: 'thin_lens', surface_type: 'plane', focal_length_mm: 20, thickness_after_mm: 20, semi_diameter_mm: 10 },
+        { id: 'EYE', kind: 'eye_reference', surface_type: 'plane', eye: { pupil_diameter_mm: 4, position_mode: 'fixed_offset' } },
+      ],
+      groups: [
+        { id: 'EYE_G', from_surface: 'EYE', to_surface: 'EYE' },
+        { id: 'FOCUS', from_surface: 'EYEPIECE', to_surface: 'EYEPIECE' },
+      ],
+    },
+  },
+]
