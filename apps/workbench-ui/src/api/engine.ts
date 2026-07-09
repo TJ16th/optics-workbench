@@ -133,8 +133,12 @@ async function postAnalysis<T>(apiBase: string, endpoint: string, request: Analy
 }
 
 export async function runChartAnalyses(apiBase: string, request: AnalysisRequest): Promise<ChartAnalysisResult> {
-  const [rayFan, distortion, fieldCurvature, msImageSurface, relativeIllumination, mtf] = await Promise.all([
+  const [rayFan, longitudinal, distortion, fieldCurvature, msImageSurface, relativeIllumination, mtf] = await Promise.all([
     postAnalysis<ChartAnalysisResult['rayFan']>(apiBase, '/v1/analysis/ray-fan', {
+      ...request,
+      ray_sampling: { ...request.ray_sampling, pupil_distribution: 'fan_y' },
+    }),
+    postAnalysis<ChartAnalysisResult['longitudinal']>(apiBase, '/v1/analysis/longitudinal-aberration', {
       ...request,
       ray_sampling: { ...request.ray_sampling, pupil_distribution: 'fan_y' },
     }),
@@ -150,6 +154,7 @@ export async function runChartAnalyses(apiBase: string, request: AnalysisRequest
   const msRowsByField = new Map((msImageSurface.rows ?? []).map((row) => [row.field_id, row]))
   return {
     rayFan,
+    longitudinal,
     distortion,
     fieldCurvature: {
       rows: (fieldCurvature.rows ?? []).map((row) => ({ ...row, ...msRowsByField.get(row.field_id) })),

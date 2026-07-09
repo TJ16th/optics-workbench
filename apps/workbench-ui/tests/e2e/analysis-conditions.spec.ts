@@ -141,6 +141,31 @@ async function mockEngine(
       },
     })
   })
+  await page.route('http://127.0.0.1:8000/v1/analysis/longitudinal-aberration', async (route) => {
+    const request = route.request().postDataJSON()
+    const fields = request.fields ?? []
+    const wavelengths = request.wavelengths_nm ?? [587.56]
+    await route.fulfill({
+      json: {
+        points: fields.flatMap((field: { id: string }) =>
+          wavelengths.flatMap((wavelength: number, wavelengthIndex: number) =>
+            [-1, 0, 1].map((pupil) => ({
+              field_id: field.id,
+              wavelength_nm: wavelength,
+              pupil_y: pupil,
+              pupil_z: 0,
+              focus_x_y_mm: 100 + pupil * 0.03 + wavelengthIndex * 0.005,
+              focus_x_z_mm: 100 + pupil * 0.02,
+              longitudinal_error_y_mm: pupil * 0.03 + wavelengthIndex * 0.005,
+              longitudinal_error_z_mm: pupil * 0.02,
+              status: 'alive',
+            })),
+          ),
+        ),
+        metadata: { pupil_distribution: 'fan_y', reference_x_mm: 100 },
+      },
+    })
+  })
   await page.route('http://127.0.0.1:8000/v1/analysis/distortion', async (route) => {
     const fields = route.request().postDataJSON().fields ?? []
     await route.fulfill({
@@ -679,22 +704,44 @@ test('decenter tilt sliders send configuration and expose evaluated symmetric fi
   await expect(page.getByTestId('analysis-dirty-status')).toContainText('clean')
 })
 
-test('P003 analysis charts render with glossary labels and geometric MTF note', async ({ page }) => {
+test('P002 and P003 analysis charts render standard aberration panels without collapsed labels', async ({ page }) => {
   await mockEngine(page)
-  await page.goto('/?lng=en')
-  await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
-  await page.getByText('P003 Achromat Doublet 100mm Demo').click()
+  for (const preset of ['P002 N-BK7 Biconvex Singlet 50mm Demo', 'P003 Achromat Doublet 100mm Demo']) {
+    await page.goto('/?lng=en')
+    await selectPresetOption(page, preset)
 
-  await page.getByRole('tab', { name: 'Analysis' }).click()
-  await page.getByRole('button', { name: 'Run Charts' }).click()
+    await page.getByRole('tab', { name: 'Analysis' }).click()
+    await page.getByRole('button', { name: 'Run Charts' }).click()
 
-  await expect(page.getByTestId('analysis-chart-grid')).toBeVisible()
-  await expect(page.getByText('Ray Fan').first()).toBeVisible()
-  await expect(page.getByText('Distortion').first()).toBeVisible()
-  await expect(page.getByText('Field Curvature').first()).toBeVisible()
-  await expect(page.getByText('Relative Illumination').first()).toBeVisible()
-  await expect(page.getByText('MTF').first()).toBeVisible()
-  await expect(page.getByText('Diffraction included: false')).toBeVisible()
+    await expect(page.getByTestId('analysis-chart-grid')).toBeVisible()
+    await expect(page.getByText('Longitudinal Aberration Standard Panels').first()).toBeVisible()
+    await expect(page.getByTestId('standard-aberration-grid')).toBeVisible()
+    await expect(page.getByTestId('longitudinal-aberration-chart')).toBeVisible()
+    await expect(page.getByTestId('standard-field-curvature-chart')).toBeVisible()
+    await expect(page.getByTestId('standard-distortion-chart')).toBeVisible()
+    await expect(page.getByText('focus shift mm').first()).toBeVisible()
+    await expect(page.getByText('pupil coordinate').first()).toBeVisible()
+    await expect(page.getByText('half field deg').first()).toBeVisible()
+    await expect(page.getByText('distortion %').first()).toBeVisible()
+    await expect(page.getByText('Ray Fan').first()).toBeVisible()
+    await expect(page.getByText('Distortion').first()).toBeVisible()
+    await expect(page.getByText('Field Curvature').first()).toBeVisible()
+    await expect(page.getByText('Relative Illumination').first()).toBeVisible()
+    await expect(page.getByText('MTF').first()).toBeVisible()
+    await expect(page.getByText('Diffraction included: false')).toBeVisible()
+
+    const labelBoxes = await page.getByTestId('standard-aberration-grid').locator('.plot-label').evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const rect = node.getBoundingClientRect()
+        return { width: rect.width, height: rect.height }
+      }),
+    )
+    expect(labelBoxes).toHaveLength(6)
+    for (const box of labelBoxes) {
+      expect(box.width).toBeGreaterThan(5)
+      expect(box.height).toBeGreaterThan(5)
+    }
+  }
 })
 
 test('image-plane policy solves focus, writes back sensor, and disables for afocal preset', async ({ page }) => {

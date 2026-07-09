@@ -226,6 +226,18 @@ export type RayFanPoint = {
   status: string
 }
 
+export type LongitudinalAberrationPoint = {
+  field_id: string
+  wavelength_nm: number
+  pupil_y: number
+  pupil_z: number
+  focus_x_y_mm: number | null
+  focus_x_z_mm: number | null
+  longitudinal_error_y_mm: number | null
+  longitudinal_error_z_mm: number | null
+  status: string
+}
+
 export type DistortionRow = {
   field_id: string
   theta_y_deg: number
@@ -263,6 +275,7 @@ export type MtfPoint = {
 
 export type ChartAnalysisResult = {
   rayFan?: { points: RayFanPoint[]; metadata?: Record<string, unknown>; artifacts?: ArtifactMap }
+  longitudinal?: { points: LongitudinalAberrationPoint[]; metadata?: Record<string, unknown>; artifacts?: ArtifactMap }
   distortion?: { rows: DistortionRow[]; metadata?: Record<string, unknown>; artifacts?: ArtifactMap }
   fieldCurvature?: { rows: FieldCurvatureRow[]; artifacts?: ArtifactMap }
   relativeIllumination?: { rows: RelativeIlluminationRow[]; metadata?: Record<string, unknown>; artifacts?: ArtifactMap }

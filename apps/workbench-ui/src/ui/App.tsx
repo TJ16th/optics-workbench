@@ -36,6 +36,7 @@ import type {
   ImagePlanePolicy,
   ImagePlanePolicyApplyTo,
   ImagePlanePolicyMode,
+  LongitudinalAberrationPoint,
   MtfPoint,
   OpticalGroup,
   OpticalSystem,
@@ -1514,7 +1515,19 @@ function EvaluatedFieldList({ trace, fields }: { trace?: TraceResponse; fields: 
 type ChartPoint = { x: number; y: number }
 type ChartSeries = { id: string; color: string; points: ChartPoint[] }
 
-function ChartSvg({ series, xLabel, yLabel, emptyLabel }: { series: ChartSeries[]; xLabel: string; yLabel: string; emptyLabel: string }) {
+function ChartSvg({
+  series,
+  xLabel,
+  yLabel,
+  emptyLabel,
+  testId,
+}: {
+  series: ChartSeries[]
+  xLabel: string
+  yLabel: string
+  emptyLabel: string
+  testId?: string
+}) {
   const points = series.flatMap((item) => item.points)
   if (!points.length) {
     return <div className="chart-empty">{emptyLabel}</div>
@@ -1531,30 +1544,30 @@ function ChartSvg({ series, xLabel, yLabel, emptyLabel }: { series: ChartSeries[
   const x1 = maxX + padX
   const y0 = minY - padY
   const y1 = maxY + padY
-  const sx = (x: number) => 44 + ((x - x0) / (x1 - x0)) * 288
-  const sy = (y: number) => 172 - ((y - y0) / (y1 - y0)) * 132
+  const sx = (x: number) => 56 + ((x - x0) / (x1 - x0)) * 294
+  const sy = (y: number) => 178 - ((y - y0) / (y1 - y0)) * 144
 
   return (
     <div className="chart-box">
-      <svg viewBox="0 0 360 220" role="img" className="analysis-chart">
-        <line x1="44" x2="332" y1="172" y2="172" className="plot-axis" />
-        <line x1="44" x2="44" y1="40" y2="172" className="plot-axis" />
-        <text x="338" y="188" className="plot-label" textAnchor="end">
+      <svg viewBox="0 0 390 240" role="img" className="analysis-chart" data-testid={testId}>
+        <line x1="56" x2="350" y1="178" y2="178" className="plot-axis" />
+        <line x1="56" x2="56" y1="34" y2="178" className="plot-axis" />
+        <text x="203" y="224" className="plot-label plot-label--x" textAnchor="middle">
           {xLabel}
         </text>
-        <text x="16" y="44" className="plot-label">
+        <text x="18" y="106" className="plot-label plot-label--y" textAnchor="middle" transform="rotate(-90 18 106)">
           {yLabel}
         </text>
-        <text x="44" y="190" className="plot-tick">
+        <text x="56" y="197" className="plot-tick">
           {formatFixed(x0, 2)}
         </text>
-        <text x="332" y="190" className="plot-tick" textAnchor="end">
+        <text x="350" y="197" className="plot-tick" textAnchor="end">
           {formatFixed(x1, 2)}
         </text>
-        <text x="38" y="176" className="plot-tick" textAnchor="end">
+        <text x="50" y="182" className="plot-tick" textAnchor="end">
           {formatFixed(y0, 2)}
         </text>
-        <text x="38" y="44" className="plot-tick" textAnchor="end">
+        <text x="50" y="38" className="plot-tick" textAnchor="end">
           {formatFixed(y1, 2)}
         </text>
         {series.map((item) => {
@@ -1580,6 +1593,19 @@ function ChartSvg({ series, xLabel, yLabel, emptyLabel }: { series: ChartSeries[
       </div>
     </div>
   )
+}
+
+function seriesFromLongitudinal(points: LongitudinalAberrationPoint[] | undefined): ChartSeries[] {
+  const groups = new Map<string, ChartSeries>()
+  for (const point of points ?? []) {
+    if (point.status !== 'alive') continue
+    if (!finitePoint(point.longitudinal_error_y_mm, point.pupil_y)) continue
+    const key = `${formatFixed(point.wavelength_nm, 0)}nm`
+    const existing = groups.get(key) ?? { id: key, color: wavelengthColor(point.wavelength_nm), points: [] }
+    existing.points.push({ x: point.longitudinal_error_y_mm as number, y: point.pupil_y })
+    groups.set(key, existing)
+  }
+  return [...groups.values()]
 }
 
 function seriesFromRayFan(points: RayFanPoint[] | undefined, axis: 'y' | 'z'): ChartSeries[] {
@@ -1609,6 +1635,18 @@ function seriesFromDistortion(rows: DistortionRow[] | undefined): ChartSeries[] 
   ]
 }
 
+function seriesFromDistortionStandard(rows: DistortionRow[] | undefined): ChartSeries[] {
+  return [
+    {
+      id: 'distortion',
+      color: '#0f62fe',
+      points: (rows ?? [])
+        .filter((row) => finitePoint(row.distortion_percent, fieldAngle(row)))
+        .map((row) => ({ x: row.distortion_percent as number, y: fieldAngle(row) })),
+    },
+  ]
+}
+
 function seriesFromFieldCurvature(rows: FieldCurvatureRow[] | undefined): ChartSeries[] {
   const safeRows = rows ?? []
   return [
@@ -1625,6 +1663,26 @@ function seriesFromFieldCurvature(rows: FieldCurvatureRow[] | undefined): ChartS
       points: safeRows
         .filter((row) => finitePoint(fieldAngle(row), row.sagittal_focus_shift_mm ?? row.best_focus_shift_mm))
         .map((row) => ({ x: fieldAngle(row), y: (row.sagittal_focus_shift_mm ?? row.best_focus_shift_mm) as number })),
+    },
+  ]
+}
+
+function seriesFromFieldCurvatureStandard(rows: FieldCurvatureRow[] | undefined): ChartSeries[] {
+  const safeRows = rows ?? []
+  return [
+    {
+      id: 'M',
+      color: '#0f62fe',
+      points: safeRows
+        .filter((row) => finitePoint(row.tangential_focus_shift_mm ?? row.best_focus_shift_mm, fieldAngle(row)))
+        .map((row) => ({ x: (row.tangential_focus_shift_mm ?? row.best_focus_shift_mm) as number, y: fieldAngle(row) })),
+    },
+    {
+      id: 'S',
+      color: '#da1e28',
+      points: safeRows
+        .filter((row) => finitePoint(row.sagittal_focus_shift_mm ?? row.best_focus_shift_mm, fieldAngle(row)))
+        .map((row) => ({ x: (row.sagittal_focus_shift_mm ?? row.best_focus_shift_mm) as number, y: fieldAngle(row) })),
     },
   ]
 }
@@ -1751,6 +1809,41 @@ function AnalysisCharts({ result, onOpenHelp }: { result?: ChartAnalysisResult; 
   }
   return (
     <div className="analysis-chart-grid" data-testid="analysis-chart-grid">
+      <section className="panel chart-panel chart-panel--wide">
+        <h2>{t('analysis:analysis.standard_aberration_title')}</h2>
+        <div className="standard-aberration-grid" data-testid="standard-aberration-grid">
+          <div>
+            <h3>{termLabel('longitudinal_aberration', i18n.language)}</h3>
+            <ChartSvg
+              series={seriesFromLongitudinal(result.longitudinal?.points)}
+              xLabel={t('analysis:analysis.axis_focus_shift_mm')}
+              yLabel={t('analysis:analysis.axis_pupil_coordinate')}
+              emptyLabel={empty}
+              testId="longitudinal-aberration-chart"
+            />
+          </div>
+          <div>
+            <h3>{termLabel('field_curvature', i18n.language)}</h3>
+            <ChartSvg
+              series={seriesFromFieldCurvatureStandard(result.fieldCurvature?.rows)}
+              xLabel={t('analysis:analysis.axis_focus_shift_mm')}
+              yLabel={t('analysis:analysis.axis_half_field_deg')}
+              emptyLabel={empty}
+              testId="standard-field-curvature-chart"
+            />
+          </div>
+          <div>
+            <h3>{termLabel('distortion', i18n.language)}</h3>
+            <ChartSvg
+              series={seriesFromDistortionStandard(result.distortion?.rows)}
+              xLabel={t('analysis:analysis.axis_distortion_percent')}
+              yLabel={t('analysis:analysis.axis_half_field_deg')}
+              emptyLabel={empty}
+              testId="standard-distortion-chart"
+            />
+          </div>
+        </div>
+      </section>
       <section className="panel chart-panel chart-panel--wide">
         <h2>
           <TermHelp termId="ray_fan" fallback={termLabel('ray_fan', i18n.language)} onOpenHelp={onOpenHelp} />
