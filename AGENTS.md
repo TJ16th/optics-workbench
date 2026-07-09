@@ -112,3 +112,7 @@ Playwright E2EをGitHub Actions Ubuntu上で実行する場合は、CI側で `np
 - 完了報告は `doc/reports/YYYY-MM-DD_<task-number>_<short-slug>.md` 形式で作成する。
 - `task-number` は小文字で、台帳・指示番号の表記を保つ。例: `g8`, `a1`, `u5`, `p3-2`, `q1`, `q1b`, `r14-20`。
 - 指示番号が未確定の場合は推測で新規番号を作らず、人間に確認する。既存の会話順から明確に次番が決まる整理タスクのみ、その根拠を完了報告に書く。
+## Completion Report Move Rule
+
+- When adding a task completion report under `doc/reports/`, move the corresponding work order from `doc/work_orders/active/` to `doc/work_orders/done/` in the same commit.
+- Do not split a completion report and its active-to-done work order move into separate commits.
