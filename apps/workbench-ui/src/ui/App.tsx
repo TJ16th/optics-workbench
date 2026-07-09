@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Button,
   CodeSnippet,
@@ -1224,6 +1224,7 @@ export function App() {
   const [pupilDistribution, setPupilDistribution] = useState('grid')
   const [aimingMode, setAimingMode] = useState('paraxial')
   const [imagePlanePolicy, setImagePlanePolicy] = useState<ImagePlanePolicyDraft>(() => ({ ...defaultImagePlanePolicy }))
+  const imagePlanePolicyRef = useRef<ImagePlanePolicyDraft>(imagePlanePolicy)
   const [analysisDirty, setAnalysisDirty] = useState(false)
   const [systemDirty, setSystemDirty] = useState(false)
   const [system, setSystem] = useState<OpticalSystem>(() => cloneSystem(presets[0].system))
@@ -1297,8 +1298,24 @@ export function App() {
   }
 
   const updateImagePlanePolicy = (patch: Partial<ImagePlanePolicyDraft>) => {
-    setImagePlanePolicy((current) => ({ ...current, ...patch }))
+    setImagePlanePolicy((current) => {
+      const next = { ...current, ...patch }
+      imagePlanePolicyRef.current = next
+      return next
+    })
     markAnalysisDirty()
+  }
+
+  const readImagePlanePolicyForm = () => {
+    const modeElement = document.getElementById('image-plane-policy-mode') as HTMLSelectElement | null
+    const applyToElement = document.getElementById('image-plane-apply-to') as HTMLSelectElement | null
+    const next = {
+      ...imagePlanePolicyRef.current,
+      mode: (modeElement?.value as ImagePlanePolicyMode | undefined) ?? imagePlanePolicyRef.current.mode,
+      applyTo: (applyToElement?.value as ImagePlanePolicyApplyTo | undefined) ?? imagePlanePolicyRef.current.applyTo,
+    }
+    imagePlanePolicyRef.current = next
+    return next
   }
 
   const ensureRegisteredSystem = async () => {
@@ -1321,7 +1338,7 @@ export function App() {
     wavelengths_nm: wavelengths.map((sample) => sample.wavelength_nm),
     wavelength_weights: wavelengths,
     frequencies_lp_per_mm: [0, 10, 20, 40, 80],
-    ...(policyDisabled ? {} : { image_plane_policy: makePolicy(imagePlanePolicy, analysisFields, wavelengths) }),
+    ...(policyDisabled ? {} : { image_plane_policy: makePolicy(readImagePlanePolicyForm(), analysisFields, wavelengths) }),
     options: { store_path: true, profiling: true },
   })
 
@@ -1452,7 +1469,7 @@ export function App() {
         samples_per_field: samplesPerField,
         pupil_distribution: pupilDistribution,
         aiming_mode: aimingMode,
-        ...(policyDisabled ? {} : { image_plane_policy: makePolicy(imagePlanePolicy, analysisFields, wavelengths) }),
+        ...(policyDisabled ? {} : { image_plane_policy: makePolicy(readImagePlanePolicyForm(), analysisFields, wavelengths) }),
         evaluation_plane: evaluationPlane,
       },
       results: {
@@ -1546,7 +1563,8 @@ export function App() {
                   setSamplesPerField(9)
                   setPupilDistribution('grid')
                   setAimingMode('paraxial')
-                  setImagePlanePolicy({ ...defaultImagePlanePolicy })
+                  imagePlanePolicyRef.current = { ...defaultImagePlanePolicy }
+                  setImagePlanePolicy(imagePlanePolicyRef.current)
                   setAnalysisDirty(false)
                   setSystemDirty(false)
                 }

@@ -1,77 +1,92 @@
 # <REPO_NAME> — Optics Workbench
 
-An educational optical simulation engine and web workbench for photographic lenses, binoculars, and telescopes.
+写真レンズ・双眼鏡・望遠鏡のための教育用光学シミュレーションエンジン＆Web Workbench
 
-**Status: work in progress.** APIs and specs are evolving.
-
-[English](#overview) | [日本語](#日本語)
+**開発中（work in progress）**：APIと仕様は変更されることがあります。
 
 ---
 
-## Overview
+## Overview (English)
 
-This project combines:
-
-- **Optics engine** (Python) — 3D sequential ray tracing on a +X optical axis: spherical/aspheric surfaces, mirrors, stops, ideal thin lenses; paraxial (y-nu) analysis; ray aiming; spot / ray fan / distortion / field curvature / chromatic aberration; geometric PSF/MTF; relative illumination; afocal (visual instrument) evaluation with exit pupil, eye relief, and angular MTF. Exposed as a stateless HTTP API for UIs and external optimizers.
-- **Workbench UI** (React + TypeScript + Carbon) — surface table editing, layout view, analysis charts, snapshots and comparison. Fully bilingual (Japanese / English) with a built-in optics glossary and three-tier help (term toggletips, help drawer, structured error explanations).
-
-Design goals, in order: **make optics visible for learners**, enable quick design studies, and serve as an evaluation backend for external optimization (DLS-friendly operand/residual API).
-
-### Screenshots
-
-<!-- TODO(codex): replace with actual sanitized screenshots under doc/images/ -->
-| Workbench (ja) | Workbench (en) | Help drawer |
-|---|---|---|
-| ![ja](doc/images/workbench-ja.png) | ![en](doc/images/workbench-en.png) | ![help](doc/images/help-drawer.png) |
-
-### Quick start
-
-Requirements: Python 3.12+, Node 20+.
+An educational optical simulation engine (Python, stateless HTTP API) and web workbench (React + TypeScript) for photographic lenses, binoculars, and telescopes: 3D sequential ray tracing, paraxial analysis, aberration/PSF/MTF evaluation, and afocal (visual instrument) analysis. The UI is fully bilingual (ja/en) with a built-in optics glossary. Documentation is primarily in Japanese; the quick-start commands below are language-neutral.
 
 ```bash
 # Engine (HTTP API)
-# TODO(codex): replace with the actual install & run commands
-pip install -e .
-python -m optics_engine.api.main   # serves http://localhost:8000
+python -m pip install -e ".[api,test]"
+python -m uvicorn optics_engine.api.main:app --host 127.0.0.1 --port 8000
 
 # Workbench UI
 npm ci
-npm run dev                        # opens the workbench against the local engine
+npm run ui:dev
+
+# Tests
+python -m pytest -q && npm run ci
 ```
 
-Run the test suites:
-
-```bash
-pytest -q          # engine tests incl. golden reference designs
-npm run ci         # UI build + i18n checks + glossary coverage
-```
-
-### Documentation
-
-Specifications are maintained in Japanese as the source of truth:
-
-- [`doc/engine_spec.md`](doc/engine_spec.md) — engine requirements & technical spec (current: v2.3)
-- [`doc/ui_spec.md`](doc/ui_spec.md) — workbench UI spec (current: v0.3)
-- [`AGENTS.md`](AGENTS.md) — rules for AI coding agents working on this repo
-
-### Project status
-
-<!-- TODO(codex): keep this table current -->
-| Area | Status |
-|---|---|
-| Engine core (trace, paraxial, aberrations, PSF/MTF, afocal) | Implemented (MVP, Phases 1–8) |
-| Engine performance (vectorized kernel, ray-aiming cache) | In progress |
-| Engine optimization API (operands, jacobian) | Planned |
-| UI Phase 1 (editing, layout, paraxial, preview) + i18n/help | Implemented |
-| UI Phase 2 (analysis views, best focus, snapshots/compare) | In progress |
-| UI Phases 3–4 (design ops, visual instruments) | Planned |
-
-### License
-
-Apache License 2.0 — see [LICENSE](LICENSE).
+License: Apache-2.0. Interested in an English README? Open an issue.
 
 ---
 
-## 日本語
+## これは何？
 
-写真レンズ・双眼鏡・望遠鏡を対象とした、教育目的の光学シミュレーションエンジンとWeb Workbenchです。光線追跡・収差解析・PSF/MTF・視覚系評価をステートレスHTTP APIとして提供し、UIは日英対応・光学用語集・3階層ヘルプを内蔵しています。仕様書（正本）は日本語で `doc/` 以下にあります。開発中のため、APIと仕様は変更されることがあります。
+本プロジェクトは、以下の2つで構成されています。
+
+- **光学エンジン**（Python）— +X光軸の3次元シーケンシャル光線追跡。球面・非球面・ミラー・絞り・理想薄レンズ、近軸（y-nu）解析、ray aiming、spot / ray fan / 歪曲 / 像面湾曲 / 色収差、幾何PSF/MTF、周辺光量、アフォーカル系（双眼鏡・望遠鏡）の射出瞳・アイレリーフ・角度MTF評価。UIや外部最適化から呼べるステートレスHTTP APIとして公開。
+- **Workbench UI**（React + TypeScript + Carbon）— 面テーブル編集、レイアウト表示、解析チャート、スナップショット比較。日英完全対応で、光学用語集と3階層ヘルプ（用語ツールチップ／解説ドロワー／エラー解説）を内蔵。
+
+設計の優先順位は、**①光学を初学者に「見える」ようにする教育用途**、②簡易的な設計検討、③外部最適化エンジン向けの評価バックエンド（DLS向けオペランド/残差API）、の順です。
+
+## スクリーンショット
+
+| Workbench (ja) | Workbench (en) | ヘルプドロワー |
+|---|---|---|
+| ![ja](doc/images/workbench-ja.png) | ![en](doc/images/workbench-en.png) | ![help](doc/images/help-drawer.png) |
+
+## クイックスタート
+
+必要環境：Python 3.12+、Node 20+
+
+```bash
+# エンジン（HTTP API）
+python -m pip install -e ".[api,test]"
+python -m uvicorn optics_engine.api.main:app --host 127.0.0.1 --port 8000
+
+# Workbench UI
+npm ci
+npm run ui:dev                     # http://127.0.0.1:5173
+```
+
+テストの実行：
+
+```bash
+python -m pytest -q          # エンジン（既知設計とのGolden Test含む）
+npm run ci                   # UIビルド + i18n検査 + 用語集カバレッジ
+```
+
+## ドキュメント
+
+仕様書（正本・日本語）：
+
+- [`doc/engine_spec.md`](doc/engine_spec.md) — エンジン要求仕様・技術仕様（現行 v2.3）
+- [`doc/ui_spec.md`](doc/ui_spec.md) — Workbench UI仕様（現行 v0.3）
+- [`AGENTS.md`](AGENTS.md) — AIコーディングエージェント向けの作業ルール
+
+## 開発状況
+
+| 領域 | 状況 |
+|---|---|
+| エンジンコア（追跡・近軸・収差・PSF/MTF・アフォーカル） | 実装済み（MVP、Phase 1–8） |
+| エンジン性能（ベクトル化カーネル、aimingキャッシュ） | 進行中 |
+| エンジン最適化API（オペランド・ヤコビアン） | 計画中 |
+| UI Phase 1（編集・レイアウト・近軸・preview）＋ i18n/ヘルプ | 実装済み |
+| UI Phase 2（解析ビュー・ベストフォーカス・snapshot比較） | 実装済み（snapshot exportは単一JSONのみ。zip exportは未実装） |
+| UI Phase 3–4（設計操作・視覚系ビュー） | 計画中 |
+
+## 未確定項目
+
+- `<REPO_NAME>` は公開時に正式リポジトリ名へ置き換えてください。
+- `NOTICE` の `<COPYRIGHT_HOLDER>` は権利者名確定後に置き換えてください。
+
+## ライセンス
+
+Apache License 2.0 — [LICENSE](LICENSE) を参照してください。

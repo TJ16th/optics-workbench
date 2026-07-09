@@ -10,6 +10,15 @@
 - 有効な作業指示は `doc/work_orders/active/` 内のみ。`done/` は完了済みの記録であり、再実行しない。
 - 実装報告は `doc/reports/` に `YYYY-MM-DD_<件名>.md` 形式で追加する。
 
+## 報告・コミュニケーション言語
+
+- 実装報告（`doc/reports/`）・タスク完了報告・人間への質問は**日本語**で書く。
+- ただし以下は翻訳せず原文のまま記載する：識別子（surface ID、metric名、エラーコード、変数キー）、ファイルパス、コマンド、テスト出力・ログの引用（例：`51 passed` はそのまま）、コード片。
+- コミットメッセージは英語とする（Conventional Commits推奨。例：`feat(engine): add image_plane_policy (Task A1)`、`docs: reorganize doc/ into canonical layout (Task G2)`）。
+- README等の対外ドキュメントは**日本語主体＋冒頭に英語Overview**の構成を維持する。全文の日英併記は行わない（内部報告書も同様）。
+- Issue（タイトル・本文）およびissues_backlogは日本語で書く。ラベル名は英語（engine / ui / docs / performance 等）。
+- 本ルール適用前の英語レポートは翻訳し直さず、そのまま `doc/reports/` に保管する。
+
 ## 作業規律
 
 - 指示書のタスクは**番号順に1タスクずつ**。タスク完了報告後に停止し、次タスクへ勝手に進まない。スコープの先取り禁止（指示書の「スコープ外」節を厳守）。
@@ -37,10 +46,8 @@
 
 ## テスト・検証コマンド
 
-<!-- TODO(codex): 実際のコマンドに合わせて更新し、このコメントを削除する -->
-
 ```bash
-pytest -q                    # エンジン（Golden Test含む）
+python -m pytest -q          # エンジン（Golden Test含む）
 npm run ci                   # UI: build + i18n:check + i18n:coverage + i18n:test
 npm run ui:build:pseudo      # 擬似ロケールビルド
 python benchmarks/spec_like_benchmark.py --profile smoke   # ベンチ（結果はbench_results/へ）
