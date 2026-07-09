@@ -11,7 +11,7 @@
 - 実装報告は `doc/reports/` に `YYYY-MM-DD_<件名>.md` 形式で追加する。
 - `doc/reports/issues_backlog.md` は、将来対応すべき残件の**下書きキュー**として継続使用する（詳細は下記「GitHub Issue運用」）。実際のIssue化は人間がGitHub Actionsから手動実行する。
 
-## GitHub Issue運用【Codex自身はIssueを直接作成しない】
+## GitHub Issue運用【改訂：Codex自身はIssueを直接作成しない】
 
 - Codex自身の実行環境（ローカルシェル）には、GitHub書き込み用の資格情報を持たせない。`gh issue create` 等をCodexの通常タスク実行中に直接叩かない。
 - 作業中に見つかった「今回のスコープ外だが将来対応すべき項目」は、`doc/reports/issues_backlog.md` に**下書きとして追記する**（通常のファイル編集・コミットであり、特別な認証は不要）。フォーマットは既存の項目に倣う：
@@ -81,14 +81,14 @@
 
 ## テスト・検証コマンド
 
+<!-- TODO(codex): 実際のコマンドに合わせて更新し、このコメントを削除する -->
+
 ```bash
-python -m pytest -q          # エンジン（Golden Test含む）
+pytest -q                    # エンジン（Golden Test含む）
 npm run ci                   # UI: build + i18n:check + i18n:coverage + i18n:test
 npm run ui:build:pseudo      # 擬似ロケールビルド
 python benchmarks/spec_like_benchmark.py --profile smoke   # ベンチ（結果はbench_results/へ）
 ```
-
-Playwright E2EをGitHub Actions Ubuntu上で実行する場合は、CI側で `npx playwright install --with-deps msedge` を先に実行すること。ローカルWindowsでは既存ブラウザで通っても、CIではブラウザ導入とOS非依存のwebServer起動コマンドが必要。
 
 ## 禁止事項
 

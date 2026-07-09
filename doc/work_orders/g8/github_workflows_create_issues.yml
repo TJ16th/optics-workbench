@@ -1,0 +1,58 @@
+# .github/workflows/create-issues.yml
+#
+# doc/reports/issues_backlog.md の内容をGitHub Issueとして登録する。
+# 手動トリガー（workflow_dispatch）専用。push等では自動実行しない
+# （Issue作成はレビュー・意図した実行を挟みたい操作のため）。
+#
+# 使う認証はリポジトリ組み込みの GITHUB_TOKEN のみ。
+# 追加のPersonal Access Tokenは不要。
+
+name: Create Issues From Backlog
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true にすると実際には作成せず一覧のみ表示する"
+        required: false
+        default: "false"
+      annotate:
+        description: "作成成功後、backlogファイルへ [issue: #N] を書き戻してコミットする"
+        required: false
+        default: "true"
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  create-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create issues from backlog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ARGS="--repo ${{ github.repository }} --file doc/reports/issues_backlog.md"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          if [ "${{ inputs.annotate }}" = "true" ] && [ "${{ inputs.dry_run }}" != "true" ]; then
+            ARGS="$ARGS --annotate"
+          fi
+          python scripts/create_issues_from_backlog.py $ARGS
+
+      - name: Commit annotated backlog (if changed)
+        if: ${{ inputs.dry_run != 'true' && inputs.annotate == 'true' }}
+        run: |
+          if ! git diff --quiet -- doc/reports/issues_backlog.md; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add doc/reports/issues_backlog.md
+            git commit -m "chore: annotate issues_backlog.md with created issue numbers [skip ci]"
+            git push
+          else
+            echo "No changes to commit."
+          fi
