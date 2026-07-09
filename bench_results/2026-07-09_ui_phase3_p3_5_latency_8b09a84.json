@@ -1,0 +1,122 @@
+{
+  "task": "UI Phase 3 P3-5",
+  "name": "slider preview latency measurement",
+  "measured_at_jst": "2026-07-09T00:00:00+09:00",
+  "source_commit": "8b09a84",
+  "api_base": "http://127.0.0.1:8000",
+  "system": "P003 Achromat Doublet 100mm",
+  "fields": 3,
+  "wavelengths": 3,
+  "previous_ui_debounce_ms": 180,
+  "adopted_ui_debounce_ms": 70,
+  "notes": [
+    "HTTP measurements were taken against the local FastAPI server on 127.0.0.1:8000.",
+    "Drag preview uses samples_per_field=5 and ray_aiming.mode=paraxial.",
+    "Commit preview uses samples_per_field=9 and ray_aiming.mode=paraxial.",
+    "Effective UI latency is estimated as adopted_ui_debounce_ms + measured HTTP end-to-end latency."
+  ],
+  "results": [
+    {
+      "name": "group_shift_drag_preview_warm",
+      "repeats": 20,
+      "median_http_ms": 10.316,
+      "p95_http_ms": 25.482,
+      "effective_ui_median_ms": 80.316,
+      "effective_ui_p95_ms": 95.482,
+      "rays": 45,
+      "arrived": 45,
+      "last_engine_profiling_ms": {
+        "validation": 0.0916,
+        "layout": 0.0321,
+        "ray_generation_and_aiming": 0.2967,
+        "trace": 1.3571,
+        "total": 1.7775
+      }
+    },
+    {
+      "name": "group_shift_commit_preview_warm",
+      "repeats": 20,
+      "median_http_ms": 5.268,
+      "p95_http_ms": 26.308,
+      "effective_ui_median_ms": 75.268,
+      "effective_ui_p95_ms": 96.308,
+      "rays": 81,
+      "arrived": 81,
+      "last_engine_profiling_ms": {
+        "validation": 0.0873,
+        "layout": 0.0274,
+        "ray_generation_and_aiming": 0.3697,
+        "trace": 1.9616,
+        "total": 2.446
+      }
+    },
+    {
+      "name": "decenter_tilt_drag_preview_warm",
+      "repeats": 20,
+      "median_http_ms": 19.167,
+      "p95_http_ms": 34.95,
+      "effective_ui_median_ms": 89.167,
+      "effective_ui_p95_ms": 104.95,
+      "rays": 45,
+      "arrived": 45,
+      "last_engine_profiling_ms": {
+        "validation": 0.5693,
+        "layout": 0.315,
+        "ray_generation_and_aiming": 1.4914,
+        "trace": 7.5856,
+        "total": 9.9613
+      }
+    },
+    {
+      "name": "decenter_tilt_commit_preview_warm",
+      "repeats": 20,
+      "median_http_ms": 15.822,
+      "p95_http_ms": 47.017,
+      "effective_ui_median_ms": 85.822,
+      "effective_ui_p95_ms": 117.017,
+      "rays": 81,
+      "arrived": 81,
+      "last_engine_profiling_ms": {
+        "validation": 0.6001,
+        "layout": 0.3313,
+        "ray_generation_and_aiming": 1.8126,
+        "trace": 9.9738,
+        "total": 12.7178
+      }
+    },
+    {
+      "name": "aperture_drag_register_plus_preview",
+      "repeats": 20,
+      "median_http_ms": 30.025,
+      "p95_http_ms": 34.153,
+      "effective_ui_median_ms": 100.025,
+      "effective_ui_p95_ms": 104.153,
+      "rays": 45,
+      "arrived": 45,
+      "last_engine_profiling_ms": {
+        "validation": 0.0882,
+        "layout": 0.0267,
+        "ray_generation_and_aiming": 0.3137,
+        "trace": 1.4448,
+        "total": 1.8734
+      }
+    },
+    {
+      "name": "aperture_commit_register_plus_preview",
+      "repeats": 20,
+      "median_http_ms": 31.474,
+      "p95_http_ms": 68.421,
+      "effective_ui_median_ms": 101.474,
+      "effective_ui_p95_ms": 138.421,
+      "rays": 81,
+      "arrived": 81,
+      "last_engine_profiling_ms": {
+        "validation": 0.1497,
+        "layout": 0.0384,
+        "ray_generation_and_aiming": 0.4938,
+        "trace": 2.3946,
+        "total": 3.0765
+      }
+    }
+  ]
+}

@@ -136,7 +136,7 @@ const wavelengthPresets: Array<{ id: string; label: string; wavelength_nm: numbe
   { id: 'e', label: 'e 546.07 nm', wavelength_nm: 546.07 },
 ]
 
-const sliderPreviewDebounceMs = 180
+const sliderPreviewDebounceMs = 70
 const sliderPreviewSamplesPerField = 5
 
 const surfaceColumns: Array<{
