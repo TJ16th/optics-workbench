@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react'
 import {
+  Accordion,
+  AccordionItem,
   Button,
   CodeSnippet,
   ContentSwitcher,
@@ -2744,26 +2746,29 @@ export function App() {
         </section>
 
         <aside className="right-pane">
-          <section className="panel">
-            <h2>{t('settings:settings.api')}</h2>
-            <TextInput id="api-base" labelText={t('settings:settings.base_url')} value={apiBase} onChange={(event) => setApiBase(event.target.value)} />
-            <Select
-              id="language"
-              labelText={t('common.language.label')}
-              value={i18n.language}
-              onChange={(event) => {
-                void changeLanguage(event.target.value as SupportedLanguage)
-              }}
-            >
-              <SelectItem value="ja" text={t('common.language.ja')} />
-              <SelectItem value="en" text={t('common.language.en')} />
-              <SelectItem value="pseudo" text={t('common.language.pseudo')} />
-            </Select>
-            {healthIssue ? (
-              <InlineNotification lowContrast kind="error" title={t('settings:settings.connection')} subtitle={renderEngineIssue(healthIssue, i18n.language).message} />
-            ) : null}
-            {versionBlocked ? <InlineNotification lowContrast kind="error" title={t('settings:settings.version')} subtitle={t('settings:settings.version_mismatch')} /> : null}
-          </section>
+          <Accordion className="right-panel-accordion" align="start">
+            <AccordionItem title={t('settings:settings.api')}>
+              <div className="right-accordion-body">
+                <TextInput id="api-base" labelText={t('settings:settings.base_url')} value={apiBase} onChange={(event) => setApiBase(event.target.value)} />
+                <Select
+                  id="language"
+                  labelText={t('common.language.label')}
+                  value={i18n.language}
+                  onChange={(event) => {
+                    void changeLanguage(event.target.value as SupportedLanguage)
+                  }}
+                >
+                  <SelectItem value="ja" text={t('common.language.ja')} />
+                  <SelectItem value="en" text={t('common.language.en')} />
+                  <SelectItem value="pseudo" text={t('common.language.pseudo')} />
+                </Select>
+                {healthIssue ? (
+                  <InlineNotification lowContrast kind="error" title={t('settings:settings.connection')} subtitle={renderEngineIssue(healthIssue, i18n.language).message} />
+                ) : null}
+                {versionBlocked ? <InlineNotification lowContrast kind="error" title={t('settings:settings.version')} subtitle={t('settings:settings.version_mismatch')} /> : null}
+              </div>
+            </AccordionItem>
+          </Accordion>
 
           <AnalysisConditionPanel
             fields={analysisFields}
@@ -2826,47 +2831,50 @@ export function App() {
             onOpenHelp={setHelpTermId}
           />
 
-          <section className="panel">
-            <h2>{t('settings:settings.validation')}</h2>
-            {mutationIssue ? (
-              <InlineNotification lowContrast kind={issueKind(mutationIssue.severity)} title={renderEngineIssue(mutationIssue, i18n.language).title} subtitle={renderEngineIssue(mutationIssue, i18n.language).message} />
-            ) : null}
-            {validation?.issues.length ? (
-              validation.issues.map((issue) => {
-                const rendered = renderEngineIssue(issue, i18n.language)
-                return (
-                  <InlineNotification
-                    key={`${rendered.code}-${issue.surface_id ?? ''}`}
-                    lowContrast
-                    kind={issueKind(issue.severity)}
-                    title={`${rendered.title} (${rendered.code})`}
-                    subtitle={`${rendered.message}${rendered.action ? ` ${rendered.action}` : ''}`}
-                  />
-                )
-              })
-            ) : (
-              <p className="muted">{validation ? t('settings:settings.no_validation_issues') : t('settings:settings.run_validation')}</p>
-            )}
-          </section>
-
-          <section className="panel">
-            <h2>{t('analysis:analysis.chart_export')}</h2>
-            <Select id="export-language" labelText={t('analysis:analysis.export_language')} value={exportLanguage} onChange={(event) => setExportLanguage(event.target.value as SupportedLanguage)}>
-              <SelectItem value="ja" text={t('common.language.ja')} />
-              <SelectItem value="en" text={t('common.language.en')} />
-            </Select>
-            <div className="button-column">
-              <Button size="sm" kind="secondary" renderIcon={Download} onClick={() => void exportChart('layout', exportLanguage, 'svg')}>
-                {t('analysis:analysis.export_layout_svg')}
-              </Button>
-              <Button size="sm" kind="secondary" renderIcon={Download} onClick={() => void exportChart('spot', exportLanguage, 'svg')}>
-                {t('analysis:analysis.export_spot_svg')}
-              </Button>
-              <Button size="sm" kind="ghost" renderIcon={Download} onClick={() => void exportChart('layout', exportLanguage, 'png')}>
-                {t('analysis:analysis.export_layout_png')}
-              </Button>
-            </div>
-          </section>
+          <Accordion className="right-panel-accordion" align="start">
+            <AccordionItem title={t('settings:settings.validation')}>
+              <div className="right-accordion-body">
+                {mutationIssue ? (
+                  <InlineNotification lowContrast kind={issueKind(mutationIssue.severity)} title={renderEngineIssue(mutationIssue, i18n.language).title} subtitle={renderEngineIssue(mutationIssue, i18n.language).message} />
+                ) : null}
+                {validation?.issues.length ? (
+                  validation.issues.map((issue) => {
+                    const rendered = renderEngineIssue(issue, i18n.language)
+                    return (
+                      <InlineNotification
+                        key={`${rendered.code}-${issue.surface_id ?? ''}`}
+                        lowContrast
+                        kind={issueKind(issue.severity)}
+                        title={`${rendered.title} (${rendered.code})`}
+                        subtitle={`${rendered.message}${rendered.action ? ` ${rendered.action}` : ''}`}
+                      />
+                    )
+                  })
+                ) : (
+                  <p className="muted">{validation ? t('settings:settings.no_validation_issues') : t('settings:settings.run_validation')}</p>
+                )}
+              </div>
+            </AccordionItem>
+            <AccordionItem title={t('analysis:analysis.chart_export')}>
+              <div className="right-accordion-body">
+                <Select id="export-language" labelText={t('analysis:analysis.export_language')} value={exportLanguage} onChange={(event) => setExportLanguage(event.target.value as SupportedLanguage)}>
+                  <SelectItem value="ja" text={t('common.language.ja')} />
+                  <SelectItem value="en" text={t('common.language.en')} />
+                </Select>
+                <div className="button-column">
+                  <Button size="sm" kind="secondary" renderIcon={Download} onClick={() => void exportChart('layout', exportLanguage, 'svg')}>
+                    {t('analysis:analysis.export_layout_svg')}
+                  </Button>
+                  <Button size="sm" kind="secondary" renderIcon={Download} onClick={() => void exportChart('spot', exportLanguage, 'svg')}>
+                    {t('analysis:analysis.export_spot_svg')}
+                  </Button>
+                  <Button size="sm" kind="ghost" renderIcon={Download} onClick={() => void exportChart('layout', exportLanguage, 'png')}>
+                    {t('analysis:analysis.export_layout_png')}
+                  </Button>
+                </div>
+              </div>
+            </AccordionItem>
+          </Accordion>
         </aside>
       </main>
 

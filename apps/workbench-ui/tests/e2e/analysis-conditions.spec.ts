@@ -453,6 +453,35 @@ test('layout view scales stop, sensor, and eye symbols from physical dimensions'
   expect(await layoutSurfaceScale(page, 'EYE')).toMatchObject({ semiDiameterMm: 2, visualHalfHeightPx: 20, rawHalfHeightPx: 8, clamped: true })
 })
 
+test('right pane scrolls independently and keeps center pane stable', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+
+  const rightPane = page.locator('.right-pane')
+  const centerPane = page.locator('.center-pane')
+  await expect(rightPane).toBeVisible()
+  await expect(page.locator('#api-base')).toBeHidden()
+
+  const initialRight = await rightPane.evaluate((node) => ({
+    clientHeight: node.clientHeight,
+    scrollHeight: node.scrollHeight,
+    scrollTop: node.scrollTop,
+  }))
+  expect(initialRight.scrollHeight).toBeGreaterThan(initialRight.clientHeight)
+
+  const before = await centerPane.boundingBox()
+  await rightPane.evaluate((node) => {
+    node.scrollTop = node.scrollHeight
+  })
+  const afterRight = await rightPane.evaluate((node) => ({ scrollTop: node.scrollTop }))
+  const after = await centerPane.boundingBox()
+  expect(afterRight.scrollTop).toBeGreaterThan(initialRight.scrollTop)
+  expect(Math.abs((after?.y ?? 0) - (before?.y ?? 0))).toBeLessThan(1)
+
+  await page.getByRole('button', { name: 'API' }).click()
+  await expect(page.locator('#api-base')).toBeVisible()
+})
+
 test('group motion sliders send runtime configuration through debounced preview', async ({ page }) => {
   const previewRequests: unknown[] = []
   await mockEngine(page, { previewRequests })

@@ -26,6 +26,8 @@ body {
 
 .app-shell {
   min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .header-status {
@@ -41,7 +43,8 @@ body {
   grid-template-columns: minmax(250px, 300px) minmax(420px, 1fr) minmax(280px, 330px);
   gap: 1px;
   padding-top: 3rem;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   background: var(--ow-border);
 }
 
@@ -51,6 +54,9 @@ body {
   background: var(--ow-bg);
   padding: 1rem;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .center-pane {
@@ -65,6 +71,24 @@ body {
   border-radius: 4px;
   padding: 1rem;
   margin-bottom: 1rem;
+}
+
+.right-panel-accordion {
+  background: var(--ow-panel);
+  border: 1px solid var(--ow-border);
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.right-panel-accordion .cds--accordion__item:last-child {
+  border-bottom: 0;
+}
+
+.right-accordion-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0 0 1rem;
 }
 
 .large-panel {
@@ -705,8 +729,15 @@ body {
 }
 
 @media (max-width: 1120px) {
+  .app-shell {
+    height: auto;
+    overflow: visible;
+  }
+
   .workbench-grid {
     grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100vh;
   }
 
   .left-pane,
@@ -716,6 +747,12 @@ body {
 
   .center-pane {
     order: 1;
+  }
+
+  .left-pane,
+  .center-pane,
+  .right-pane {
+    overflow: visible;
   }
 }
 
