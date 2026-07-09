@@ -56,7 +56,7 @@ doc/
 ```
 
 2. 指示書を仕分ける：完了済み（v2.3小改訂、U1〜U5）→ done/、未着手・実行中（エンジンAPI追補、UI Phase 2、最適化タスク8-13、性能タスクの未完分）→ active/。仕分け結果の一覧を報告する。
-3. **active/内の全指示書のファイルパス参照を新パスに更新する**（`doc/optical_engine_spec_v2_3.md` → `doc/engine_spec.md` 等）。本文中の「仕様v2.1 21.5節」のような版言及は改訂履歴で追えるため変更しない。
+3. **active/内の全指示書のファイルパス参照を新パスに更新する**（`doc/engine_spec.md` / `doc/ui_spec.md` 等）。本文中の「仕様v2.1 21.5節」のような版言及は改訂履歴で追えるため変更しない。
 4. glossaryのシード原本がdocにある場合、実装側（apps/workbench-ui/src/i18n/glossary/）を正とし、docの重複コピーはarchiveへ移す（二重管理の排除）。
 5. `doc/README.md` を作成する：正本2ファイルと現行バージョン、archive参照禁止、work_orders/active/のみが有効な指示である旨、reportsの命名規約（`YYYY-MM-DD_<件名>.md`）。
 
