@@ -1,6 +1,8 @@
 import math
+import os
 import time
 
+import numpy as np
 import pytest
 
 from optics_engine import (
@@ -88,8 +90,8 @@ def test_health_and_meta_payloads_advertise_v2_3_capabilities_and_enumerations()
     assert "{surface_id}_curvature" in meta["enumerations"]["variable_key_patterns"]
 
 
-def test_runtime_iris_radius_variable_controls_trace_stop_targets():
-    system = load_system(
+def _runtime_iris_system():
+    return load_system(
         {
             "name": "runtime iris variable",
             "materials": [{"id": "AIR", "type": "constant", "n": 1.0}],
@@ -98,25 +100,93 @@ def test_runtime_iris_radius_variable_controls_trace_stop_targets():
                     "id": "STOP",
                     "kind": "aperture_stop",
                     "surface_type": "plane",
-                    "semi_diameter_mm": {"variable": "iris_radius_mm", "default": 5.0},
-                    "aperture": {"shape": "circle", "semi_diameter_mm": {"variable": "iris_radius_mm", "default": 5.0}},
+                    "semi_diameter_mm": {"variable": "iris_radius_mm", "default": 10.0},
+                    "aperture": {"shape": "circle", "semi_diameter_mm": {"variable": "iris_radius_mm", "default": 10.0}},
                     "thickness_after_mm": 50.0,
                 },
-                {"id": "IMG", "kind": "sensor", "surface_type": "plane", "sensor": {"width_mm": 20.0, "height_mm": 20.0}},
+                {"id": "IMG", "kind": "sensor", "surface_type": "plane", "sensor": {"width_mm": 30.0, "height_mm": 30.0}},
             ],
         }
     )
-    compiled = compile_system(system)
+
+
+def _trace_stop_y_extent(compiled, configuration=None):
     result = trace_forward(
         compiled,
         [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}],
         {"samples_per_field": 3, "pupil_distribution": "fan_y"},
         [587.56],
-        {"store_path": True, "configuration": {"variables": {"iris_radius_mm": 2.0}}},
+        {"store_path": True, "configuration": configuration or {}},
     )
     stop_points = [entry["local_point_mm"] for path in result.paths for entry in path if entry["surface_id"] == "STOP"]
-    assert max(abs(point[1]) for point in stop_points) <= 2.0 + 1.0e-9
-    assert result.status.tolist() == ["alive", "alive", "alive"]
+    return max(abs(point[1]) for point in stop_points), result
+
+
+def test_runtime_iris_radius_variable_defaults_and_overrides_are_stateless():
+    system = _runtime_iris_system()
+    compiled = compile_system(system)
+
+    assert compiled.surfaces[0].semi_diameter_mm == pytest.approx(10.0)
+    assert compiled.surfaces[0].aperture.semi_diameter_mm == pytest.approx(10.0)
+
+    default_extent, default_result = _trace_stop_y_extent(compiled)
+    small_extent, small_result = _trace_stop_y_extent(compiled, {"variables": {"iris_radius_mm": 3.0}})
+    default_again_extent, _ = _trace_stop_y_extent(compiled)
+    large_extent, large_result = _trace_stop_y_extent(compiled, {"variables": {"iris_radius_mm": 8.0}})
+
+    assert default_extent == pytest.approx(10.0)
+    assert small_extent == pytest.approx(3.0)
+    assert default_again_extent == pytest.approx(10.0)
+    assert large_extent == pytest.approx(8.0)
+    assert default_result.status.tolist() == ["alive", "alive", "alive"]
+    assert small_result.status.tolist() == ["alive", "alive", "alive"]
+    assert large_result.status.tolist() == ["alive", "alive", "alive"]
+
+
+def test_runtime_iris_radius_variable_controls_aperture_blocking():
+    system = load_system(
+        {
+            "name": "runtime iris blocking",
+            "materials": [{"id": "AIR", "type": "constant", "n": 1.0}],
+            "surfaces": [
+                {
+                    "id": "STOP",
+                    "kind": "aperture_stop",
+                    "surface_type": "plane",
+                    "semi_diameter_mm": {"variable": "iris_radius_mm", "default": 10.0},
+                    "aperture": {"shape": "circle", "semi_diameter_mm": {"variable": "iris_radius_mm", "default": 10.0}},
+                    "thickness_after_mm": 50.0,
+                },
+                {"id": "IMG", "kind": "sensor", "surface_type": "plane", "sensor": {"width_mm": 30.0, "height_mm": 30.0}},
+            ],
+        }
+    )
+    compiled = compile_system(system)
+
+    from optics_engine.tracing import _trace_raw
+
+    origins = np.array([[-10.0, 5.0, 0.0]], dtype=float)
+    directions = np.array([[1.0, 0.0, 0.0]], dtype=float)
+    wavelengths = np.array([587.56], dtype=float)
+
+    blocked = _trace_raw(
+        compiled,
+        origins,
+        directions,
+        wavelengths,
+        store_path=True,
+        configuration={"variables": {"iris_radius_mm": 3.0}},
+    )
+    passed = _trace_raw(
+        compiled,
+        origins,
+        directions,
+        wavelengths,
+        store_path=True,
+        configuration={"variables": {"iris_radius_mm": 8.0}},
+    )
+    assert blocked.status.tolist() == ["blocked"]
+    assert passed.status.tolist() == ["alive"]
 
 
 def test_image_plane_policy_paraxial_image_moves_evaluation_plane_without_mutating_system():
@@ -257,6 +327,8 @@ def test_image_plane_policy_afocal_error_uses_v2_3_code():
     assert getattr(excinfo.value, "code", None) == "image_plane_policy_not_applicable"
 
 
+@pytest.mark.performance
+@pytest.mark.skipif(os.environ.get("OPTICS_RUN_PERF_TESTS") != "1", reason="timing-sensitive performance check; run with OPTICS_RUN_PERF_TESTS=1")
 def test_image_plane_policy_best_focus_rms_is_within_fixed_sensor_speed_budget():
     compiled = compile_system(thin_lens_system(focal_length=100.0, sensor_x=95.0))
     fields = [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}]

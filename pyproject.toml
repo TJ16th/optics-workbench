@@ -19,6 +19,9 @@ test = ["pytest>=8", "httpx>=0.27"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+  "performance: timing-sensitive performance checks excluded from the default test gate",
+]
 
 [tool.setuptools.packages.find]
 include = ["optics_engine*"]
