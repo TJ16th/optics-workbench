@@ -482,6 +482,44 @@ test('right pane scrolls independently and keeps center pane stable', async ({ p
   await expect(page.locator('#api-base')).toBeVisible()
 })
 
+test('ray count edits only change samples per field in preview requests', async ({ page }) => {
+  const previewRequests: unknown[] = []
+  await mockEngine(page, { previewRequests })
+  await page.goto('/?lng=en')
+  await selectPresetOption(page, 'P002 N-BK7 Biconvex Singlet 50mm Demo')
+  await page.locator('#pupil-distribution').selectOption('hexapolar')
+  await page.locator('#aiming').selectOption('full')
+
+  let fieldSignature = ''
+  for (const [index, samples] of [5, 9, 15, 25].entries()) {
+    await page.locator('#samples').fill(String(samples))
+    await page.getByRole('button', { name: 'Run Preview' }).click()
+    await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBe(index + 1)
+
+    const request = previewRequests[index] as {
+      fields?: Array<{ id: string; theta_y_deg: number; theta_z_deg: number }>
+      wavelengths_nm?: number[]
+      ray_sampling?: { samples_per_field?: number; pupil_distribution?: string; ray_aiming?: { mode?: string } }
+    }
+    expect(request.ray_sampling?.samples_per_field).toBe(samples)
+    expect(request.ray_sampling?.pupil_distribution).toBe('hexapolar')
+    expect(request.ray_sampling?.ray_aiming?.mode).toBe('full')
+    const nextFieldSignature = JSON.stringify(request.fields)
+    if (!fieldSignature) fieldSignature = nextFieldSignature
+    expect(nextFieldSignature).toBe(fieldSignature)
+
+    const expectedRayCount = (request.fields?.length ?? 0) * (request.wavelengths_nm?.length ?? 0) * samples
+    await expect.poll(async () => Number(await page.locator('#layout-svg').getAttribute('data-total-rays')), { timeout: 3_000 }).toBe(expectedRayCount)
+  }
+
+  await page.getByRole('tab', { name: 'Debug' }).click()
+  const summary = page.getByTestId('request-sampling-panel')
+  await expect(summary).toContainText('25')
+  await expect(summary).toContainText('hexapolar')
+  await expect(summary).toContainText('full')
+  await expect(summary).toContainText('center, edge-y, edge-z')
+})
+
 test('group motion sliders send runtime configuration through debounced preview', async ({ page }) => {
   const previewRequests: unknown[] = []
   await mockEngine(page, { previewRequests })

@@ -236,6 +236,17 @@ function traceArrived(trace?: TraceResponse) {
   return trace?.status.filter((item, index) => item === 'alive' && Number.isFinite(trace.sensor_y_mm[index])).length ?? 0
 }
 
+function analysisRequestSummary(request: unknown) {
+  const value = request as Partial<AnalysisRequest> | null | undefined
+  return {
+    fields: Array.isArray(value?.fields) ? value.fields : [],
+    wavelengths: Array.isArray(value?.wavelengths_nm) ? value.wavelengths_nm : [],
+    samplesPerField: value?.ray_sampling?.samples_per_field,
+    pupilDistribution: value?.ray_sampling?.pupil_distribution,
+    rayAimingMode: value?.ray_sampling?.ray_aiming?.mode,
+  }
+}
+
 function collectArtifactUris(value: unknown, prefix = 'result'): Record<string, string> {
   const found: Record<string, string> = {}
   if (!value || typeof value !== 'object') return found
@@ -2464,6 +2475,7 @@ export function App() {
   const versionBlocked = Boolean(apiMajor && apiMajor !== '2')
   const healthIssue = getApiIssue(health.error)
   const mutationIssue = getApiIssue(validateMutation.error ?? registerMutation.error ?? previewMutation.error ?? chartsMutation.error ?? focusMutation.error)
+  const requestSummary = analysisRequestSummary(lastRequest)
 
   const saveSnapshot = async () => {
     const snapshotId = `snapshot-${snapshots.length + 1}`
@@ -2727,6 +2739,29 @@ export function App() {
                 <div className="metric-row">
                   <span>{t('common.debug.started_at')}</span>
                   <code>{meta.data?.build_info?.started_at ?? t('common.empty.dash')}</code>
+                </div>
+              </div>
+              <div className="panel" data-testid="request-sampling-panel">
+                <h2>{t('common.debug.ray_sampling_request')}</h2>
+                <div className="metric-row">
+                  <span>{t('common.debug.samples_per_field')}</span>
+                  <strong>{requestSummary.samplesPerField ?? t('common.empty.dash')}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>{t('common.debug.pupil_distribution')}</span>
+                  <strong>{requestSummary.pupilDistribution ?? t('common.empty.dash')}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>{t('common.debug.ray_aiming_mode')}</span>
+                  <strong>{requestSummary.rayAimingMode ?? t('common.empty.dash')}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>{t('common.debug.fields')}</span>
+                  <code>{requestSummary.fields.length ? requestSummary.fields.map((field) => field.id).join(', ') : t('common.empty.dash')}</code>
+                </div>
+                <div className="metric-row">
+                  <span>{t('common.debug.wavelengths')}</span>
+                  <code>{requestSummary.wavelengths.length ? requestSummary.wavelengths.join(', ') : t('common.empty.dash')}</code>
                 </div>
               </div>
               <div className="panel raw-panel">

@@ -71,6 +71,12 @@
       "git_commit": "git_commit",
       "git_dirty": "git_dirty",
       "started_at": "started_at",
+      "ray_sampling_request": "Ray Sampling Request",
+      "samples_per_field": "samples_per_field",
+      "pupil_distribution": "pupil_distribution",
+      "ray_aiming_mode": "ray_aiming.mode",
+      "fields": "fields",
+      "wavelengths": "wavelengths_nm",
       "request": "Request",
       "response": "Response"
     },
