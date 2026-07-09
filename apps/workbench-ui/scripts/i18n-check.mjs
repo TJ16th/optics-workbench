@@ -71,6 +71,15 @@ const allowedDynamicPrefixes = [
   'units:units.',
 ]
 
+const allowedDynamicKeys = new Set([
+  'surfaceTable:surfaceTable.groups.issue_error',
+  'surfaceTable:surfaceTable.groups.issue_warning',
+  'surfaceTable:surfaceTable.groups.duplicate_id',
+  'surfaceTable:surfaceTable.groups.unknown_surface',
+  'surfaceTable:surfaceTable.groups.invalid_range',
+  'surfaceTable:surfaceTable.groups.overlap',
+])
+
 const errors = []
 for (const lang of languages) {
   const keys = resourceKeys.get(lang)
@@ -79,6 +88,7 @@ for (const lang of languages) {
   }
   for (const key of keys) {
     if (allowedDynamicPrefixes.some((prefix) => key.startsWith(prefix))) continue
+    if (allowedDynamicKeys.has(key)) continue
     if (!referenced.has(key)) errors.push(`${lang}: unused i18n key ${key}`)
   }
 }
