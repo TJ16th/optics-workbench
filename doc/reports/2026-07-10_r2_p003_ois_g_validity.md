@@ -4,7 +4,7 @@ Date: 2026-07-10
 
 ## 対象
 
-- Work order: `doc/work_orders/active/codex_p003_ois_g_validity.md`
+- Work order: `doc/work_orders/done/codex_r2_p003_ois_g_validity.md`
 - 対象プリセット: P003 Achromat Doublet 100mm Demo
 
 ## 面構成の確認

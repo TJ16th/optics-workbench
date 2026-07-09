@@ -4,7 +4,7 @@ Date: 2026-07-10
 
 ## Scope
 
-`doc/work_orders/active/codex_right_panel_layout.md` に基づき、Workbench UI右ペインの縦伸び、スクロール時の中央ペイン巻き込み、低頻度セクションの常時展開を確認し、レイアウトを整理した。
+`doc/work_orders/done/codex_q3_right_panel_layout.md` に基づき、Workbench UI右ペインの縦伸び、スクロール時の中央ペイン巻き込み、低頻度セクションの常時展開を確認し、レイアウトを整理した。
 
 ## Findings
 

@@ -2,7 +2,7 @@
 
 ## 着手タイミング
 
-**Layout View描画品質改善（`codex_layout_view_rendering_quality.md`）の完了報告後に着手する。** 現在進行中のタスクと競合しないよう、それまでは着手しない。
+**Layout View描画品質改善（`codex_q1_layout_view_rendering_quality.md`）の完了報告後に着手する。** 現在進行中のタスクと競合しないよう、それまでは着手しない。
 
 ## 背景
 

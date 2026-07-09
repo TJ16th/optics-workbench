@@ -4,7 +4,7 @@ Date: 2026-07-10
 
 ## Scope
 
-- Work order: `doc/work_orders/active/codex_aberration_chart_standard.md`
+- Work order: `doc/work_orders/done/codex_q6_aberration_chart_standard.md`
 - Target UI: Analysis tab chart rendering for P002 and P003.
 - Goal: remove collapsed SVG axis labels and align the aberration chart display closer to the common three-panel longitudinal-aberration convention.
 

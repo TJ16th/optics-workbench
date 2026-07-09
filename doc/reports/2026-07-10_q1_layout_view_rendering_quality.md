@@ -4,7 +4,7 @@ Date: 2026-07-10
 
 ## 対象
 
-- Work order: `doc/work_orders/active/codex_layout_view_rendering_quality.md`
+- Work order: `doc/work_orders/done/codex_q1_layout_view_rendering_quality.md`
 - 対象UI: Optical Layout View
 - 主な確認プリセット: P003 Achromat Doublet 100mm Demo
 

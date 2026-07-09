@@ -4,7 +4,7 @@ Date: 2026-07-10
 
 ## Scope
 
-`doc/work_orders/active/codex_preset_fast_negative_pair.md` に基づき、明るいF値で強い正負メニスカス曲率を持つLayout View検証用プリセットを追加した。
+`doc/work_orders/done/codex_q5_preset_fast_negative_pair.md` に基づき、明るいF値で強い正負メニスカス曲率を持つLayout View検証用プリセットを追加した。
 
 ## Added Preset
 

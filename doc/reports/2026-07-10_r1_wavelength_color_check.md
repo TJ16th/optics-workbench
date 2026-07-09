@@ -4,7 +4,7 @@ Date: 2026-07-10
 
 ## Scope
 
-`doc/work_orders/active/codex_wavelength_color_check.md` に基づき、Workbench UIのOptical Layout ViewとSpot Diagramで、複数波長の表示色が実際に反映されているか確認した。
+`doc/work_orders/done/codex_r1_wavelength_color_check.md` に基づき、Workbench UIのOptical Layout ViewとSpot Diagramで、複数波長の表示色が実際に反映されているか確認した。
 
 確認対象はP003 achromat preset、F/d/Cの3波長、複数field、education preview由来のray pathとspot previewである。
 

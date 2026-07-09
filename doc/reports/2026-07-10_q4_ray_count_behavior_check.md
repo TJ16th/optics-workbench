@@ -4,7 +4,7 @@ Date: 2026-07-10
 
 ## Scope
 
-`doc/work_orders/active/codex_ray_count_behavior_check.md` に基づき、Workbench UIの「Rays / field」変更が、実際のPreview/Analysis requestで意図しない条件連動を起こしていないか確認した。
+`doc/work_orders/done/codex_q4_ray_count_behavior_check.md` に基づき、Workbench UIの「Rays / field」変更が、実際のPreview/Analysis requestで意図しない条件連動を起こしていないか確認した。
 
 ## Findings
 

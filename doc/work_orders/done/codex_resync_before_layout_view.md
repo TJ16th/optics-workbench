@@ -9,7 +9,7 @@
 1. 現在のエンジンAPI・UI開発サーバープロセスを停止し、現在のHEADコードで再起動する（`codex_restart_processes.md`と同じ手順）。
 2. `GET /v1/meta`の`build_info.git_commit`が現在のHEADと一致することを確認する。
 3. 今回の結果を`doc/reports/`に短く記録する（前回同様の形式でよい。詳細な調査は不要、PID・コミット一致確認のみで十分）。
-4. Layout View描画品質改善タスク（`codex_layout_view_rendering_quality.md`）の完了後、再度この同期作業が必要になる見込みであることを一言メモしておく（人間側が都度依頼せずとも、大きめのタスク完了後は再起動を促す運用にするかどうかは今後検討）。
+4. Layout View描画品質改善タスク（`codex_q1_layout_view_rendering_quality.md`）の完了後、再度この同期作業が必要になる見込みであることを一言メモしておく（人間側が都度依頼せずとも、大きめのタスク完了後は再起動を促す運用にするかどうかは今後検討）。
 
 ## 完了条件
 

@@ -4,7 +4,7 @@ Date: 2026-07-10
 
 ## Scope
 
-`doc/work_orders/active/codex_layout_symbol_scale_check.md` に基づき、Optical Layout View上のSTOP、sensor、eye_referenceなどの記号サイズが、固定pxではなく光学系データの実寸から決まっているか確認した。
+`doc/work_orders/done/codex_q2_layout_symbol_scale_check.md` に基づき、Optical Layout View上のSTOP、sensor、eye_referenceなどの記号サイズが、固定pxではなく光学系データの実寸から決まっているか確認した。
 
 ## Findings
 

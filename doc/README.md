@@ -17,7 +17,6 @@ Only work orders in `doc/work_orders/active/` are actionable. Work orders in `do
 
 | Status | File | Notes |
 | --- | --- | --- |
-| active | `doc/work_orders/active/codex_github_publication_work_order.md` | Public-release tasks G1-G5. G1 is complete; G2 is this documentation reorganization. |
 | active | `doc/work_orders/active/codex_performance_work_order.md` | Performance and optimization follow-up work. |
 | done | `doc/work_orders/done/codex_engine_api_addendum_work_order.md` | A0-A3 completed; see `doc/reports/engine_api_addendum_a0_a3_report.md`. |
 | done | `doc/work_orders/done/codex_ui_i18n_work_order.md` | U1-U5 completed; see `doc/reports/implementation_status_v2_3_ui_i18n.md`. |
@@ -30,7 +29,7 @@ Implementation reports live in `doc/reports/`.
 New reports should use:
 
 ```text
-YYYY-MM-DD_<subject>.md
+YYYY-MM-DD_<task-number>_<subject>.md
 ```
 
 Existing pre-publication reports that predate this convention are retained in `doc/reports/` for traceability.

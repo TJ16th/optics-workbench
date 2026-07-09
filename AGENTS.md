@@ -105,3 +105,10 @@ Playwright E2EをGitHub Actions Ubuntu上で実行する場合は、CI側で `np
 - 新規の書き込み系資格情報（PAT等）の発行・保存・環境変数への設定は人間の承認を得てから行う。GitHub Issue作成はPATを使わずAGENTS.md「GitHub Issue運用」節の方式（Actions workflow_dispatch＋組み込みGITHUB_TOKEN）で行うため、通常はこの種の資格情報をCodexに持たせる必要はない。
 - 個人情報・絶対パス（ユーザー名入り）・秘密情報のコード/ドキュメント/ログへの記載
 - 未実装機能のcapabilities掲載、README進捗表の誇張
+
+## Work Order File Naming
+
+- 新規の作業指示書は `doc/work_orders/active/codex_<task-number>_<short-slug>.md` 形式で作成する。
+- 完了報告は `doc/reports/YYYY-MM-DD_<task-number>_<short-slug>.md` 形式で作成する。
+- `task-number` は小文字で、台帳・指示番号の表記を保つ。例: `g8`, `a1`, `u5`, `p3-2`, `q1`, `q1b`, `r14-20`。
+- 指示番号が未確定の場合は推測で新規番号を作らず、人間に確認する。既存の会話順から明確に次番が決まる整理タスクのみ、その根拠を完了報告に書く。

@@ -4,7 +4,7 @@
 
 ## 対象
 
-- 指示書: `doc/work_orders/active/codex_work_orders_active_done_check.md`
+- 指示書: `doc/work_orders/done/codex_r8_work_orders_active_done_check.md`
 - 対象ディレクトリ:
   - `doc/work_orders/active/`
   - `doc/work_orders/done/`
@@ -26,9 +26,9 @@
 | `codex_education_preview_paths_fix.md` | `2026-07-10_education_preview_paths_fix.md` |
 | `codex_fix_i18n_check_groups.md` | `2026-07-10_fix_i18n_check_groups.md` |
 | `codex_github_publication_work_order.md` | G1-G5 reports: `2026-07-09_g1...` through `2026-07-09_g5...` |
-| `codex_layout_view_rendering_quality.md` | `2026-07-10_layout_view_rendering_quality.md` |
-| `codex_lod_ray_symmetry.md` | `2026-07-10_lod_ray_symmetry.md` |
-| `codex_p003_ois_g_validity.md` | `2026-07-10_p003_ois_g_validity.md` |
+| `codex_q1_layout_view_rendering_quality.md` | `2026-07-10_q1_layout_view_rendering_quality.md` |
+| `codex_q1b_lod_ray_symmetry.md` | `2026-07-10_q1b_lod_ray_symmetry.md` |
+| `codex_r2_p003_ois_g_validity.md` | `2026-07-10_r2_p003_ois_g_validity.md` |
 | `codex_restart_processes.md` | `2026-07-10_restart_processes.md` |
 | `codex_restart_report_and_dirty_flag.md` | `2026-07-10_restart_processes.md` と AGENTS.md の dirty/reporting rule |
 | `codex_resync_before_layout_view.md` | `2026-07-10_resync_before_layout_view.md` |
@@ -39,7 +39,7 @@
 | `codex_ui_phase3_work_order.md` | P3-0 through P3-5 reports and follow-up reports exist |
 | `codex_ui_ray_path_verification.md` | `2026-07-09_ui_ray_path_verification.md` |
 | `codex_verify_fix_and_build_info.md` | `2026-07-10_verify_fix_and_build_info.md` |
-| `codex_work_orders_active_done_check.md` | 本レポート |
+| `codex_r8_work_orders_active_done_check.md` | 本レポート |
 
 ## active に残した指示書
 

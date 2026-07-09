@@ -4,7 +4,7 @@ Date: 2026-07-10
 
 ## 対象
 
-- Work order: `doc/work_orders/active/codex_lod_ray_symmetry.md`
+- Work order: `doc/work_orders/done/codex_q1b_lod_ray_symmetry.md`
 - 対象UI: Optical Layout View
 - 確認プリセット: P002 N-BK7 Biconvex Singlet 50mm Demo / P003 Achromat Doublet 100mm Demo
 

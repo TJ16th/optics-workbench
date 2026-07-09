@@ -8,7 +8,7 @@
 
 これらを兼ね備えた新規プリセットを追加し、あわせて現在進行中のLayout View描画品質改善（有効径境界・エッジ厚表現・材質区別）の検証ケースとしても使う。
 
-**着手前提**：Layout View描画品質改善（`codex_layout_view_rendering_quality.md`）の作業と競合しないよう、当該タスクが完了報告を出してから本タスクに着手する。もし並行実行が既に指示されている場合は、`presets.ts`への追記のみを行い、Layout View描画ロジック自体には触れない。
+**着手前提**：Layout View描画品質改善（`codex_q1_layout_view_rendering_quality.md`）の作業と競合しないよう、当該タスクが完了報告を出してから本タスクに着手する。もし並行実行が既に指示されている場合は、`presets.ts`への追記のみを行い、Layout View描画ロジック自体には触れない。
 
 ## 作業
 
