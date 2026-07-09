@@ -29,6 +29,8 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps msedge
       - name: UI CI
         run: npm run ci
       - name: Pseudo-locale build

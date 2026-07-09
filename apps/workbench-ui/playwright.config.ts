@@ -11,7 +11,7 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'npm.cmd run ui:dev -- --port 5177',
+    command: 'node ../../node_modules/vite/bin/vite.js . --host 127.0.0.1 --port 5177',
     url: 'http://127.0.0.1:5177/?lng=en',
     reuseExistingServer: true,
     timeout: 120_000,

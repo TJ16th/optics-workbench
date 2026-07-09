@@ -65,6 +65,8 @@ npm run ui:build:pseudo      # 擬似ロケールビルド
 python benchmarks/spec_like_benchmark.py --profile smoke   # ベンチ（結果はbench_results/へ）
 ```
 
+Playwright E2EをGitHub Actions Ubuntu上で実行する場合は、CI側で `npx playwright install --with-deps msedge` を先に実行すること。ローカルWindowsでは既存ブラウザで通っても、CIではブラウザ導入とOS非依存のwebServer起動コマンドが必要。
+
 ## 禁止事項
 
 - `doc/archive/` の参照、旧版仕様に基づく実装
