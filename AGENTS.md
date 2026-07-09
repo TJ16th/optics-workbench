@@ -8,6 +8,7 @@
 - UI仕様の正本：`doc/ui_spec.md`（同上）
 - **`doc/archive/` 以下は旧版であり、参照禁止。** 検索でヒットしても正本を優先すること。
 - 有効な作業指示は `doc/work_orders/active/` 内のみ。`done/` は完了済みの記録であり、再実行しない。
+- `doc/work_orders/` 直下には `active/`・`done/`・`README.md` 以外を置かない。
 - 実装報告は `doc/reports/` に `YYYY-MM-DD_<件名>.md` 形式で追加する。
 - `doc/reports/issues_backlog.md` は、将来対応すべき残件の**下書きキュー**として継続使用する（詳細は下記「GitHub Issue運用」）。実際のIssue化は人間がGitHub Actionsから手動実行する。
 
