@@ -1267,8 +1267,14 @@ function SliderControl({
 
 function SpotStrip({ trace }: { trace?: TraceResponse }) {
   const { t } = useTranslation(['layoutView'])
+  const samples = Math.max(1, Number(trace?.metadata.samples_per_field ?? 1))
+  const wavelengths = trace?.metadata.wavelengths_nm?.length ? trace.metadata.wavelengths_nm : [undefined]
   const points = trace?.sensor_y_mm
-    ?.map((y, index) => ({ y, z: trace.sensor_z_mm[index], status: trace.status[index] }))
+    ?.map((y, index) => {
+      const wavelengthIndex = Math.floor(index / samples) % wavelengths.length
+      const wavelength = wavelengths[wavelengthIndex]
+      return { y, z: trace.sensor_z_mm[index], status: trace.status[index], wavelength, wavelengthIndex }
+    })
     .filter((point) => Number.isFinite(point.y) && Number.isFinite(point.z))
     .slice(0, 120)
 
@@ -1286,7 +1292,19 @@ function SpotStrip({ trace }: { trace?: TraceResponse }) {
       {points?.map((point, index) => {
         const x = 130 + Math.max(-96, Math.min(96, point.y * 16))
         const y = 110 - Math.max(-86, Math.min(86, point.z * 16))
-        return <circle key={index} cx={x} cy={y} r="2.7" className={point.status === 'alive' ? 'spot-point' : 'spot-blocked'} />
+        const color = point.wavelength === undefined ? undefined : wavelengthColor(point.wavelength)
+        return (
+          <circle
+            key={index}
+            cx={x}
+            cy={y}
+            r="2.7"
+            className={point.status === 'alive' ? 'spot-point' : 'spot-blocked'}
+            style={point.status === 'alive' && color ? { fill: color } : undefined}
+            data-wavelength-index={point.wavelengthIndex}
+            data-wavelength-nm={point.wavelength}
+          />
+        )
       })}
     </svg>
   )

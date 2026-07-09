@@ -351,6 +351,17 @@ test('P003 slider preview keeps layout rays on education preview surface paths',
     return counts
   }, {})
   expect(new Set(Object.values(fieldCounts))).toEqual(new Set([9]))
+  await expect(page.locator('#layout-svg path.ray-line.ray-f').first()).toBeVisible()
+  await expect(page.locator('#layout-svg path.ray-line.ray-d').first()).toBeVisible()
+  await expect(page.locator('#layout-svg path.ray-line.ray-c').first()).toBeVisible()
+  const spotColors = await page.locator('#spot-svg circle.spot-point').evaluateAll((nodes) =>
+    nodes.map((node) => ({
+      wavelength: node.getAttribute('data-wavelength-nm'),
+      fill: getComputedStyle(node).fill,
+    })),
+  )
+  expect(new Set(spotColors.map((item) => item.wavelength))).toEqual(new Set(['486.13', '587.56', '656.27']))
+  expect(new Set(spotColors.map((item) => item.fill))).toEqual(new Set(['rgb(15, 98, 254)', 'rgb(138, 116, 0)', 'rgb(218, 30, 40)']))
 })
 
 test('debug tab shows connected engine build info', async ({ page }) => {
