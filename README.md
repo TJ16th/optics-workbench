@@ -1,4 +1,4 @@
-# <REPO_NAME> — Optics Workbench
+# optics-workbench — Optics Workbench
 
 写真レンズ・双眼鏡・望遠鏡のための教育用光学シミュレーションエンジン＆Web Workbench
 
@@ -84,8 +84,8 @@ npm run ci                   # UIビルド + i18n検査 + 用語集カバレッ�
 
 ## 未確定項目
 
-- `<REPO_NAME>` は公開時に正式リポジトリ名へ置き換えてください。
-- `NOTICE` の `<COPYRIGHT_HOLDER>` は権利者名確定後に置き換えてください。
+- `optics-workbench` は公開時に正式リポジトリ名へ置き換えてください。
+- `NOTICE` の `TJ16th` は権利者名確定後に置き換えてください。
 
 ## ライセンス
 
