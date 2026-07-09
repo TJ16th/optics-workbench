@@ -7,6 +7,7 @@ import type {
   FieldCurvatureRow,
   ImagePlanePolicy,
   OpticalSystem,
+  RuntimeConfiguration,
   TraceResponse,
   ValidationResult,
   WavelengthSample,
@@ -104,6 +105,7 @@ export type PreviewRequest = {
   }
   wavelengths_nm: number[]
   wavelength_weights?: WavelengthSample[]
+  configuration?: RuntimeConfiguration
   options: { store_path: boolean; profiling: boolean }
 }
 

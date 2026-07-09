@@ -62,6 +62,11 @@ export type OpticalGroup = {
   to_surface: string
 }
 
+export type RuntimeConfiguration = {
+  zoom_position?: string
+  group_positions?: Record<string, { shift_x_mm?: number; shift_y_mm?: number; shift_z_mm?: number }>
+}
+
 export type AnalysisField = {
   id: string
   type: 'angular'

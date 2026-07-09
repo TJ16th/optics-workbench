@@ -39,6 +39,7 @@ import type {
   OpticalSystem,
   RayFanPoint,
   RelativeIlluminationRow,
+  RuntimeConfiguration,
   Surface,
   TraceResponse,
   ValidationResult,
@@ -114,6 +115,9 @@ const wavelengthPresets: Array<{ id: string; label: string; wavelength_nm: numbe
   { id: 'C', label: 'C 656.27 nm', wavelength_nm: 656.27 },
   { id: 'e', label: 'e 546.07 nm', wavelength_nm: 546.07 },
 ]
+
+const sliderPreviewDebounceMs = 180
+const sliderPreviewSamplesPerField = 5
 
 const surfaceColumns: Array<{
   id: string
@@ -348,6 +352,35 @@ function groupIssues(groups: OpticalGroup[], surfaces: Surface[]) {
     }
   }
   return issues
+}
+
+function motionGroupIds(system: OpticalSystem) {
+  const ids = new Set<string>()
+  for (const position of system.zoom_positions ?? []) {
+    for (const groupId of Object.keys(position.group_positions)) ids.add(groupId)
+  }
+  for (const group of system.groups ?? []) {
+    if (/focus|zoom/i.test(`${group.id} ${group.name ?? ''}`)) ids.add(group.id)
+  }
+  return [...ids]
+}
+
+function zoomBaseShift(system: OpticalSystem, zoomPositionId: string, groupId: string) {
+  const position = system.zoom_positions?.find((item) => item.id === zoomPositionId)
+  return position?.group_positions[groupId]?.shift_x_mm ?? 0
+}
+
+function makeRuntimeConfiguration(system: OpticalSystem, zoomPositionId: string, focusGroupId: string, focusShiftMm: number): RuntimeConfiguration {
+  const configuration: RuntimeConfiguration = {}
+  if (zoomPositionId) configuration.zoom_position = zoomPositionId
+  if (focusGroupId) {
+    configuration.group_positions = {
+      [focusGroupId]: {
+        shift_x_mm: zoomBaseShift(system, zoomPositionId, focusGroupId) + focusShiftMm,
+      },
+    }
+  }
+  return configuration
 }
 
 function presetLabel(id: string, fallback: string, t: (key: string, options?: Record<string, unknown>) => string) {
@@ -629,6 +662,106 @@ function GroupPanel({
           ))}
         </div>
       ) : null}
+    </section>
+  )
+}
+
+function GroupMotionPanel({
+  system,
+  zoomPositionId,
+  focusGroupId,
+  focusShiftMm,
+  runtimeConfiguration,
+  isPreviewing,
+  onSetZoomPosition,
+  onSetFocusGroup,
+  onSetFocusShift,
+  onCommit,
+}: {
+  system: OpticalSystem
+  zoomPositionId: string
+  focusGroupId: string
+  focusShiftMm: number
+  runtimeConfiguration: RuntimeConfiguration
+  isPreviewing: boolean
+  onSetZoomPosition: (id: string, commit?: boolean) => void
+  onSetFocusGroup: (id: string, commit?: boolean) => void
+  onSetFocusShift: (value: number, commit?: boolean) => void
+  onCommit: () => void
+}) {
+  const { t } = useTranslation(['settings', 'units'])
+  const zoomPositions = system.zoom_positions ?? []
+  const groupIds = motionGroupIds(system)
+  const zoomIndex = Math.max(0, zoomPositions.findIndex((position) => position.id === zoomPositionId))
+  const enabled = zoomPositions.length > 0 || groupIds.length > 0
+  const configJson = JSON.stringify(runtimeConfiguration)
+
+  if (!enabled) {
+    return (
+      <section className="panel">
+        <h2>{t('settings:settings.group_motion')}</h2>
+        <p className="muted">{t('settings:settings.group_motion_empty')}</p>
+      </section>
+    )
+  }
+
+  return (
+    <section className="panel group-motion-panel">
+      <div className="condition-heading">
+        <h2>{t('settings:settings.group_motion')}</h2>
+        <Tag type={isPreviewing ? 'blue' : 'gray'}>{isPreviewing ? t('settings:settings.previewing') : t('settings:settings.preview_ready')}</Tag>
+      </div>
+      {zoomPositions.length ? (
+        <div className="slider-control">
+          <label htmlFor="zoom-position-slider">{t('settings:settings.zoom_position')}</label>
+          <input
+            id="zoom-position-slider"
+            type="range"
+            min={0}
+            max={zoomPositions.length - 1}
+            step={1}
+            value={zoomIndex}
+            onChange={(event) => onSetZoomPosition(zoomPositions[Number(event.target.value)]?.id ?? zoomPositions[0].id)}
+            onMouseUp={onCommit}
+            onTouchEnd={onCommit}
+          />
+          <div className="slider-meta">
+            <strong>{zoomPositionId || zoomPositions[0].id}</strong>
+            <span>{t('settings:settings.discrete_zoom')}</span>
+          </div>
+        </div>
+      ) : null}
+      {groupIds.length ? (
+        <div className="slider-control">
+          <Select id="focus-group" labelText={t('settings:settings.focus_group')} value={focusGroupId} onChange={(event) => onSetFocusGroup(event.target.value, true)}>
+            {groupIds.map((groupId) => (
+              <SelectItem key={groupId} value={groupId} text={groupId} />
+            ))}
+          </Select>
+          <label htmlFor="focus-shift-slider">{t('settings:settings.focus_shift_x_mm')}</label>
+          <input
+            id="focus-shift-slider"
+            type="range"
+            min={-5}
+            max={5}
+            step={0.1}
+            value={focusShiftMm}
+            onChange={(event) => onSetFocusShift(Number(event.target.value))}
+            onMouseUp={onCommit}
+            onTouchEnd={onCommit}
+          />
+          <div className="slider-meta">
+            <strong>
+              {formatFixed(zoomBaseShift(system, zoomPositionId, focusGroupId) + focusShiftMm, 3)} {t('units:units.mm')}
+            </strong>
+            <span>{t('settings:settings.focus_shift_detail', { value: formatFixed(focusShiftMm, 1) })}</span>
+          </div>
+        </div>
+      ) : null}
+      <CodeSnippet type="single" hideCopyButton>
+        {configJson}
+      </CodeSnippet>
+      <p className="muted">{t('settings:settings.group_motion_debounce', { ms: sliderPreviewDebounceMs, rays: sliderPreviewSamplesPerField })}</p>
     </section>
   )
 }
@@ -1393,6 +1526,14 @@ export function App() {
   const [aimingMode, setAimingMode] = useState('paraxial')
   const [imagePlanePolicy, setImagePlanePolicy] = useState<ImagePlanePolicyDraft>(() => ({ ...defaultImagePlanePolicy }))
   const imagePlanePolicyRef = useRef<ImagePlanePolicyDraft>(imagePlanePolicy)
+  const [zoomPositionId, setZoomPositionId] = useState('')
+  const [focusGroupId, setFocusGroupId] = useState('')
+  const [focusShiftMm, setFocusShiftMm] = useState(0)
+  const [runtimeConfiguration, setRuntimeConfiguration] = useState<RuntimeConfiguration>({})
+  const runtimeConfigurationRef = useRef<RuntimeConfiguration>({})
+  const sliderPreviewTimerRef = useRef<number | undefined>()
+  const motionPreviewSequenceRef = useRef(0)
+  const [sliderPreviewPending, setSliderPreviewPending] = useState(false)
   const [analysisDirty, setAnalysisDirty] = useState(false)
   const [systemDirty, setSystemDirty] = useState(false)
   const [system, setSystem] = useState<OpticalSystem>(() => cloneSystem(presets[0].system))
@@ -1474,6 +1615,17 @@ export function App() {
     markAnalysisDirty()
   }
 
+  const resetMotionControls = (nextSystem: OpticalSystem) => {
+    const nextZoom = nextSystem.zoom_positions?.[0]?.id ?? ''
+    const nextGroup = motionGroupIds(nextSystem)[0] ?? ''
+    setZoomPositionId(nextZoom)
+    setFocusGroupId(nextGroup)
+    setFocusShiftMm(0)
+    const nextConfiguration = makeRuntimeConfiguration(nextSystem, nextZoom, nextGroup, 0)
+    runtimeConfigurationRef.current = nextConfiguration
+    setRuntimeConfiguration(nextConfiguration)
+  }
+
   const markSystemChanged = (nextSystem: OpticalSystem) => {
     setSystem(nextSystem)
     setSystemDirty(true)
@@ -1528,20 +1680,84 @@ export function App() {
     return result.system_id
   }
 
-  const makeAnalysisRequest = (id: string): AnalysisRequest => ({
+  const makeAnalysisRequest = (
+    id: string,
+    overrides: { configuration?: RuntimeConfiguration; samplesPerField?: number; aimingMode?: string } = {},
+  ): AnalysisRequest => ({
     system_id: id,
     fields: analysisFields,
     ray_sampling: {
-      samples_per_field: samplesPerField,
+      samples_per_field: overrides.samplesPerField ?? samplesPerField,
       pupil_distribution: pupilDistribution,
-      ray_aiming: { mode: aimingMode },
+      ray_aiming: { mode: overrides.aimingMode ?? aimingMode },
     },
     wavelengths_nm: wavelengths.map((sample) => sample.wavelength_nm),
     wavelength_weights: wavelengths,
+    configuration: overrides.configuration ?? runtimeConfiguration,
     frequencies_lp_per_mm: [0, 10, 20, 40, 80],
     ...(policyDisabled ? {} : { image_plane_policy: makePolicy(readImagePlanePolicyForm(), analysisFields, wavelengths) }),
     options: { store_path: true, profiling: true },
   })
+
+  const applyPreviewResult = (result: TraceResponse, clean: boolean) => {
+    setTrace(result)
+    const nextEvaluationPlane = extractEvaluationPlane(result)
+    setEvaluationPlane(nextEvaluationPlane)
+    setFocusCurve(nextEvaluationPlane?.focus_curve ?? [])
+    setFocusResult(undefined)
+    setLastResponse(result)
+    setAnalysisDirty(!clean)
+    setActiveTab('preview')
+  }
+
+  const runMotionPreview = async (configuration: RuntimeConfiguration, lowResolution: boolean) => {
+    const sequence = motionPreviewSequenceRef.current + 1
+    motionPreviewSequenceRef.current = sequence
+    setSliderPreviewPending(true)
+    try {
+      const id = await ensureRegisteredSystem()
+      const request = makeAnalysisRequest(id, {
+        configuration,
+        ...(lowResolution ? { samplesPerField: sliderPreviewSamplesPerField, aimingMode: 'paraxial' } : {}),
+      })
+      setLastRequest(request)
+      const result = await runPreview(apiBase, request)
+      if (sequence !== motionPreviewSequenceRef.current) return
+      applyPreviewResult(result, !lowResolution)
+    } catch (error) {
+      if (sequence !== motionPreviewSequenceRef.current) return
+      setLastResponse(getApiIssue(error))
+    } finally {
+      if (sequence === motionPreviewSequenceRef.current) setSliderPreviewPending(false)
+    }
+  }
+
+  const scheduleMotionPreview = (configuration: RuntimeConfiguration) => {
+    if (sliderPreviewTimerRef.current) window.clearTimeout(sliderPreviewTimerRef.current)
+    sliderPreviewTimerRef.current = window.setTimeout(() => {
+      void runMotionPreview(configuration, true)
+    }, sliderPreviewDebounceMs)
+  }
+
+  const setMotionConfiguration = (nextZoom: string, nextFocusGroup: string, nextFocusShift: number, commit = false) => {
+    const nextConfiguration = makeRuntimeConfiguration(system, nextZoom, nextFocusGroup, nextFocusShift)
+    setZoomPositionId(nextZoom)
+    setFocusGroupId(nextFocusGroup)
+    setFocusShiftMm(nextFocusShift)
+    runtimeConfigurationRef.current = nextConfiguration
+    setRuntimeConfiguration(nextConfiguration)
+    markAnalysisDirty()
+    scheduleMotionPreview(nextConfiguration)
+    if (commit) {
+      if (sliderPreviewTimerRef.current) window.clearTimeout(sliderPreviewTimerRef.current)
+      void runMotionPreview(nextConfiguration, false)
+    }
+  }
+
+  const commitMotionConfiguration = () => {
+    if (sliderPreviewTimerRef.current) window.clearTimeout(sliderPreviewTimerRef.current)
+    void runMotionPreview(runtimeConfigurationRef.current, false)
+  }
 
   const validateMutation = useMutation({
     mutationFn: async () => validateSystem(apiBase, system),
@@ -1582,14 +1798,7 @@ export function App() {
       return runPreview(apiBase, request)
     },
     onSuccess: (result) => {
-      setTrace(result)
-      const nextEvaluationPlane = extractEvaluationPlane(result)
-      setEvaluationPlane(nextEvaluationPlane)
-      setFocusCurve(nextEvaluationPlane?.focus_curve ?? [])
-      setFocusResult(undefined)
-      setLastResponse(result)
-      setAnalysisDirty(false)
-      setActiveTab('preview')
+      applyPreviewResult(result, true)
     },
     onError: (error) => {
       setLastResponse(getApiIssue(error))
@@ -1756,6 +1965,7 @@ export function App() {
                   setAimingMode('paraxial')
                   imagePlanePolicyRef.current = { ...defaultImagePlanePolicy }
                   setImagePlanePolicy(imagePlanePolicyRef.current)
+                  resetMotionControls(selectedItem.system)
                   setAnalysisDirty(false)
                   setSystemDirty(false)
                 }
@@ -1957,6 +2167,19 @@ export function App() {
             isSolving={focusMutation.isPending}
             onUpdatePolicy={updateImagePlanePolicy}
             onSolve={() => focusMutation.mutate()}
+          />
+
+          <GroupMotionPanel
+            system={system}
+            zoomPositionId={zoomPositionId}
+            focusGroupId={focusGroupId}
+            focusShiftMm={focusShiftMm}
+            runtimeConfiguration={runtimeConfiguration}
+            isPreviewing={sliderPreviewPending}
+            onSetZoomPosition={(id, commit) => setMotionConfiguration(id, focusGroupId, focusShiftMm, commit)}
+            onSetFocusGroup={(id, commit) => setMotionConfiguration(zoomPositionId, id, focusShiftMm, commit)}
+            onSetFocusShift={(value, commit) => setMotionConfiguration(zoomPositionId, focusGroupId, value, commit)}
+            onCommit={commitMotionConfiguration}
           />
 
           <section className="panel">

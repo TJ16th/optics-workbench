@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-async function mockEngine(page: import('@playwright/test').Page, options: { failArtifacts?: boolean } = {}) {
+async function mockEngine(page: import('@playwright/test').Page, options: { failArtifacts?: boolean; previewRequests?: unknown[] } = {}) {
   await page.route('http://127.0.0.1:8000/v1/health', async (route) => {
     await route.fulfill({ json: { status: 'ok' } })
   })
@@ -67,6 +67,7 @@ async function mockEngine(page: import('@playwright/test').Page, options: { fail
   })
   await page.route('http://127.0.0.1:8000/v1/education/preview', async (route) => {
     const request = route.request().postDataJSON()
+    options.previewRequests?.push(request)
     const fields = request.fields ?? []
     const wavelengths = request.wavelengths_nm ?? []
     const samples = request.ray_sampling?.samples_per_field ?? 1
@@ -236,6 +237,43 @@ test('group edits mark the optical system dirty and show range warnings', async 
 
   await page.getByRole('button', { name: 'Remove group' }).last().click()
   await expect(page.getByTestId('group-row')).toHaveCount(2)
+})
+
+test('group motion sliders send runtime configuration through debounced preview', async ({ page }) => {
+  const previewRequests: unknown[] = []
+  await mockEngine(page, { previewRequests })
+  await page.goto('/?lng=en')
+  await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
+  await page.getByText('P003 Achromat Doublet 100mm Demo').click()
+
+  await expect(page.getByText('Group Motion')).toBeVisible()
+  await expect(page.locator('#focus-group')).toHaveValue('FOCUS_G')
+  await page.locator('#focus-shift-slider').evaluate((node) => {
+    const input = node as HTMLInputElement
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(input, '1.5')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+
+  await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBeGreaterThanOrEqual(1)
+  const dragPreview = previewRequests[previewRequests.length - 1] as {
+    configuration?: { zoom_position?: string; group_positions?: Record<string, { shift_x_mm?: number }> }
+    ray_sampling?: { samples_per_field?: number; ray_aiming?: { mode?: string } }
+  }
+  expect(dragPreview.configuration?.zoom_position).toBe('infinity')
+  expect(dragPreview.configuration?.group_positions?.FOCUS_G?.shift_x_mm).toBeCloseTo(1.5)
+  expect(dragPreview.ray_sampling?.samples_per_field).toBe(5)
+  expect(dragPreview.ray_sampling?.ray_aiming?.mode).toBe('paraxial')
+
+  await page.locator('#focus-shift-slider').dispatchEvent('mouseup')
+  await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBeGreaterThanOrEqual(2)
+  const commitPreview = previewRequests[previewRequests.length - 1] as {
+    configuration?: { group_positions?: Record<string, { shift_x_mm?: number }> }
+    ray_sampling?: { samples_per_field?: number }
+  }
+  expect(commitPreview.configuration?.group_positions?.FOCUS_G?.shift_x_mm).toBeCloseTo(1.5)
+  expect(commitPreview.ray_sampling?.samples_per_field).toBe(9)
+  await expect(page.getByTestId('analysis-dirty-status')).toContainText('clean')
 })
 
 test('P003 analysis charts render with glossary labels and geometric MTF note', async ({ page }) => {
