@@ -353,6 +353,7 @@ function groupSurfaceRange(group: OpticalGroup, surfaces: Surface[]) {
 
 function groupIssues(groups: OpticalGroup[], surfaces: Surface[]) {
   const issues: Array<{ key: string; type: 'error' | 'warning'; messageKey: string; values?: Record<string, string> }> = []
+  // Keep group issue message keys in sync with allowedDynamicKeys in scripts/i18n-check.mjs.
   const ranges = groups.map((group) => ({ group, ...groupSurfaceRange(group, surfaces) }))
   const ids = new Set<string>()
   for (const { group, fromIndex, toIndex } of ranges) {
