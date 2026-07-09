@@ -159,7 +159,7 @@ def p003_achromat_system():
             ],
             "groups": [
                 {"id": "FOCUS_G", "name": "Focus group", "from_surface": "S1", "to_surface": "S3"},
-                {"id": "OIS_G", "name": "OIS decenter/tilt group", "from_surface": "S2", "to_surface": "S3"},
+                {"id": "OIS_G", "name": "OIS decenter/tilt group", "from_surface": "S1", "to_surface": "S3"},
             ],
             "zoom_positions": [
                 {"id": "infinity", "focal_length_nominal_mm": 100.0, "group_positions": {"FOCUS_G": {"shift_x_mm": 0.0}}},
@@ -167,6 +167,12 @@ def p003_achromat_system():
             ],
         }
     )
+
+
+def test_p003_ois_group_moves_full_cemented_doublet():
+    compiled = compile_system(p003_achromat_system())
+    assert compiled.group_ranges["FOCUS_G"] == (1, 3)
+    assert compiled.group_ranges["OIS_G"] == (1, 3)
 
 
 def path_segment_slopes_y(path):

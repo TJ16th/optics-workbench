@@ -291,3 +291,39 @@ Phase 8でafocal、eye_reference、射出瞳、アイボックス、角度MTF等
 - 有効径境界と製造外形がUI上で区別できる。
 - snapshot export/importで追加寸法が保持される。
 - 既存の `edge_thickness` 評価・validationと矛盾しない。
+
+## Issue: edge_thickness metricのエンジン実装を追加する
+
+ラベル案: `engine`
+
+### 背景
+
+仕様・`/v1/meta` のmetadata列挙には `edge_thickness` が存在するが、エンジン本体に算出コードが見当たらないことがLayout View品質改善タスクで判明した。
+
+### 対応案
+
+- 仕様10.3節の定義（`min(semiD_a, semiD_b)` 位置での周縁厚評価）に従い、実際の算出ロジックを実装する。
+- validation warning、optimization operand、API metadataで同じ評価値を参照できるようにする。
+
+### 受け入れ条件
+
+- `edge_thickness` オペランドがevaluate APIで実際の数値を返す。
+- 既存のedge thickness警告経路と整合する。
+
+## Issue: 最適化APIにmulti-configuration（複数zoom_position/フォーカス位置）評価を追加する
+
+ラベル案: `engine`, `architecture`
+
+### 背景
+
+ズーム・フォーカス・防振群の実務的な設計最適化は、複数のconfiguration（広角端・望遠端、無限遠・至近等）を同時に評価し全域でバランスした解を探す必要がある。現行のオペランドAPI（25.3節）・ヤコビアンバッチ（25.7節）は単一configurationのみ対応で、`zoom_positions`（10.2節）とは接続されていない。
+
+### 対応案
+
+- 各オペランドに `configuration_id` / `zoom_position_id` を持たせる。
+- 複数configurationを1回のevaluateでまとめて評価し、merit合成する仕組みを検討する。
+- 詳細設計は別途エンジン仕様改訂で行う。本Issueは登録のみとし、着手は最適化タスク8-13の前提整理時とする。
+
+### 受け入れ条件
+
+- エンジン仕様への追記案が作成される。

@@ -124,7 +124,7 @@ export const presets: Preset[] = [
       ],
       groups: [
         { id: 'FOCUS_G', name: 'Focus group', from_surface: 'S1', to_surface: 'S3' },
-        { id: 'OIS_G', name: 'OIS decenter/tilt group', from_surface: 'S2', to_surface: 'S3' },
+        { id: 'OIS_G', name: 'OIS decenter/tilt group', from_surface: 'S1', to_surface: 'S3' },
       ],
       zoom_positions: [
         { id: 'infinity', focal_length_nominal_mm: 100, group_positions: { FOCUS_G: { shift_x_mm: 0 } } },

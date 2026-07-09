@@ -533,7 +533,7 @@ test('decenter tilt sliders send configuration and expose evaluated symmetric fi
   await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBeGreaterThanOrEqual(2)
   const commitPreview = previewRequests[previewRequests.length - 1] as { ray_sampling?: { samples_per_field?: number } }
   expect(commitPreview.ray_sampling?.samples_per_field).toBe(9)
-  await expect(page.locator('#layout-svg .configured-dot')).toHaveCount(2)
+  await expect(page.locator('#layout-svg .configured-dot')).toHaveCount(3)
   await expect(page.getByTestId('evaluated-fields')).toContainText('field_y-10_z0')
   await expect(page.getByTestId('evaluated-fields')).toContainText('field_y10_z0')
   await expect(page.getByTestId('analysis-dirty-status')).toContainText('clean')
