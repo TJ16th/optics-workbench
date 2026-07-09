@@ -239,7 +239,9 @@ test('image-plane policy solves focus, writes back sensor, and disables for afoc
 
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByText('P002 N-BK7 Biconvex Singlet 50mm Demo').click()
+  await expect(page.getByText('P002 N-BK7 Biconvex Singlet').first()).toBeVisible()
   await page.locator('#image-plane-policy-mode').selectOption('best_focus_rms')
+  await expect(page.locator('#image-plane-policy-mode')).toHaveValue('best_focus_rms')
   await page.getByRole('button', { name: 'Solve Image Plane' }).click()
 
   await expect(page.getByTestId('evaluation-plane-metadata')).toContainText('best_focus_rms')
@@ -267,6 +269,7 @@ test('snapshots embed artifacts and compare two saved conditions', async ({ page
 
   await page.getByRole('tab', { name: 'Analysis' }).click()
   await page.locator('#image-plane-policy-mode').selectOption('sweep')
+  await expect(page.locator('#image-plane-policy-mode')).toHaveValue('sweep')
   await page.getByRole('button', { name: 'Solve Image Plane' }).click()
   await page.getByRole('button', { name: 'Save Snapshot' }).click()
   await expect(page.locator('.snapshot-row').filter({ hasText: 'snapshot-1' })).toBeVisible()
@@ -287,6 +290,7 @@ test('partial snapshots fall back when embedded artifact retrieval fails', async
   await page.goto('/?lng=en')
   await page.getByRole('tab', { name: 'Analysis' }).click()
   await page.locator('#image-plane-policy-mode').selectOption('sweep')
+  await expect(page.locator('#image-plane-policy-mode')).toHaveValue('sweep')
   await page.getByRole('button', { name: 'Solve Image Plane' }).click()
   await page.getByRole('button', { name: 'Save Snapshot' }).click()
   await page.getByRole('tab', { name: 'Analysis' }).click()
