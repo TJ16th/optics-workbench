@@ -13,6 +13,8 @@ export type Surface = {
   kind: string
   surface_type?: string
   radius_mm?: number
+  conic?: number
+  asphere_coefficients?: Record<string, number>
   thickness_after_mm?: number
   material_after?: string
   semi_diameter_mm?: number

@@ -562,6 +562,46 @@ function groupVisualTransform(system: OpticalSystem, surfaceId: string, configur
   }
 }
 
+function surfaceSagMm(surface: Surface, rayHeightMm: number) {
+  const radius = surface.radius_mm ?? 0
+  if (!Number.isFinite(radius) || Math.abs(radius) < 1.0e-12) return 0
+  const r = Math.abs(rayHeightMm)
+  const surfaceType = surface.surface_type ?? 'plane'
+  if (surfaceType === 'aspherical_even') {
+    const c = 1 / radius
+    const conic = surface.conic ?? 0
+    const radicand = 1 - (1 + conic) * c * c * r * r
+    const base = radicand <= 0 ? 0 : (c * r * r) / (1 + Math.sqrt(radicand))
+    const departure = Object.entries(surface.asphere_coefficients ?? {}).reduce((sum, [key, coefficient]) => {
+      const order = Number(key.replace(/^A/i, ''))
+      return Number.isFinite(order) && Number.isFinite(coefficient) ? sum + coefficient * r ** order : sum
+    }, 0)
+    return base + departure
+  }
+  if (surfaceType === 'spherical') {
+    const limit = Math.max(0, radius * radius - r * r)
+    return radius - Math.sign(radius) * Math.sqrt(limit)
+  }
+  return 0
+}
+
+function surfaceProfilePath(surface: Surface, vertexX: number, sy: number, h: number, semiDiameterMm: number, xScale: (x: number) => number, tiltDx: number) {
+  const radius = surface.radius_mm ?? 0
+  const surfaceType = surface.surface_type ?? 'plane'
+  if ((surfaceType !== 'spherical' && surfaceType !== 'aspherical_even') || !Number.isFinite(radius) || Math.abs(radius) < 1.0e-12 || semiDiameterMm <= 0 || h <= 0) {
+    return null
+  }
+  const points = Array.from({ length: 25 }, (_, index) => {
+    const t = index / 24
+    const pixelOffset = -h + t * h * 2
+    const rayHeightMm = (pixelOffset / h) * semiDiameterMm
+    const sag = surfaceSagMm(surface, rayHeightMm)
+    const tiltedX = (pixelOffset / h) * tiltDx
+    return `${index === 0 ? 'M' : 'L'} ${xScale(vertexX + sag) + tiltedX} ${sy + pixelOffset}`
+  })
+  return points.join(' ')
+}
+
 function LayoutView({
   system,
   trace,
@@ -598,14 +638,16 @@ function LayoutView({
       <line x1="24" x2="696" y1={centerY} y2={centerY} className="axis-line" />
       {positions.map(({ surface, x }) => {
         const sx = xScale(x)
-        const h = apertureY(surface.semi_diameter_mm ?? surface.aperture?.semi_diameter_mm)
+        const semiD = typeof surface.semi_diameter_mm === 'number' ? surface.semi_diameter_mm : typeof surface.aperture?.semi_diameter_mm === 'number' ? surface.aperture.semi_diameter_mm : 8
+        const h = apertureY(semiD)
         const transform = groupVisualTransform(system, surface.id, configuration)
         const sy = centerY - Math.max(-52, Math.min(52, transform.shiftY * 10))
         const tiltDx = Math.max(-20, Math.min(20, transform.tiltZ * 3))
         const className = `surface-line surface-${surface.kind}${transform.active ? ' surface-configured' : ''}`
+        const profile = surfaceProfilePath(surface, x, sy, h, semiD, xScale, tiltDx)
         return (
           <g key={surface.id}>
-            <line x1={sx - tiltDx} x2={sx + tiltDx} y1={sy - h} y2={sy + h} className={className} />
+            {profile ? <path d={profile} className={className} fill="none" /> : <line x1={sx - tiltDx} x2={sx + tiltDx} y1={sy - h} y2={sy + h} className={className} />}
             {surface.kind === 'sensor' ? <rect x={sx - 3} y={sy - 62} width="6" height="124" className="sensor-plane" /> : null}
             {surface.kind === 'aperture_stop' ? <circle cx={sx} cy={sy} r="5" className="stop-dot" /> : null}
             {transform.active ? <circle cx={sx} cy={sy - h - 10} r="3.5" className="configured-dot" /> : null}

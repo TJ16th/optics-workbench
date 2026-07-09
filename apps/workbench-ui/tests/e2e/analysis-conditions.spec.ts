@@ -250,6 +250,29 @@ test('group edits mark the optical system dirty and show range warnings', async 
   await expect(page.getByTestId('group-row')).toHaveCount(2)
 })
 
+test('layout view draws spherical surfaces as signed curves', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+
+  await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
+  await page.getByText('P002 N-BK7 Biconvex Singlet 50mm Demo').click()
+  const p002Profiles = page.locator('#layout-svg path.surface-refractive')
+  await expect(p002Profiles).toHaveCount(2)
+
+  const firstProfile = (await p002Profiles.nth(0).getAttribute('d')) ?? ''
+  const secondProfile = (await p002Profiles.nth(1).getAttribute('d')) ?? ''
+  const firstNumbers = firstProfile.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? []
+  const secondNumbers = secondProfile.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? []
+  const firstXs = firstNumbers.filter((_, index) => index % 2 === 0)
+  const secondXs = secondNumbers.filter((_, index) => index % 2 === 0)
+  expect(firstXs[0]).toBeGreaterThan(firstXs[12])
+  expect(secondXs[0]).toBeLessThan(secondXs[12])
+
+  await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
+  await page.getByText('P003 Achromat Doublet 100mm Demo').click()
+  await expect(page.locator('#layout-svg path.surface-refractive')).toHaveCount(3)
+})
+
 test('group motion sliders send runtime configuration through debounced preview', async ({ page }) => {
   const previewRequests: unknown[] = []
   await mockEngine(page, { previewRequests })
