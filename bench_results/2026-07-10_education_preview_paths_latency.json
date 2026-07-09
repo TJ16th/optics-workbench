@@ -1,0 +1,145 @@
+{
+  "task": "education_preview_paths_fix",
+  "measured_at_jst": "2026-07-10T03:23:49+09:00",
+  "source_commit": "7924eec",
+  "api_surface": "/v1/education/preview via FastAPI TestClient",
+  "previous_ui_debounce_ms": 70,
+  "notes": [
+    "Preview endpoint forces store_path=True and now serializes paths through the shared forward response.",
+    "Measurements include in-process FastAPI/TestClient request and JSON response serialization.",
+    "Each drag-preview case uses 3 fields x 3 wavelengths x 5 rays = 45 rays."
+  ],
+  "results": [
+    {
+      "name": "p002_run_preview_paths",
+      "repeats": 20,
+      "median_http_ms": 8.908,
+      "p95_http_ms": 11.801,
+      "min_http_ms": 8.176,
+      "max_http_ms": 18.155,
+      "response_bytes": 42855,
+      "paths_present": true,
+      "path_count": 45,
+      "first_alive_path_surface_ids": [
+        "STOP",
+        "S1",
+        "S2",
+        "IMG"
+      ],
+      "rays": 45,
+      "arrived": 45,
+      "last_engine_profiling_ms": {
+        "validation_ms": 0.08999998681247234,
+        "layout_ms": 0.021400017431005836,
+        "ray_generation_and_aiming_ms": 0.4275999963283539,
+        "trace_ms": 1.5171999984886497,
+        "total_ms": 2.056199999060482,
+        "total_rays": 45,
+        "cache_hit": null,
+        "aiming_failed_count": 0,
+        "aiming_iterations_max": 0
+      },
+      "effective_ui_median_ms": 78.908,
+      "effective_ui_p95_ms": 81.801
+    },
+    {
+      "name": "p003_group_shift_drag_preview_paths",
+      "repeats": 20,
+      "median_http_ms": 12.755,
+      "p95_http_ms": 17.227,
+      "min_http_ms": 9.923,
+      "max_http_ms": 17.24,
+      "response_bytes": 54156,
+      "paths_present": true,
+      "path_count": 45,
+      "first_alive_path_surface_ids": [
+        "STOP",
+        "S1",
+        "S2",
+        "S3",
+        "IMG"
+      ],
+      "rays": 45,
+      "arrived": 45,
+      "last_engine_profiling_ms": {
+        "validation_ms": 0.09139999747276306,
+        "layout_ms": 0.022899999748915434,
+        "ray_generation_and_aiming_ms": 0.3341000119689852,
+        "trace_ms": 1.3567999994847924,
+        "total_ms": 1.805200008675456,
+        "total_rays": 45,
+        "cache_hit": null,
+        "aiming_failed_count": 0,
+        "aiming_iterations_max": 0
+      },
+      "effective_ui_median_ms": 82.755,
+      "effective_ui_p95_ms": 87.227
+    },
+    {
+      "name": "p003_aperture_drag_preview_paths",
+      "repeats": 20,
+      "median_http_ms": 10.346,
+      "p95_http_ms": 12.049,
+      "min_http_ms": 9.586,
+      "max_http_ms": 14.521,
+      "response_bytes": 54410,
+      "paths_present": true,
+      "path_count": 45,
+      "first_alive_path_surface_ids": [
+        "STOP",
+        "S1",
+        "S2",
+        "S3",
+        "IMG"
+      ],
+      "rays": 45,
+      "arrived": 45,
+      "last_engine_profiling_ms": {
+        "validation_ms": 0.07580002420581877,
+        "layout_ms": 0.016799982404336333,
+        "ray_generation_and_aiming_ms": 0.33370000892318785,
+        "trace_ms": 1.6415999853052199,
+        "total_ms": 2.067900000838563,
+        "total_rays": 45,
+        "cache_hit": null,
+        "aiming_failed_count": 0,
+        "aiming_iterations_max": 0
+      },
+      "effective_ui_median_ms": 80.346,
+      "effective_ui_p95_ms": 82.049
+    },
+    {
+      "name": "p003_decenter_tilt_drag_preview_paths",
+      "repeats": 20,
+      "median_http_ms": 10.889,
+      "p95_http_ms": 12.147,
+      "min_http_ms": 9.825,
+      "max_http_ms": 12.169,
+      "response_bytes": 54180,
+      "paths_present": true,
+      "path_count": 45,
+      "first_alive_path_surface_ids": [
+        "STOP",
+        "S1",
+        "S2",
+        "S3",
+        "IMG"
+      ],
+      "rays": 45,
+      "arrived": 45,
+      "last_engine_profiling_ms": {
+        "validation_ms": 0.17970000044442713,
+        "layout_ms": 0.056599994422867894,
+        "ray_generation_and_aiming_ms": 0.28830001247115433,
+        "trace_ms": 1.350299979094416,
+        "total_ms": 1.8748999864328653,
+        "total_rays": 45,
+        "cache_hit": null,
+        "aiming_failed_count": 0,
+        "aiming_iterations_max": 0
+      },
+      "effective_ui_median_ms": 80.889,
+      "effective_ui_p95_ms": 82.147
+    }
+  ]
+}

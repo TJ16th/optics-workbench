@@ -120,6 +120,55 @@ def p002_singlet_system():
     )
 
 
+def p003_achromat_system():
+    return load_system(
+        {
+            "name": "P003 Achromat Doublet 100mm",
+            "units": "mm",
+            "optical_axis": "+X",
+            "system_type": "focal",
+            "wavelengths_nm": {"primary": 587.56, "samples": [486.13, 587.56, 656.27]},
+            "materials": [
+                {"id": "AIR", "type": "constant", "n": 1.0},
+                {
+                    "id": "N-BK7",
+                    "type": "sellmeier",
+                    "B": [1.03961212, 0.231792344, 1.01046945],
+                    "C": [0.00600069867, 0.0200179144, 103.560653],
+                },
+                {
+                    "id": "N-F2",
+                    "type": "sellmeier",
+                    "B": [1.34533359, 0.209073176, 0.937357162],
+                    "C": [0.00997743871, 0.0470450767, 111.886764],
+                },
+            ],
+            "surfaces": [
+                {
+                    "id": "STOP",
+                    "kind": "aperture_stop",
+                    "surface_type": "plane",
+                    "thickness_after_mm": 1.5,
+                    "semi_diameter_mm": {"variable": "iris_radius_mm", "default": 10.0},
+                    "aperture": {"shape": "circle", "semi_diameter_mm": {"variable": "iris_radius_mm", "default": 10.0}},
+                },
+                {"id": "S1", "kind": "refractive", "surface_type": "spherical", "radius_mm": 62.5, "thickness_after_mm": 4.0, "material_after": "N-BK7", "semi_diameter_mm": 14.0},
+                {"id": "S2", "kind": "refractive", "surface_type": "spherical", "radius_mm": -43.0, "thickness_after_mm": 2.0, "material_after": "N-F2", "semi_diameter_mm": 14.0},
+                {"id": "S3", "kind": "refractive", "surface_type": "spherical", "radius_mm": -125.0, "thickness_after_mm": 96.0, "material_after": "AIR", "semi_diameter_mm": 14.0},
+                {"id": "IMG", "kind": "sensor", "surface_type": "plane", "sensor": {"width_mm": 36.0, "height_mm": 24.0}},
+            ],
+            "groups": [
+                {"id": "FOCUS_G", "name": "Focus group", "from_surface": "S1", "to_surface": "S3"},
+                {"id": "OIS_G", "name": "OIS decenter/tilt group", "from_surface": "S2", "to_surface": "S3"},
+            ],
+            "zoom_positions": [
+                {"id": "infinity", "focal_length_nominal_mm": 100.0, "group_positions": {"FOCUS_G": {"shift_x_mm": 0.0}}},
+                {"id": "close_focus", "focal_length_nominal_mm": 100.0, "group_positions": {"FOCUS_G": {"shift_x_mm": 2.0}}},
+            ],
+        }
+    )
+
+
 def path_segment_slopes_y(path):
     points = [entry["point_mm"] for entry in path]
     return [(right[1] - left[1]) / (right[0] - left[0]) for left, right in zip(points, points[1:])]
@@ -609,6 +658,30 @@ def test_http_api_v2_1_smoke_with_artifact_fetch():
     assert trace.status_code == 200
     trace_json = trace.json()
     assert [entry["surface_id"] for entry in trace_json["paths"][2]] == ["STOP", "S1", "S2", "IMG"]
+
+    for system, expected_surfaces in [
+        (p002_singlet_system(), ["STOP", "S1", "S2", "IMG"]),
+        (p003_achromat_system(), ["STOP", "S1", "S2", "S3", "IMG"]),
+    ]:
+        registered_preview = client.post("/v1/systems/register", json=system.model_dump(mode="json"))
+        assert registered_preview.status_code == 200
+        preview = client.post(
+            "/v1/education/preview",
+            json={
+                "system_id": registered_preview.json()["system_id"],
+                "fields": [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}],
+                "ray_sampling": {"samples_per_field": 5, "pupil_distribution": "fan_y"},
+                "wavelengths_nm": [587.56],
+                "options": {"profiling": True},
+            },
+        )
+        assert preview.status_code == 200
+        preview_json = preview.json()
+        assert "paths" in preview_json
+        assert len(preview_json["paths"]) == len(preview_json["status"])
+        alive_path = next(path for path, status in zip(preview_json["paths"], preview_json["status"]) if status == "alive")
+        assert [entry["surface_id"] for entry in alive_path] == expected_surfaces
+        assert "trace_ms" in preview_json["metadata"]["profiling"]
 
     material = client.post(
         "/v1/materials/refractive-index",

@@ -4,6 +4,7 @@ async function mockEngine(
   page: import('@playwright/test').Page,
   options: { failArtifacts?: boolean; previewRequests?: unknown[]; registerRequests?: unknown[] } = {},
 ) {
+  let registeredSurfaceIds = ['STOP', 'S1', 'S2', 'IMG']
   await page.route('http://127.0.0.1:8000/v1/health', async (route) => {
     await route.fulfill({ json: { status: 'ok' } })
   })
@@ -21,7 +22,10 @@ async function mockEngine(
     })
   })
   await page.route('http://127.0.0.1:8000/v1/systems/register', async (route) => {
-    options.registerRequests?.push(route.request().postDataJSON())
+    const request = route.request().postDataJSON()
+    options.registerRequests?.push(request)
+    const surfaceIds = request.surfaces?.map((surface: { id?: string }) => surface.id).filter(Boolean)
+    if (surfaceIds?.length) registeredSurfaceIds = surfaceIds
     await route.fulfill({ json: { system_id: 'system-test', system_hash: 'hash-test' } })
   })
   await page.route('http://127.0.0.1:8000/v1/solve/best-focus', async (route) => {
@@ -90,12 +94,13 @@ async function mockEngine(
         sensor_z_mm: Array.from({ length: total }, (_, index) => -index / 100),
         paths: Array.from({ length: total }, (_, index) => {
           const y = (index % 5 - 2) * 1.5
-          return [
-            { surface_id: 'STOP', point_mm: [0, y, 0], local_point_mm: [0, y, 0] },
-            { surface_id: 'S1', point_mm: [1.5, y, 0], local_point_mm: [0, y, 0] },
-            { surface_id: 'S2', point_mm: [5.5, y * 0.7, 0], local_point_mm: [0, y * 0.7, 0] },
-            { surface_id: 'IMG', point_mm: [103.5, index / 100, -index / 100], local_point_mm: [0, index / 100, -index / 100] },
-          ]
+          const last = Math.max(1, registeredSurfaceIds.length - 1)
+          return registeredSurfaceIds.map((surfaceId, surfaceIndex) => {
+            const isImage = surfaceIndex === registeredSurfaceIds.length - 1
+            const bend = y * (1 - surfaceIndex / (last + 1))
+            const point = [isImage ? 103.5 : surfaceIndex * 3, isImage ? index / 100 : bend, isImage ? -index / 100 : 0]
+            return { surface_id: surfaceId, point_mm: point, local_point_mm: [0, point[1], point[2]] }
+          })
         }),
         metadata: {
           evaluated_fields: evaluatedFields,
@@ -207,6 +212,14 @@ async function mockEngine(
   })
 }
 
+async function expectLayoutRayPath(page: import('@playwright/test').Page, pointCount: number) {
+  const rayPaths = page.locator('#layout-svg path.ray-line')
+  await expect(rayPaths.first()).toBeVisible()
+  const d = (await rayPaths.first().getAttribute('d')) ?? ''
+  expect(d.split('L')).toHaveLength(pointCount)
+  await expect(page.locator('#layout-svg line.ray-line')).toHaveCount(0)
+}
+
 test('analysis condition edits mark dirty and rerun preview with updated results', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en')
@@ -289,11 +302,28 @@ test('layout view uses trace path polylines when preview returns surface hits', 
   await page.getByText('P002 N-BK7 Biconvex Singlet 50mm Demo').click()
   await page.getByRole('button', { name: 'Run Preview' }).click()
 
-  const rayPaths = page.locator('#layout-svg path.ray-line')
-  await expect(rayPaths.first()).toBeVisible()
-  const d = (await rayPaths.first().getAttribute('d')) ?? ''
-  expect(d.split('L')).toHaveLength(4)
-  await expect(page.locator('#layout-svg line.ray-line')).toHaveCount(0)
+  await expectLayoutRayPath(page, 4)
+})
+
+test('P003 slider preview keeps layout rays on education preview surface paths', async ({ page }) => {
+  const previewRequests: unknown[] = []
+  await mockEngine(page, { previewRequests })
+  await page.goto('/?lng=en')
+  await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
+  await page.getByText('P003 Achromat Doublet 100mm Demo').click()
+
+  await page.locator('#focus-shift-slider').evaluate((node) => {
+    const input = node as HTMLInputElement
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(input, '1.5')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+
+  await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBeGreaterThanOrEqual(1)
+  const dragPreview = previewRequests[previewRequests.length - 1] as { ray_sampling?: { samples_per_field?: number; ray_aiming?: { mode?: string } } }
+  expect(dragPreview.ray_sampling?.samples_per_field).toBe(5)
+  expect(dragPreview.ray_sampling?.ray_aiming?.mode).toBe('paraxial')
+  await expectLayoutRayPath(page, 5)
 })
 
 test('layout view fixture draws even-aspheric sag differently from a sphere', async ({ page }) => {
