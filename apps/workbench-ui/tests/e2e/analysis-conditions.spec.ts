@@ -273,6 +273,28 @@ test('layout view draws spherical surfaces as signed curves', async ({ page }) =
   await expect(page.locator('#layout-svg path.surface-refractive')).toHaveCount(3)
 })
 
+test('layout view fixture draws even-aspheric sag differently from a sphere', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en&fixture=asphere-layout')
+
+  await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
+  await page.getByText('F_ASPHERE Asphere Layout Visual Fixture').click()
+  const profiles = page.locator('#layout-svg path.surface-refractive')
+  await expect(profiles).toHaveCount(2)
+  await expect(page.locator('#layout-svg')).toContainText('SPH')
+  await expect(page.locator('#layout-svg')).toContainText('ASP')
+
+  const sphericalProfile = (await profiles.nth(0).getAttribute('d')) ?? ''
+  const asphericProfile = (await profiles.nth(1).getAttribute('d')) ?? ''
+  const sphericalNumbers = sphericalProfile.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? []
+  const asphericNumbers = asphericProfile.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? []
+  const sphericalXs = sphericalNumbers.filter((_, index) => index % 2 === 0)
+  const asphericXs = asphericNumbers.filter((_, index) => index % 2 === 0)
+  const sphericalEdgeSagPx = sphericalXs[0] - sphericalXs[12]
+  const asphericEdgeSagPx = asphericXs[0] - asphericXs[12]
+  expect(asphericEdgeSagPx).toBeGreaterThan(sphericalEdgeSagPx + 8)
+})
+
 test('group motion sliders send runtime configuration through debounced preview', async ({ page }) => {
   const previewRequests: unknown[] = []
   await mockEngine(page, { previewRequests })

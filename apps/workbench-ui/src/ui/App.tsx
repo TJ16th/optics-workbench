@@ -21,7 +21,7 @@ import { Add, Checkmark, Download, Play, Renew, Save, TrashCan } from '@carbon/i
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
-import { presets } from '../domain/presets'
+import { presets, visualFixturePresets } from '../domain/presets'
 import type {
   AnalysisField,
   BestFocusResponse,
@@ -1831,6 +1831,8 @@ function ImagePlanePolicyPanel({
 
 export function App() {
   const { t, i18n } = useTranslation(['common', 'settings', 'analysis', 'layoutView'])
+  const fixtureMode = new URLSearchParams(window.location.search).get('fixture')
+  const availablePresets = fixtureMode === 'asphere-layout' ? [...presets, ...visualFixturePresets] : presets
   const [apiBase, setApiBase] = useState(defaultApiBase)
   const [selectedPresetId, setSelectedPresetId] = useState('P001')
   const [activeTab, setActiveTab] = useState<TabKey>('preview')
@@ -1873,7 +1875,7 @@ export function App() {
   const [compareRightId, setCompareRightId] = useState('')
   const [exportLanguage, setExportLanguage] = useState<SupportedLanguage>('ja')
 
-  const preset = presets.find((item) => item.id === selectedPresetId) ?? presets[0]
+  const preset = availablePresets.find((item) => item.id === selectedPresetId) ?? availablePresets[0]
   const policyDisabled = system.system_type === 'afocal'
 
   const health = useQuery({ queryKey: ['health', apiBase], queryFn: () => getHealth(apiBase), retry: false })
@@ -2327,7 +2329,7 @@ export function App() {
               id="preset"
               titleText={t('common.preset.label')}
               label={t('common.preset.label')}
-              items={presets}
+              items={availablePresets}
               itemToString={(item) => (item ? `${item.id} ${presetLabel(item.id, item.name, t)}` : '')}
               selectedItem={preset}
               onChange={({ selectedItem }) => {

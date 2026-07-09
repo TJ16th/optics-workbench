@@ -164,3 +164,43 @@ export const presets: Preset[] = [
     },
   },
 ]
+
+export const visualFixturePresets: Preset[] = [
+  {
+    id: 'F_ASPHERE',
+    name: 'Asphere Layout Visual Fixture',
+    summary: 'Development-only fixture for comparing spherical and even-aspheric sag in the layout view.',
+    recommendedAnalysis: ['layout'],
+    system: {
+      name: 'Asphere Layout Visual Fixture',
+      units: 'mm',
+      optical_axis: '+X',
+      system_type: 'focal',
+      wavelengths_nm: { primary: 587.56, samples: [587.56] },
+      materials: commonMaterials,
+      surfaces: [
+        {
+          id: 'STOP',
+          kind: 'aperture_stop',
+          surface_type: 'plane',
+          thickness_after_mm: 4,
+          semi_diameter_mm: 8,
+          aperture: { shape: 'circle', semi_diameter_mm: 8 },
+        },
+        { id: 'SPH', kind: 'refractive', surface_type: 'spherical', radius_mm: 32.5, thickness_after_mm: 7, material_after: 'N-BK7', semi_diameter_mm: 15 },
+        {
+          id: 'ASP',
+          kind: 'refractive',
+          surface_type: 'aspherical_even',
+          radius_mm: 32.5,
+          conic: -1,
+          asphere_coefficients: { A4: 0.00003 },
+          thickness_after_mm: 46,
+          material_after: 'AIR',
+          semi_diameter_mm: 15,
+        },
+        { id: 'IMG', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 36, height_mm: 24 } },
+      ],
+    },
+  },
+]
