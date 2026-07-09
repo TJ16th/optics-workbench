@@ -656,26 +656,68 @@ function wavelengthClass(wavelength: number | undefined) {
   return 'ray-d'
 }
 
-function layoutRayItems(trace?: TraceResponse) {
+function rayStopY(path: NonNullable<TraceResponse['paths']>[number], apertureStopId?: string) {
+  const stopEntry = (apertureStopId ? path.find((entry) => entry.surface_id === apertureStopId) : undefined) ?? path[0]
+  const value = stopEntry?.local_point_mm?.[1] ?? stopEntry?.point_mm?.[1]
+  return Number.isFinite(value) ? Number(value) : undefined
+}
+
+function layoutRayItems(trace?: TraceResponse, apertureStopId?: string) {
   const paths = trace?.paths
   if (!trace || !paths?.length) return []
   const samples = Math.max(1, Number(trace.metadata.samples_per_field ?? 1))
   const wavelengths = trace.metadata.wavelengths_nm?.length ? trace.metadata.wavelengths_nm : [undefined]
-  const representativeSamples = new Set([0, Math.floor((samples - 1) / 2), samples - 1])
+  const wavelengthCount = wavelengths.length
   const items = paths
     .map((path, index) => {
       const sampleIndex = index % samples
-      const wavelengthIndex = Math.floor(index / samples) % wavelengths.length
+      const wavelengthIndex = Math.floor(index / samples) % wavelengthCount
+      const fieldIndex = Math.floor(index / (samples * wavelengthCount))
       return {
         path,
         status: trace.status[index],
         index,
         sampleIndex,
+        fieldIndex,
+        wavelengthIndex,
+        stopY: rayStopY(path, apertureStopId),
+        sampleRole: 'candidate',
         className: `ray-line ${wavelengthClass(wavelengths[wavelengthIndex])}`,
       }
     })
-    .filter((item) => item.status === 'alive' && item.path.length >= 2 && representativeSamples.has(item.sampleIndex))
-  return (items.length ? items : paths.map((path, index) => ({ path, status: trace.status[index], index, sampleIndex: index, className: 'ray-line ray-d' })).filter((item) => item.status === 'alive' && item.path.length >= 2)).slice(0, 36)
+    .filter((item) => item.status === 'alive' && item.path.length >= 2)
+  const grouped = new Map<string, typeof items>()
+  items.forEach((item) => {
+    const key = `${item.fieldIndex}:${item.wavelengthIndex}`
+    const group = grouped.get(key) ?? []
+    group.push(item)
+    grouped.set(key, group)
+  })
+  const selected: typeof items = []
+  grouped.forEach((group) => {
+    const finite = group.filter((item) => item.stopY !== undefined).sort((a, b) => (a.stopY as number) - (b.stopY as number))
+    const picks = finite.length
+      ? [
+          { ...finite[0], sampleRole: 'lower' },
+          { ...finite.reduce((best, item) => (Math.abs(item.stopY as number) < Math.abs(best.stopY as number) ? item : best), finite[0]), sampleRole: 'center' },
+          { ...finite[finite.length - 1], sampleRole: 'upper' },
+        ]
+      : [0, Math.floor((samples - 1) / 2), samples - 1]
+          .map((sampleIndex, pickIndex) => {
+            const item = group.find((candidate) => candidate.sampleIndex === sampleIndex)
+            const role = pickIndex === 0 ? 'lower' : pickIndex === 1 ? 'center' : 'upper'
+            return item ? { ...item, sampleRole: role } : undefined
+          })
+          .filter((item): item is (typeof items)[number] => Boolean(item))
+    const seen = new Set<number>()
+    picks.forEach((item) => {
+      if (!seen.has(item.index)) {
+        selected.push(item)
+        seen.add(item.index)
+      }
+    })
+  })
+  return (selected.length ? selected : items).slice(0, 36)
 }
 
 function LayoutView({
@@ -708,7 +750,8 @@ function LayoutView({
     ?.map((y, index) => ({ y, z: trace.sensor_z_mm[index], status: trace.status[index] }))
     .filter((point) => Number.isFinite(point.y) && point.status === 'alive')
     .slice(0, 24)
-  const tracePaths = layoutRayItems(trace)
+  const apertureStopId = system.surfaces.find((surface) => surface.kind === 'aperture_stop')?.id
+  const tracePaths = layoutRayItems(trace, apertureStopId)
   const surfaceViews = positions.map(({ surface, x }, index) => {
     const semiD = surfaceSemiDiameter(surface, configuration)
     const h = apertureY(semiD)
@@ -798,9 +841,21 @@ function LayoutView({
         </g>
       ) : null}
       {tracePaths?.length
-        ? tracePaths.map(({ path, className, index }) => {
+        ? tracePaths.map(({ path, className, index, fieldIndex, wavelengthIndex, sampleIndex, sampleRole, stopY }) => {
             const d = rayPathD(path, xScale, centerY, rayYScale)
-            return d ? <path key={index} d={d} className={className} fill="none" /> : null
+            return d ? (
+              <path
+                key={index}
+                d={d}
+                className={className}
+                fill="none"
+                data-field-index={fieldIndex}
+                data-wavelength-index={wavelengthIndex}
+                data-sample-index={sampleIndex}
+                data-sample-role={sampleRole}
+                data-stop-y-mm={stopY}
+              />
+            ) : null
           })
         : tracePoints?.map((point, index) => {
             const sensorX = xScale(positions[positions.length - 1]?.x ?? maxX)

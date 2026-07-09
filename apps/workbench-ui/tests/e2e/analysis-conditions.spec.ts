@@ -94,7 +94,9 @@ async function mockEngine(
         sensor_y_mm: Array.from({ length: total }, (_, index) => index / 100),
         sensor_z_mm: Array.from({ length: total }, (_, index) => -index / 100),
         paths: Array.from({ length: total }, (_, index) => {
-          const y = (index % 5 - 2) * 1.5
+          const sampleIndex = index % samples
+          const midpoint = (samples - 1) / 2
+          const y = midpoint > 0 ? ((sampleIndex - midpoint) / midpoint) * 1.5 : 0
           const last = Math.max(1, registeredSurfaceIds.length - 1)
           return registeredSurfaceIds.map((surfaceId, surfaceIndex) => {
             const isImage = surfaceIndex === registeredSurfaceIds.length - 1
@@ -332,6 +334,23 @@ test('P003 slider preview keeps layout rays on education preview surface paths',
   const displayedRays = Number(await page.locator('#layout-svg').getAttribute('data-displayed-rays'))
   expect(totalRays).toBeGreaterThan(displayedRays)
   expect(displayedRays).toBeLessThanOrEqual(36)
+  const displayed = await page.locator('#layout-svg path.ray-line').evaluateAll((nodes) =>
+    nodes.map((node) => ({
+      field: Number(node.getAttribute('data-field-index')),
+      stopY: Number(node.getAttribute('data-stop-y-mm')),
+      role: node.getAttribute('data-sample-role'),
+    })),
+  )
+  const stopYs = displayed.map((item) => item.stopY).filter(Number.isFinite)
+  expect(Math.min(...stopYs)).toBeLessThan(0)
+  expect(Math.max(...stopYs)).toBeGreaterThan(0)
+  expect(Math.abs(Math.min(...stopYs) + Math.max(...stopYs))).toBeLessThan(1.0e-9)
+  expect(new Set(displayed.map((item) => item.role))).toEqual(new Set(['lower', 'center', 'upper']))
+  const fieldCounts = displayed.reduce<Record<number, number>>((counts, item) => {
+    counts[item.field] = (counts[item.field] ?? 0) + 1
+    return counts
+  }, {})
+  expect(new Set(Object.values(fieldCounts))).toEqual(new Set([9]))
 })
 
 test('debug tab shows connected engine build info', async ({ page }) => {
