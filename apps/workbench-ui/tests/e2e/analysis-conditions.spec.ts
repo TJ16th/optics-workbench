@@ -223,6 +223,23 @@ async function expectLayoutRayPath(page: import('@playwright/test').Page, pointC
   await expect(page.locator('#layout-svg line.ray-line')).toHaveCount(0)
 }
 
+async function layoutSurfaceScale(page: import('@playwright/test').Page, surfaceId: string) {
+  const surface = page.locator(`#layout-svg [data-surface-id="${surfaceId}"]`)
+  await expect(surface).toHaveCount(1)
+  return {
+    semiDiameterMm: Number(await surface.getAttribute('data-semi-diameter-mm')),
+    visualHalfHeightPx: Number(await surface.getAttribute('data-visual-half-height-px')),
+    rawHalfHeightPx: Number(await surface.getAttribute('data-raw-half-height-px')),
+    clamped: (await surface.getAttribute('data-scale-clamped')) === 'true',
+  }
+}
+
+async function selectPresetOption(page: import('@playwright/test').Page, label: string) {
+  await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
+  await page.getByRole('option', { name: new RegExp(label) }).click()
+  await expect(page.getByRole('combobox', { name: 'Preset', exact: true })).toContainText(label)
+}
+
 test('analysis condition edits mark dirty and rerun preview with updated results', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en')
@@ -418,6 +435,24 @@ test('layout view keeps plane boundary elements and warns on negative edge thick
   expect(planeSphereWarning).toContain('Z')
 })
 
+test('layout view scales stop, sensor, and eye symbols from physical dimensions', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+
+  await selectPresetOption(page, 'P002 N-BK7 Biconvex Singlet 50mm Demo')
+  expect(await layoutSurfaceScale(page, 'STOP')).toMatchObject({ semiDiameterMm: 8, visualHalfHeightPx: 32, rawHalfHeightPx: 32, clamped: false })
+  expect(await layoutSurfaceScale(page, 'IMG')).toMatchObject({ semiDiameterMm: 12, visualHalfHeightPx: 48, rawHalfHeightPx: 48, clamped: false })
+  await expect(page.locator('#layout-svg [data-surface-id="IMG"] rect.sensor-plane')).toHaveAttribute('height', '96')
+
+  await selectPresetOption(page, 'P005 Coaxial Cassegrain Telescope Demo')
+  expect(await layoutSurfaceScale(page, 'M1')).toMatchObject({ semiDiameterMm: 100, visualHalfHeightPx: 92, rawHalfHeightPx: 400, clamped: true })
+  expect(await layoutSurfaceScale(page, 'IMG')).toMatchObject({ semiDiameterMm: 15, visualHalfHeightPx: 60, rawHalfHeightPx: 60, clamped: false })
+
+  await selectPresetOption(page, 'P006 Keplerian Afocal Telescope Demo')
+  expect(await layoutSurfaceScale(page, 'STOP')).toMatchObject({ semiDiameterMm: 25, visualHalfHeightPx: 92, rawHalfHeightPx: 100, clamped: true })
+  expect(await layoutSurfaceScale(page, 'EYE')).toMatchObject({ semiDiameterMm: 2, visualHalfHeightPx: 20, rawHalfHeightPx: 8, clamped: true })
+})
+
 test('group motion sliders send runtime configuration through debounced preview', async ({ page }) => {
   const previewRequests: unknown[] = []
   await mockEngine(page, { previewRequests })
@@ -474,6 +509,7 @@ test('aperture slider updates stop radius through debounced preview', async ({ p
   expect(registeredStop?.semi_diameter_mm?.default).toBeCloseTo(10)
   expect(registeredStop?.aperture?.semi_diameter_mm?.variable).toBe('iris_radius_mm')
   const initialPreviewCount = previewRequests.length
+  expect(await layoutSurfaceScale(page, 'STOP')).toMatchObject({ semiDiameterMm: 10, visualHalfHeightPx: 40, rawHalfHeightPx: 40, clamped: false })
 
   await expect(page.locator('#iris-radius-slider')).toBeVisible()
   await page.locator('#iris-radius-slider').evaluate((node) => {
@@ -483,6 +519,8 @@ test('aperture slider updates stop radius through debounced preview', async ({ p
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
 
+  await expect.poll(async () => (await layoutSurfaceScale(page, 'STOP')).visualHalfHeightPx, { timeout: 3_000 }).toBe(20)
+  expect(await layoutSurfaceScale(page, 'STOP')).toMatchObject({ semiDiameterMm: 5, visualHalfHeightPx: 20, rawHalfHeightPx: 20, clamped: false })
   await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBeGreaterThan(initialPreviewCount)
   const dragPreview = previewRequests[previewRequests.length - 1] as {
     configuration?: { variables?: Record<string, number> }

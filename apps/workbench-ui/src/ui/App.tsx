@@ -461,13 +461,22 @@ function apertureStopIndex(system: OpticalSystem) {
 function apertureStopRadius(system: OpticalSystem) {
   const stop = system.surfaces[apertureStopIndex(system)]
   if (!stop) return null
-  return scalarNumber(stop.aperture?.semi_diameter_mm) ?? scalarNumber(stop.aperture?.outer_semi_diameter_mm) ?? scalarNumber(stop.semi_diameter_mm) ?? null
+  return scalarNumber(stop.aperture?.outer_semi_diameter_mm) ?? scalarNumber(stop.aperture?.semi_diameter_mm) ?? scalarNumber(stop.semi_diameter_mm) ?? null
 }
 
 function surfaceSemiDiameter(surface: Surface, configuration?: RuntimeConfiguration) {
-  if (surface.kind === 'aperture_stop') {
+  if (surface.kind === 'sensor') {
+    const sensorHeight = scalarNumber(surface.sensor?.height_mm)
+    return sensorHeight && sensorHeight > 0 ? sensorHeight / 2 : 8
+  }
+  if (surface.kind === 'eye_reference') {
+    const eyePupilDiameter = scalarNumber(surface.eye?.pupil_diameter_mm)
+    return eyePupilDiameter && eyePupilDiameter > 0 ? eyePupilDiameter / 2 : 8
+  }
+  if (surface.kind === 'aperture_stop' || surface.kind === 'mechanical_aperture') {
     const irisRadius = configuration?.variables?.iris_radius_mm
-    if (typeof irisRadius === 'number' && Number.isFinite(irisRadius) && irisRadius > 0) return irisRadius
+    if (surface.kind === 'aperture_stop' && typeof irisRadius === 'number' && Number.isFinite(irisRadius) && irisRadius > 0) return irisRadius
+    return scalarNumber(surface.aperture?.outer_semi_diameter_mm) ?? scalarNumber(surface.aperture?.semi_diameter_mm) ?? scalarNumber(surface.semi_diameter_mm) ?? 8
   }
   return scalarNumber(surface.semi_diameter_mm) ?? scalarNumber(surface.aperture?.semi_diameter_mm) ?? 8
 }
@@ -755,6 +764,7 @@ function LayoutView({
   const surfaceViews = positions.map(({ surface, x }, index) => {
     const semiD = surfaceSemiDiameter(surface, configuration)
     const h = apertureY(semiD)
+    const rawH = semiD * 4
     const transform = groupVisualTransform(system, surface.id, configuration)
     const sy = centerY - Math.max(-52, Math.min(52, transform.shiftY * 10))
     const tiltDx = Math.max(-20, Math.min(20, transform.tiltZ * 3))
@@ -765,6 +775,7 @@ function LayoutView({
       sx: xScale(x),
       semiD,
       h,
+      rawH,
       sy,
       tiltDx,
       transform,
@@ -808,15 +819,23 @@ function LayoutView({
       {glassElements.map((element) => (
         <path key={element.key} d={element.d} className={`glass-element${element.warning ? ' glass-element-warning' : ''}`} />
       ))}
-      {surfaceViews.map(({ surface, sx, sy, h, tiltDx, transform, profilePoints, cementedBoundary }) => {
+      {surfaceViews.map(({ surface, sx, sy, semiD, h, rawH, tiltDx, transform, profilePoints, cementedBoundary }) => {
         const className = `surface-line surface-${surface.kind}${transform.active ? ' surface-configured' : ''}${cementedBoundary ? ' surface-cemented' : ''}`
         const profile = pointsPath(profilePoints)
         const labelY = sy + h + 22 + (labelRows.get(surface.id) ?? 0) * 13
         return (
-          <g key={surface.id}>
+          <g
+            key={surface.id}
+            data-surface-id={surface.id}
+            data-surface-kind={surface.kind}
+            data-semi-diameter-mm={semiD}
+            data-visual-half-height-px={h}
+            data-raw-half-height-px={rawH}
+            data-scale-clamped={Math.abs(h - rawH) > 1.0e-9 ? 'true' : 'false'}
+          >
             {profilePoints.length > 2 ? <path d={profile} className={className} fill="none" /> : <line x1={sx - tiltDx} x2={sx + tiltDx} y1={sy - h} y2={sy + h} className={className} />}
-            {surface.kind === 'sensor' ? <rect x={sx - 3} y={sy - 62} width="6" height="124" className="sensor-plane" /> : null}
-            {surface.kind === 'aperture_stop' ? <circle cx={sx} cy={sy} r="5" className="stop-dot" /> : null}
+            {surface.kind === 'sensor' ? <rect x={sx - 3} y={sy - h} width="6" height={h * 2} className="sensor-plane" /> : null}
+            {surface.kind === 'aperture_stop' ? <circle cx={sx} cy={sy} r={Math.max(3, Math.min(6, h * 0.12))} className="stop-dot" /> : null}
             {transform.active ? <circle cx={sx} cy={sy - h - 10} r="3.5" className="configured-dot" /> : null}
             <text x={sx} y={labelY} textAnchor="middle" className="surface-label">
               {surface.id}
