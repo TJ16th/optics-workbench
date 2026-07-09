@@ -73,16 +73,23 @@ async function mockEngine(
     const request = route.request().postDataJSON()
     options.previewRequests?.push(request)
     const fields = request.fields ?? []
+    const evaluatedFields =
+      request.configuration?.decenters?.length || request.configuration?.tilts?.length
+        ? [
+            { id: 'field_y-10_z0', type: 'angular', theta_y_deg: -10, theta_z_deg: 0 },
+            { id: 'field_y10_z0', type: 'angular', theta_y_deg: 10, theta_z_deg: 0 },
+          ]
+        : fields
     const wavelengths = request.wavelengths_nm ?? []
     const samples = request.ray_sampling?.samples_per_field ?? 1
-    const total = Math.max(1, fields.length * wavelengths.length * samples)
+    const total = Math.max(1, evaluatedFields.length * wavelengths.length * samples)
     await route.fulfill({
       json: {
         status: Array.from({ length: total }, () => 'alive'),
         sensor_y_mm: Array.from({ length: total }, (_, index) => index / 100),
         sensor_z_mm: Array.from({ length: total }, (_, index) => -index / 100),
         metadata: {
-          evaluated_fields: fields,
+          evaluated_fields: evaluatedFields,
           wavelengths_nm: wavelengths,
           samples_per_field: samples,
           pupil_distribution: request.ray_sampling?.pupil_distribution,
@@ -311,6 +318,52 @@ test('aperture slider updates stop radius through debounced preview', async ({ p
   const commitPreview = previewRequests[previewRequests.length - 1] as { ray_sampling?: { samples_per_field?: number } }
   expect(commitPreview.ray_sampling?.samples_per_field).toBe(9)
   await expect(page.getByTestId('system-dirty-status')).toHaveCount(0)
+  await expect(page.getByTestId('analysis-dirty-status')).toContainText('clean')
+})
+
+test('decenter tilt sliders send configuration and expose evaluated symmetric fields', async ({ page }) => {
+  const previewRequests: unknown[] = []
+  await mockEngine(page, { previewRequests })
+  await page.goto('/?lng=en')
+  await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
+  await page.getByText('P003 Achromat Doublet 100mm Demo').click()
+
+  await expect(page.locator('#decenter-tilt-group')).toHaveValue('OIS_G')
+  await page.locator('#shift-y-slider').evaluate((node) => {
+    const input = node as HTMLInputElement
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(input, '1.2')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await page.locator('#tilt-z-slider').evaluate((node) => {
+    const input = node as HTMLInputElement
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(input, '2')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+
+  await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBeGreaterThanOrEqual(1)
+  const dragPreview = previewRequests[previewRequests.length - 1] as {
+    configuration?: {
+      decenters?: Array<{ group?: string; shift_y_mm?: number }>
+      tilts?: Array<{ group?: string; tilt_z_deg?: number; rotation_center?: { reference?: string } }>
+    }
+    ray_sampling?: { samples_per_field?: number; ray_aiming?: { mode?: string } }
+  }
+  expect(dragPreview.configuration?.decenters?.[0]?.group).toBe('OIS_G')
+  expect(dragPreview.configuration?.decenters?.[0]?.shift_y_mm).toBeCloseTo(1.2)
+  expect(dragPreview.configuration?.tilts?.[0]?.tilt_z_deg).toBeCloseTo(2)
+  expect(dragPreview.configuration?.tilts?.[0]?.rotation_center?.reference).toBe('from_surface_vertex')
+  expect(dragPreview.ray_sampling?.samples_per_field).toBe(5)
+  expect(dragPreview.ray_sampling?.ray_aiming?.mode).toBe('paraxial')
+
+  await page.locator('#tilt-z-slider').dispatchEvent('mouseup')
+  await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBeGreaterThanOrEqual(2)
+  const commitPreview = previewRequests[previewRequests.length - 1] as { ray_sampling?: { samples_per_field?: number } }
+  expect(commitPreview.ray_sampling?.samples_per_field).toBe(9)
+  await expect(page.locator('#layout-svg .configured-dot')).toHaveCount(2)
+  await expect(page.getByTestId('evaluated-fields')).toContainText('field_y-10_z0')
+  await expect(page.getByTestId('evaluated-fields')).toContainText('field_y10_z0')
   await expect(page.getByTestId('analysis-dirty-status')).toContainText('clean')
 })
 

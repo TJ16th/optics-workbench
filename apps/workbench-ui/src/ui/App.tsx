@@ -92,6 +92,16 @@ type ImagePlanePolicyDraft = {
   searchSteps: number
 }
 
+type DecenterTiltDraft = {
+  targetGroupId: string
+  shiftY: number
+  shiftZ: number
+  tiltY: number
+  tiltZ: number
+  rollX: number
+  rotationReference: 'from_surface_vertex' | 'to_surface_vertex'
+}
+
 const tabKeys: TabKey[] = ['system', 'preview', 'analysis', 'compare', 'debug']
 
 const defaultImagePlanePolicy: ImagePlanePolicyDraft = {
@@ -101,6 +111,16 @@ const defaultImagePlanePolicy: ImagePlanePolicyDraft = {
   frequencyLpMm: 20,
   searchRangeMm: 5,
   searchSteps: 11,
+}
+
+const defaultDecenterTiltDraft: DecenterTiltDraft = {
+  targetGroupId: '',
+  shiftY: 0,
+  shiftZ: 0,
+  tiltY: 0,
+  tiltZ: 0,
+  rollX: 0,
+  rotationReference: 'from_surface_vertex',
 }
 
 const defaultFieldSet: AnalysisField[] = [
@@ -365,12 +385,23 @@ function motionGroupIds(system: OpticalSystem) {
   return [...ids]
 }
 
+function decenterTiltGroupIds(system: OpticalSystem) {
+  const groups = system.groups ?? []
+  const preferred = groups.filter((group) => /ois|decenter|tilt|align/i.test(`${group.id} ${group.name ?? ''}`)).map((group) => group.id)
+  const all = groups.map((group) => group.id)
+  return [...new Set([...preferred, ...all])]
+}
+
 function zoomBaseShift(system: OpticalSystem, zoomPositionId: string, groupId: string) {
   const position = system.zoom_positions?.find((item) => item.id === zoomPositionId)
   return position?.group_positions[groupId]?.shift_x_mm ?? 0
 }
 
-function makeRuntimeConfiguration(system: OpticalSystem, zoomPositionId: string, focusGroupId: string, focusShiftMm: number): RuntimeConfiguration {
+function hasNonzeroDecenterTilt(draft: DecenterTiltDraft) {
+  return [draft.shiftY, draft.shiftZ, draft.tiltY, draft.tiltZ, draft.rollX].some((value) => Math.abs(value) > 1.0e-12)
+}
+
+function makeRuntimeConfiguration(system: OpticalSystem, zoomPositionId: string, focusGroupId: string, focusShiftMm: number, decenterTilt: DecenterTiltDraft): RuntimeConfiguration {
   const configuration: RuntimeConfiguration = {}
   if (zoomPositionId) configuration.zoom_position = zoomPositionId
   if (focusGroupId) {
@@ -378,6 +409,28 @@ function makeRuntimeConfiguration(system: OpticalSystem, zoomPositionId: string,
       [focusGroupId]: {
         shift_x_mm: zoomBaseShift(system, zoomPositionId, focusGroupId) + focusShiftMm,
       },
+    }
+  }
+  if (decenterTilt.targetGroupId && hasNonzeroDecenterTilt(decenterTilt)) {
+    if (Math.abs(decenterTilt.shiftY) > 1.0e-12 || Math.abs(decenterTilt.shiftZ) > 1.0e-12) {
+      configuration.decenters = [
+        {
+          group: decenterTilt.targetGroupId,
+          shift_y_mm: decenterTilt.shiftY,
+          shift_z_mm: decenterTilt.shiftZ,
+        },
+      ]
+    }
+    if (Math.abs(decenterTilt.tiltY) > 1.0e-12 || Math.abs(decenterTilt.tiltZ) > 1.0e-12 || Math.abs(decenterTilt.rollX) > 1.0e-12) {
+      configuration.tilts = [
+        {
+          group: decenterTilt.targetGroupId,
+          tilt_y_deg: decenterTilt.tiltY,
+          tilt_z_deg: decenterTilt.tiltZ,
+          roll_x_deg: decenterTilt.rollX,
+          rotation_center: { reference: decenterTilt.rotationReference },
+        },
+      ]
     }
   }
   return configuration
@@ -491,7 +544,35 @@ function HelpDrawer({ termId, onClose, onNavigate }: { termId: string | null; on
   )
 }
 
-function LayoutView({ system, trace, evaluationPlane }: { system: OpticalSystem; trace?: TraceResponse; evaluationPlane?: EvaluationPlaneMetadata }) {
+function groupVisualTransform(system: OpticalSystem, surfaceId: string, configuration?: RuntimeConfiguration) {
+  const containingGroups = (system.groups ?? []).filter((item) => {
+    const range = groupSurfaceRange(item, system.surfaces)
+    const index = system.surfaces.findIndex((surface) => surface.id === surfaceId)
+    return range.fromIndex >= 0 && range.toIndex >= 0 && index >= range.fromIndex && index <= range.toIndex
+  })
+  const configuredIds = new Set([...(configuration?.decenters ?? []).map((entry) => entry.group), ...(configuration?.tilts ?? []).map((entry) => entry.group)])
+  const group = containingGroups.find((item) => configuredIds.has(item.id)) ?? containingGroups[0]
+  if (!group || !configuration) return { shiftY: 0, tiltZ: 0, active: false }
+  const decenter = configuration.decenters?.find((entry) => entry.group === group.id)
+  const tilt = configuration.tilts?.find((entry) => entry.group === group.id)
+  return {
+    shiftY: decenter?.shift_y_mm ?? 0,
+    tiltZ: tilt?.tilt_z_deg ?? 0,
+    active: Boolean(decenter || tilt),
+  }
+}
+
+function LayoutView({
+  system,
+  trace,
+  evaluationPlane,
+  configuration,
+}: {
+  system: OpticalSystem
+  trace?: TraceResponse
+  evaluationPlane?: EvaluationPlaneMetadata
+  configuration?: RuntimeConfiguration
+}) {
   const { t } = useTranslation(['layoutView'])
   const positions = systemPositions(system)
   const evalX = evaluationPlane?.evaluation_plane_x_mm
@@ -518,13 +599,17 @@ function LayoutView({ system, trace, evaluationPlane }: { system: OpticalSystem;
       {positions.map(({ surface, x }) => {
         const sx = xScale(x)
         const h = apertureY(surface.semi_diameter_mm ?? surface.aperture?.semi_diameter_mm)
-        const className = `surface-line surface-${surface.kind}`
+        const transform = groupVisualTransform(system, surface.id, configuration)
+        const sy = centerY - Math.max(-52, Math.min(52, transform.shiftY * 10))
+        const tiltDx = Math.max(-20, Math.min(20, transform.tiltZ * 3))
+        const className = `surface-line surface-${surface.kind}${transform.active ? ' surface-configured' : ''}`
         return (
           <g key={surface.id}>
-            <line x1={sx} x2={sx} y1={centerY - h} y2={centerY + h} className={className} />
-            {surface.kind === 'sensor' ? <rect x={sx - 3} y={centerY - 62} width="6" height="124" className="sensor-plane" /> : null}
-            {surface.kind === 'aperture_stop' ? <circle cx={sx} cy={centerY} r="5" className="stop-dot" /> : null}
-            <text x={sx} y={centerY + h + 22} textAnchor="middle" className="surface-label">
+            <line x1={sx - tiltDx} x2={sx + tiltDx} y1={sy - h} y2={sy + h} className={className} />
+            {surface.kind === 'sensor' ? <rect x={sx - 3} y={sy - 62} width="6" height="124" className="sensor-plane" /> : null}
+            {surface.kind === 'aperture_stop' ? <circle cx={sx} cy={sy} r="5" className="stop-dot" /> : null}
+            {transform.active ? <circle cx={sx} cy={sy - h - 10} r="3.5" className="configured-dot" /> : null}
+            <text x={sx} y={sy + h + 22} textAnchor="middle" className="surface-label">
               {surface.id}
             </text>
           </g>
@@ -849,6 +934,108 @@ function ApertureMotionPanel({
       </div>
       <p className="muted">{t('settings:settings.aperture_motion_debounce', { ms: sliderPreviewDebounceMs, rays: sliderPreviewSamplesPerField })}</p>
     </section>
+  )
+}
+
+function DecenterTiltPanel({
+  system,
+  draft,
+  runtimeConfiguration,
+  isPreviewing,
+  onUpdateDraft,
+  onCommit,
+  onOpenHelp,
+}: {
+  system: OpticalSystem
+  draft: DecenterTiltDraft
+  runtimeConfiguration: RuntimeConfiguration
+  isPreviewing: boolean
+  onUpdateDraft: (patch: Partial<DecenterTiltDraft>, commit?: boolean) => void
+  onCommit: () => void
+  onOpenHelp: (termId: string) => void
+}) {
+  const { t } = useTranslation(['settings', 'units'])
+  const groupIds = decenterTiltGroupIds(system)
+  if (!groupIds.length) {
+    return (
+      <section className="panel">
+        <h2>{t('settings:settings.decenter_tilt')}</h2>
+        <p className="muted">{t('settings:settings.decenter_tilt_empty')}</p>
+      </section>
+    )
+  }
+  const configJson = JSON.stringify({
+    decenters: runtimeConfiguration.decenters ?? [],
+    tilts: runtimeConfiguration.tilts ?? [],
+  })
+  return (
+    <section className="panel group-motion-panel">
+      <div className="condition-heading">
+        <h2>
+          <TermHelp termId="decenter" fallback={t('settings:settings.decenter_tilt')} onOpenHelp={onOpenHelp} />
+        </h2>
+        <Tag type={isPreviewing ? 'blue' : 'gray'}>{isPreviewing ? t('settings:settings.previewing') : t('settings:settings.preview_ready')}</Tag>
+      </div>
+      <Select id="decenter-tilt-group" labelText={t('settings:settings.target_group')} value={draft.targetGroupId} onChange={(event) => onUpdateDraft({ targetGroupId: event.target.value }, true)}>
+        {groupIds.map((groupId) => (
+          <SelectItem key={groupId} value={groupId} text={groupId} />
+        ))}
+      </Select>
+      <div className="slider-grid">
+        <SliderControl id="shift-y-slider" label={t('settings:settings.shift_y_mm')} value={draft.shiftY} min={-5} max={5} step={0.1} unit={t('units:units.mm')} onChange={(value) => onUpdateDraft({ shiftY: value })} onCommit={onCommit} />
+        <SliderControl id="shift-z-slider" label={t('settings:settings.shift_z_mm')} value={draft.shiftZ} min={-5} max={5} step={0.1} unit={t('units:units.mm')} onChange={(value) => onUpdateDraft({ shiftZ: value })} onCommit={onCommit} />
+        <SliderControl id="tilt-y-slider" label={t('settings:settings.tilt_y_deg')} value={draft.tiltY} min={-5} max={5} step={0.1} unit={t('units:units.deg')} onChange={(value) => onUpdateDraft({ tiltY: value })} onCommit={onCommit} />
+        <SliderControl id="tilt-z-slider" label={t('settings:settings.tilt_z_deg')} value={draft.tiltZ} min={-5} max={5} step={0.1} unit={t('units:units.deg')} onChange={(value) => onUpdateDraft({ tiltZ: value })} onCommit={onCommit} />
+        <SliderControl id="roll-x-slider" label={t('settings:settings.roll_x_deg')} value={draft.rollX} min={-5} max={5} step={0.1} unit={t('units:units.deg')} onChange={(value) => onUpdateDraft({ rollX: value })} onCommit={onCommit} />
+      </div>
+      <Select
+        id="rotation-reference"
+        labelText={t('settings:settings.rotation_center')}
+        value={draft.rotationReference}
+        onChange={(event) => onUpdateDraft({ rotationReference: event.target.value as DecenterTiltDraft['rotationReference'] }, true)}
+      >
+        <SelectItem value="from_surface_vertex" text={t('settings:settings.from_surface_vertex')} />
+        <SelectItem value="to_surface_vertex" text={t('settings:settings.to_surface_vertex')} />
+      </Select>
+      <CodeSnippet type="single" hideCopyButton>
+        {configJson}
+      </CodeSnippet>
+      <p className="muted">{t('settings:settings.decenter_tilt_debounce', { ms: sliderPreviewDebounceMs, rays: sliderPreviewSamplesPerField })}</p>
+    </section>
+  )
+}
+
+function SliderControl({
+  id,
+  label,
+  value,
+  min,
+  max,
+  step,
+  unit,
+  onChange,
+  onCommit,
+}: {
+  id: string
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  unit: string
+  onChange: (value: number) => void
+  onCommit: () => void
+}) {
+  return (
+    <div className="slider-control">
+      <label htmlFor={id}>{label}</label>
+      <input id={id} type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} onMouseUp={onCommit} onTouchEnd={onCommit} />
+      <div className="slider-meta">
+        <strong>
+          {formatFixed(value, 2)} {unit}
+        </strong>
+      </div>
+    </div>
   )
 }
 
@@ -1615,6 +1802,8 @@ export function App() {
   const [zoomPositionId, setZoomPositionId] = useState('')
   const [focusGroupId, setFocusGroupId] = useState('')
   const [focusShiftMm, setFocusShiftMm] = useState(0)
+  const [decenterTiltDraft, setDecenterTiltDraft] = useState<DecenterTiltDraft>(() => ({ ...defaultDecenterTiltDraft }))
+  const decenterTiltDraftRef = useRef<DecenterTiltDraft>({ ...defaultDecenterTiltDraft })
   const [runtimeConfiguration, setRuntimeConfiguration] = useState<RuntimeConfiguration>({})
   const runtimeConfigurationRef = useRef<RuntimeConfiguration>({})
   const [irisRadiusMm, setIrisRadiusMm] = useState(() => apertureStopRadius(presets[0].system) ?? 1)
@@ -1707,11 +1896,14 @@ export function App() {
   const resetMotionControls = (nextSystem: OpticalSystem) => {
     const nextZoom = nextSystem.zoom_positions?.[0]?.id ?? ''
     const nextGroup = motionGroupIds(nextSystem)[0] ?? ''
+    const nextDecenterTilt = { ...defaultDecenterTiltDraft, targetGroupId: decenterTiltGroupIds(nextSystem)[0] ?? '' }
     const nextIris = apertureStopRadius(nextSystem) ?? 1
     setZoomPositionId(nextZoom)
     setFocusGroupId(nextGroup)
     setFocusShiftMm(0)
-    const nextConfiguration = makeRuntimeConfiguration(nextSystem, nextZoom, nextGroup, 0)
+    setDecenterTiltDraft(nextDecenterTilt)
+    decenterTiltDraftRef.current = nextDecenterTilt
+    const nextConfiguration = makeRuntimeConfiguration(nextSystem, nextZoom, nextGroup, 0, nextDecenterTilt)
     runtimeConfigurationRef.current = nextConfiguration
     setRuntimeConfiguration(nextConfiguration)
     irisRadiusRef.current = nextIris
@@ -1849,7 +2041,7 @@ export function App() {
   }
 
   const setMotionConfiguration = (nextZoom: string, nextFocusGroup: string, nextFocusShift: number, commit = false) => {
-    const nextConfiguration = makeRuntimeConfiguration(system, nextZoom, nextFocusGroup, nextFocusShift)
+    const nextConfiguration = makeRuntimeConfiguration(system, nextZoom, nextFocusGroup, nextFocusShift, decenterTiltDraftRef.current)
     setZoomPositionId(nextZoom)
     setFocusGroupId(nextFocusGroup)
     setFocusShiftMm(nextFocusShift)
@@ -1887,6 +2079,26 @@ export function App() {
     if (!nextSystem) return
     if (sliderPreviewTimerRef.current) window.clearTimeout(sliderPreviewTimerRef.current)
     void runMotionPreview(runtimeConfigurationRef.current, false, nextSystem, true)
+  }
+
+  const updateDecenterTilt = (patch: Partial<DecenterTiltDraft>, commit = false) => {
+    const nextDraft = { ...decenterTiltDraftRef.current, ...patch }
+    decenterTiltDraftRef.current = nextDraft
+    setDecenterTiltDraft(nextDraft)
+    const nextConfiguration = makeRuntimeConfiguration(system, zoomPositionId, focusGroupId, focusShiftMm, nextDraft)
+    runtimeConfigurationRef.current = nextConfiguration
+    setRuntimeConfiguration(nextConfiguration)
+    markAnalysisDirty()
+    scheduleMotionPreview(nextConfiguration)
+    if (commit) {
+      if (sliderPreviewTimerRef.current) window.clearTimeout(sliderPreviewTimerRef.current)
+      void runMotionPreview(nextConfiguration, false)
+    }
+  }
+
+  const commitDecenterTilt = () => {
+    if (sliderPreviewTimerRef.current) window.clearTimeout(sliderPreviewTimerRef.current)
+    void runMotionPreview(runtimeConfigurationRef.current, false)
   }
 
   const validateMutation = useMutation({
@@ -2161,7 +2373,7 @@ export function App() {
                     </Button>
                   </div>
                 </div>
-                <LayoutView system={system} trace={trace} evaluationPlane={evaluationPlane} />
+                <LayoutView system={system} trace={trace} evaluationPlane={evaluationPlane} configuration={runtimeConfiguration} />
               </div>
               <div className="result-band">
                 <div className="panel">
@@ -2319,6 +2531,16 @@ export function App() {
             isPreviewing={sliderPreviewPending}
             onSetIrisRadius={setApertureRadius}
             onCommit={commitApertureRadius}
+            onOpenHelp={setHelpTermId}
+          />
+
+          <DecenterTiltPanel
+            system={system}
+            draft={decenterTiltDraft}
+            runtimeConfiguration={runtimeConfiguration}
+            isPreviewing={sliderPreviewPending}
+            onUpdateDraft={updateDecenterTilt}
+            onCommit={commitDecenterTilt}
             onOpenHelp={setHelpTermId}
           />
 

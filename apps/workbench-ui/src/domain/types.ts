@@ -65,6 +65,14 @@ export type OpticalGroup = {
 export type RuntimeConfiguration = {
   zoom_position?: string
   group_positions?: Record<string, { shift_x_mm?: number; shift_y_mm?: number; shift_z_mm?: number }>
+  decenters?: Array<{ group?: string; shift_y_mm?: number; shift_z_mm?: number }>
+  tilts?: Array<{
+    group?: string
+    tilt_y_deg?: number
+    tilt_z_deg?: number
+    roll_x_deg?: number
+    rotation_center?: { reference?: string; offset_x_mm?: number; offset_y_mm?: number; offset_z_mm?: number }
+  }>
 }
 
 export type AnalysisField = {
