@@ -185,6 +185,31 @@ v2.3/P2対応で不足した用語・エラーコードは `glossary.supplement.
 - 単純な球面レンズ系をZ軸表現から取り込み、内部 `+X` 系で同じ近軸量になる。
 - 変換規約がドキュメント化されている。
 
+## Issue: variable binding registryをCompiledSystemに保持する
+
+ラベル案: `engine`, `architecture`
+
+### 背景
+
+follow-up3時点では、`semi_diameter_mm: { variable: "iris_radius_mm", default: 10 }` のようなvariable形式はロード時にdefault値へ正規化される。`iris_radius_mm` については `configuration.variables.iris_radius_mm` をtrace時に個別処理しているためMVPとして動作するが、CompiledSystem内に「どのsurface/parameterがどのvariable keyへ束縛されているか」という情報は残っていない。
+
+このまま `{surface_id}_curvature`、`{surface_id}_conic`、`{surface_id}_thickness_after_mm` など25.6節の一般変数へ広げると、UI表示、validation、最適化API、CompiledSystem cache再利用の整合が取りづらくなる。
+
+### 対応案
+
+- `CompiledSystem` にvariable binding registryを追加し、variable key、対象surface、対象parameter、default値、許容範囲/型を保持する。
+- `load_system` / `compile_system` でvariable形式をdefault数値へ正規化しつつ、binding情報を失わないようにする。
+- `configuration.variables` 適用を `iris_radius_mm` 専用処理から一般的なparameter injectionへ拡張する。
+- system hash / cache keyに、binding schemaとdefault値を含め、runtime値そのものはcache keyに含めない方針を明確にする。
+- unknown variable、型不正、範囲外値の構造化エラー/警告を追加する。
+
+### 受け入れ条件
+
+- 同一CompiledSystemに対して複数のruntime variable値を連続適用しても前回値が残留しない。
+- `iris_radius_mm` がregistry経由で動作し、現行のaperture runtime化テストが維持される。
+- 少なくとも1つのsurface parameter（例: `{surface_id}_curvature` または `{surface_id}_thickness_after_mm`）がregistry経由でruntime injectionできる。
+- variable bindingの内容がdebug/API metadataで確認できる。
+
 ## Issue: 回折PSF・波面収差・FFT瞳関数を追加する
 
 ラベル案: `engine`
