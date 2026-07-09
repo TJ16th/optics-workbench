@@ -10,6 +10,7 @@
 - 有効な作業指示は `doc/work_orders/active/` 内のみ。`done/` は完了済みの記録であり、再実行しない。
 - `doc/work_orders/` 直下には `active/`・`done/`・`README.md` 以外を置かない。
 - 実装報告は `doc/reports/` に `YYYY-MM-DD_<件名>.md` 形式で追加する。
+- コード変更を伴わない確認・運用作業であっても、人間から明示的に依頼された調査・確認タスクは完了報告を `doc/reports/` に残す。
 - `doc/reports/issues_backlog.md` は、将来対応すべき残件の**下書きキュー**として継続使用する（詳細は下記「GitHub Issue運用」）。実際のIssue化は人間がGitHub Actionsから手動実行する。
 
 ## GitHub Issue運用【Codex自身はIssueを直接作成しない】
@@ -47,6 +48,7 @@
 
 - README の状況表・ステータス文言、`doc/work_orders` の active/done 分類、および実装報告内の「Done」「実装済み」表記を新たに主張・変更する場合は、**根拠となるコミットハッシュ・テストファイル名・直近のテスト/CI実行結果を必ず明記する**こと。根拠を示せない完了主張は行わない。
 - ブラウザ等の実環境で修正が反映されているか確認する際は、まず `/v1/meta` の `build_info.git_commit` が報告コミットと一致しているかを確認する。一致しない場合はプロセス再起動が必要である。
+- `/v1/meta` の `build_info.git_dirty` は作業ツリー全体の状態を示す。`doc/work_orders/active/` の指示書や `doc/reports/` の報告書追加でも `true` になりうるため、値の解釈時は `git status --short` で内訳を確認する。
 - 機能の一部が未実装・簡略化されている場合は「Done」と書かず、「Partial」「Done with noted limitation」のように状態を正確に区別する（例：単一JSON exportは実装、zip exportは未実装、のように粒度を分ける）。
 - 別タスク・別報告書の記述と矛盾する完了主張をしないこと。矛盾に気づいた場合は、その場で報告し人間の確認を求める（無視して片方を採用しない）。
 
