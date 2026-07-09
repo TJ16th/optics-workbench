@@ -281,6 +281,7 @@ test('layout view draws spherical surfaces as signed curves', async ({ page }) =
   await page.getByText('P002 N-BK7 Biconvex Singlet 50mm Demo').click()
   const p002Profiles = page.locator('#layout-svg path.surface-refractive')
   await expect(p002Profiles).toHaveCount(2)
+  await expect(page.locator('#layout-svg path.glass-element')).toHaveCount(1)
 
   const firstProfile = (await p002Profiles.nth(0).getAttribute('d')) ?? ''
   const secondProfile = (await p002Profiles.nth(1).getAttribute('d')) ?? ''
@@ -294,6 +295,8 @@ test('layout view draws spherical surfaces as signed curves', async ({ page }) =
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByText('P003 Achromat Doublet 100mm Demo').click()
   await expect(page.locator('#layout-svg path.surface-refractive')).toHaveCount(3)
+  await expect(page.locator('#layout-svg path.glass-element')).toHaveCount(2)
+  await expect(page.locator('#layout-svg path.surface-cemented')).toHaveCount(1)
 })
 
 test('layout view uses trace path polylines when preview returns surface hits', async ({ page }) => {
@@ -325,6 +328,10 @@ test('P003 slider preview keeps layout rays on education preview surface paths',
   expect(dragPreview.ray_sampling?.samples_per_field).toBe(5)
   expect(dragPreview.ray_sampling?.ray_aiming?.mode).toBe('paraxial')
   await expectLayoutRayPath(page, 5)
+  const totalRays = Number(await page.locator('#layout-svg').getAttribute('data-total-rays'))
+  const displayedRays = Number(await page.locator('#layout-svg').getAttribute('data-displayed-rays'))
+  expect(totalRays).toBeGreaterThan(displayedRays)
+  expect(displayedRays).toBeLessThanOrEqual(36)
 })
 
 test('debug tab shows connected engine build info', async ({ page }) => {
@@ -360,6 +367,25 @@ test('layout view fixture draws even-aspheric sag differently from a sphere', as
   const sphericalEdgeSagPx = sphericalXs[0] - sphericalXs[12]
   const asphericEdgeSagPx = asphericXs[0] - asphericXs[12]
   expect(asphericEdgeSagPx).toBeGreaterThan(sphericalEdgeSagPx + 8)
+})
+
+test('layout view keeps plane boundary elements and warns on negative edge thickness', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en&fixture=asphere-layout')
+
+  await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
+  await page.getByText('F_EDGE_CASE Layout Edge Case Fixture').click()
+
+  const glassElements = page.locator('#layout-svg path.glass-element')
+  await expect(glassElements).toHaveCount(2)
+  await expect(page.locator('#layout-svg path.glass-element-warning')).toHaveCount(1)
+  await expect(page.locator('#layout-svg')).toContainText('PP1')
+  await expect(page.locator('#layout-svg')).toContainText('PS2')
+
+  const planePlaneElement = (await glassElements.nth(0).getAttribute('d')) ?? ''
+  const planeSphereWarning = (await page.locator('#layout-svg path.glass-element-warning').getAttribute('d')) ?? ''
+  expect(planePlaneElement).toContain('Z')
+  expect(planeSphereWarning).toContain('Z')
 })
 
 test('group motion sliders send runtime configuration through debounced preview', async ({ page }) => {

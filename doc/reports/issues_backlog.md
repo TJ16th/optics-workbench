@@ -266,3 +266,28 @@ Phase 8でafocal、eye_reference、射出瞳、アイボックス、角度MTF等
 
 - 長時間解析の進捗とキャンセル方針が仕様化されている。
 - MVP API形状とUI状態遷移が決まっている。
+
+## Issue: 面ごとの製造外径（mechanical_diameter_mm）を導入し、段付き外径をUIで表現できるようにする
+
+ラベル案: `engine`, `ui`
+
+### 背景
+
+現PhaseのLayout Viewは `semi_diameter_mm` を有効半径として扱い、clear aperture boundaryを描画する。これは光線通過域の可視化としては正しいが、実レンズ図面で必要になる段付きの製造外径、コバ径、鏡筒保持部の表現には不足する。エンジン仕様v2.2で定義済みの `edge_thickness` 評価値は隣接面間の周縁厚み制約チェックに留まり、製造外径自体を決定する仕組みではない。
+
+### 対応案
+
+- エンジン仕様に面単位の任意項目 `mechanical_diameter_mm` を追加する。
+- 省略時は `semi_diameter_mm` と同値として扱い、マージンの自動付与はしない。
+- `mechanical_diameter_mm` は描画・製造制約評価専用とし、光線の遮光判定には影響させない。この非影響をテストで固定する。
+- UI Layout Viewで、clear aperture boundaryと製造外形を別レイヤーとして描画できるようにする。
+- edge thicknessの評価位置は現行どおり有効半径基準 `min(semiD_a, semiD_b)` を維持し、将来的にmechanical edge位置での評価オプションを追加する余地を注記する。
+- 将来的な発展として、最小コバ厚み制約から外径を逆算する、外径差が過大な場合に警告する、といった機能は別Issue候補として残す。
+
+### 受け入れ条件
+
+- `mechanical_diameter_mm` を面ごとに指定でき、省略時は有効径ベースの既定値が使われる。
+- UIが段付き外径を正しく描画する。
+- 有効径境界と製造外形がUI上で区別できる。
+- snapshot export/importで追加寸法が保持される。
+- 既存の `edge_thickness` 評価・validationと矛盾しない。

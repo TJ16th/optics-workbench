@@ -596,21 +596,49 @@ function surfaceSagMm(surface: Surface, rayHeightMm: number) {
   return 0
 }
 
-function surfaceProfilePath(surface: Surface, vertexX: number, sy: number, h: number, semiDiameterMm: number, xScale: (x: number) => number, tiltDx: number) {
+type LayoutPoint = { x: number; y: number }
+
+function surfaceProfilePoints(surface: Surface, vertexX: number, sy: number, h: number, semiDiameterMm: number, xScale: (x: number) => number, tiltDx: number): LayoutPoint[] {
   const radius = surface.radius_mm ?? 0
   const surfaceType = surface.surface_type ?? 'plane'
   if ((surfaceType !== 'spherical' && surfaceType !== 'aspherical_even') || !Number.isFinite(radius) || Math.abs(radius) < 1.0e-12 || semiDiameterMm <= 0 || h <= 0) {
-    return null
+    return [
+      { x: xScale(vertexX) - tiltDx, y: sy - h },
+      { x: xScale(vertexX) + tiltDx, y: sy + h },
+    ]
   }
-  const points = Array.from({ length: 25 }, (_, index) => {
+  return Array.from({ length: 25 }, (_, index) => {
     const t = index / 24
     const pixelOffset = -h + t * h * 2
     const rayHeightMm = (pixelOffset / h) * semiDiameterMm
     const sag = surfaceSagMm(surface, rayHeightMm)
     const tiltedX = (pixelOffset / h) * tiltDx
-    return `${index === 0 ? 'M' : 'L'} ${xScale(vertexX + sag) + tiltedX} ${sy + pixelOffset}`
+    return { x: xScale(vertexX + sag) + tiltedX, y: sy + pixelOffset }
   })
-  return points.join(' ')
+}
+
+function pointsPath(points: LayoutPoint[]) {
+  if (!points.length) return ''
+  return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
+}
+
+function closedElementPath(left: LayoutPoint[], right: LayoutPoint[]) {
+  if (left.length < 2 || right.length < 2) return ''
+  return `${pointsPath(left)} ${right
+    .slice()
+    .reverse()
+    .map((point) => `L ${point.x} ${point.y}`)
+    .join(' ')} Z`
+}
+
+function isGlassMaterial(material?: string) {
+  return Boolean(material && material.toUpperCase() !== 'AIR')
+}
+
+function edgeThicknessMm(left: Surface, right: Surface, leftX: number, rightX: number, semiD: number) {
+  const leftSag = surfaceSagMm(left, semiD)
+  const rightSag = surfaceSagMm(right, semiD)
+  return rightX + rightSag - (leftX + leftSag)
 }
 
 function rayPathD(path: NonNullable<TraceResponse['paths']>[number], xScale: (x: number) => number, centerY: number, yScale: number) {
@@ -619,6 +647,35 @@ function rayPathD(path: NonNullable<TraceResponse['paths']>[number], xScale: (x:
     .filter((point) => point.length >= 3 && point.every((value) => Number.isFinite(value)))
   if (points.length < 2) return null
   return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${xScale(point[0])} ${centerY - point[1] * yScale}`).join(' ')
+}
+
+function wavelengthClass(wavelength: number | undefined) {
+  if (wavelength === undefined || !Number.isFinite(wavelength)) return 'ray-d'
+  if (wavelength <= 510) return 'ray-f'
+  if (wavelength >= 630) return 'ray-c'
+  return 'ray-d'
+}
+
+function layoutRayItems(trace?: TraceResponse) {
+  const paths = trace?.paths
+  if (!trace || !paths?.length) return []
+  const samples = Math.max(1, Number(trace.metadata.samples_per_field ?? 1))
+  const wavelengths = trace.metadata.wavelengths_nm?.length ? trace.metadata.wavelengths_nm : [undefined]
+  const representativeSamples = new Set([0, Math.floor((samples - 1) / 2), samples - 1])
+  const items = paths
+    .map((path, index) => {
+      const sampleIndex = index % samples
+      const wavelengthIndex = Math.floor(index / samples) % wavelengths.length
+      return {
+        path,
+        status: trace.status[index],
+        index,
+        sampleIndex,
+        className: `ray-line ${wavelengthClass(wavelengths[wavelengthIndex])}`,
+      }
+    })
+    .filter((item) => item.status === 'alive' && item.path.length >= 2 && representativeSamples.has(item.sampleIndex))
+  return (items.length ? items : paths.map((path, index) => ({ path, status: trace.status[index], index, sampleIndex: index, className: 'ray-line ray-d' })).filter((item) => item.status === 'alive' && item.path.length >= 2)).slice(0, 36)
 }
 
 function LayoutView({
@@ -650,32 +707,75 @@ function LayoutView({
   const tracePoints = trace?.sensor_y_mm
     ?.map((y, index) => ({ y, z: trace.sensor_z_mm[index], status: trace.status[index] }))
     .filter((point) => Number.isFinite(point.y) && point.status === 'alive')
-    .slice(0, 80)
-  const tracePaths = trace?.paths
-    ?.map((path, index) => ({ path, status: trace.status[index] }))
-    .filter((item) => item.status === 'alive' && item.path.length >= 2)
-    .slice(0, 80)
+    .slice(0, 24)
+  const tracePaths = layoutRayItems(trace)
+  const surfaceViews = positions.map(({ surface, x }, index) => {
+    const semiD = surfaceSemiDiameter(surface, configuration)
+    const h = apertureY(semiD)
+    const transform = groupVisualTransform(system, surface.id, configuration)
+    const sy = centerY - Math.max(-52, Math.min(52, transform.shiftY * 10))
+    const tiltDx = Math.max(-20, Math.min(20, transform.tiltZ * 3))
+    const previous = index > 0 ? positions[index - 1].surface : undefined
+    return {
+      surface,
+      x,
+      sx: xScale(x),
+      semiD,
+      h,
+      sy,
+      tiltDx,
+      transform,
+      profilePoints: surfaceProfilePoints(surface, x, sy, h, semiD, xScale, tiltDx),
+      cementedBoundary: surface.kind === 'refractive' && isGlassMaterial(previous?.material_after) && isGlassMaterial(surface.material_after),
+    }
+  })
+  const glassElements = surfaceViews
+    .map((view, index) => {
+      const next = surfaceViews[index + 1]
+      if (!next || view.surface.kind !== 'refractive' || !isGlassMaterial(view.surface.material_after)) return null
+      const thickness = edgeThicknessMm(view.surface, next.surface, view.x, next.x, Math.min(view.semiD, next.semiD))
+      return {
+        key: `${view.surface.id}-${next.surface.id}`,
+        d: closedElementPath(view.profilePoints, next.profilePoints),
+        warning: thickness <= 0,
+      }
+    })
+    .filter((item): item is { key: string; d: string; warning: boolean } => Boolean(item?.d))
+  const labelRows = new Map<string, number>()
+  let previousLabelX = Number.NEGATIVE_INFINITY
+  let labelRow = 0
+  surfaceViews.forEach((view) => {
+    labelRow = view.sx - previousLabelX < 18 ? labelRow + 1 : 0
+    labelRows.set(view.surface.id, labelRow)
+    previousLabelX = view.sx
+  })
 
   return (
-    <svg id="layout-svg" className="layout-view" viewBox="0 0 720 340" role="img" aria-label={t('layoutView.optical_layout_aria')}>
+    <svg
+      id="layout-svg"
+      className="layout-view"
+      viewBox="0 0 720 340"
+      role="img"
+      aria-label={t('layoutView.optical_layout_aria')}
+      data-total-rays={trace?.status.length ?? 0}
+      data-displayed-rays={tracePaths.length || tracePoints?.length || 0}
+    >
       <title>{t('layoutView.optical_layout')}</title>
       <line x1="24" x2="696" y1={centerY} y2={centerY} className="axis-line" />
-      {positions.map(({ surface, x }) => {
-        const sx = xScale(x)
-        const semiD = surfaceSemiDiameter(surface, configuration)
-        const h = apertureY(semiD)
-        const transform = groupVisualTransform(system, surface.id, configuration)
-        const sy = centerY - Math.max(-52, Math.min(52, transform.shiftY * 10))
-        const tiltDx = Math.max(-20, Math.min(20, transform.tiltZ * 3))
-        const className = `surface-line surface-${surface.kind}${transform.active ? ' surface-configured' : ''}`
-        const profile = surfaceProfilePath(surface, x, sy, h, semiD, xScale, tiltDx)
+      {glassElements.map((element) => (
+        <path key={element.key} d={element.d} className={`glass-element${element.warning ? ' glass-element-warning' : ''}`} />
+      ))}
+      {surfaceViews.map(({ surface, sx, sy, h, tiltDx, transform, profilePoints, cementedBoundary }) => {
+        const className = `surface-line surface-${surface.kind}${transform.active ? ' surface-configured' : ''}${cementedBoundary ? ' surface-cemented' : ''}`
+        const profile = pointsPath(profilePoints)
+        const labelY = sy + h + 22 + (labelRows.get(surface.id) ?? 0) * 13
         return (
           <g key={surface.id}>
-            {profile ? <path d={profile} className={className} fill="none" /> : <line x1={sx - tiltDx} x2={sx + tiltDx} y1={sy - h} y2={sy + h} className={className} />}
+            {profilePoints.length > 2 ? <path d={profile} className={className} fill="none" /> : <line x1={sx - tiltDx} x2={sx + tiltDx} y1={sy - h} y2={sy + h} className={className} />}
             {surface.kind === 'sensor' ? <rect x={sx - 3} y={sy - 62} width="6" height="124" className="sensor-plane" /> : null}
             {surface.kind === 'aperture_stop' ? <circle cx={sx} cy={sy} r="5" className="stop-dot" /> : null}
             {transform.active ? <circle cx={sx} cy={sy - h - 10} r="3.5" className="configured-dot" /> : null}
-            <text x={sx} y={sy + h + 22} textAnchor="middle" className="surface-label">
+            <text x={sx} y={labelY} textAnchor="middle" className="surface-label">
               {surface.id}
             </text>
           </g>
@@ -698,14 +798,14 @@ function LayoutView({
         </g>
       ) : null}
       {tracePaths?.length
-        ? tracePaths.map(({ path }, index) => {
+        ? tracePaths.map(({ path, className, index }) => {
             const d = rayPathD(path, xScale, centerY, rayYScale)
-            return d ? <path key={index} d={d} className="ray-line" fill="none" /> : null
+            return d ? <path key={index} d={d} className={className} fill="none" /> : null
           })
         : tracePoints?.map((point, index) => {
             const sensorX = xScale(positions[positions.length - 1]?.x ?? maxX)
             const py = centerY - Math.max(-80, Math.min(80, point.y * 8))
-            return <line key={index} x1={xScale(positions[0]?.x ?? minX)} y1={centerY + (index % 7 - 3) * 7} x2={sensorX} y2={py} className="ray-line" />
+            return <line key={index} x1={xScale(positions[0]?.x ?? minX)} y1={centerY + (index % 7 - 3) * 7} x2={sensorX} y2={py} className="ray-line ray-d" />
           })}
     </svg>
   )

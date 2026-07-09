@@ -203,4 +203,33 @@ export const visualFixturePresets: Preset[] = [
       ],
     },
   },
+  {
+    id: 'F_EDGE_CASE',
+    name: 'Layout Edge Case Fixture',
+    summary: 'Development-only fixture for plane boundaries and edge-thickness warning rendering.',
+    recommendedAnalysis: ['layout'],
+    system: {
+      name: 'Layout Edge Case Fixture',
+      units: 'mm',
+      optical_axis: '+X',
+      system_type: 'focal',
+      wavelengths_nm: { primary: 587.56, samples: [587.56] },
+      materials: commonMaterials,
+      surfaces: [
+        {
+          id: 'STOP',
+          kind: 'aperture_stop',
+          surface_type: 'plane',
+          thickness_after_mm: 4,
+          semi_diameter_mm: 8,
+          aperture: { shape: 'circle', semi_diameter_mm: 8 },
+        },
+        { id: 'PP1', kind: 'refractive', surface_type: 'plane', thickness_after_mm: 2, material_after: 'N-BK7', semi_diameter_mm: 12 },
+        { id: 'PP2', kind: 'refractive', surface_type: 'plane', thickness_after_mm: 10, material_after: 'AIR', semi_diameter_mm: 12 },
+        { id: 'PS1', kind: 'refractive', surface_type: 'plane', thickness_after_mm: -2, material_after: 'N-BK7', semi_diameter_mm: 12 },
+        { id: 'PS2', kind: 'refractive', surface_type: 'spherical', radius_mm: -24, thickness_after_mm: 42, material_after: 'AIR', semi_diameter_mm: 10 },
+        { id: 'IMG', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 36, height_mm: 24 } },
+      ],
+    },
+  },
 ]
