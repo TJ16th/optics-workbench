@@ -35,6 +35,7 @@ import type {
   ImagePlanePolicyApplyTo,
   ImagePlanePolicyMode,
   MtfPoint,
+  OpticalGroup,
   OpticalSystem,
   RayFanPoint,
   RelativeIlluminationRow,
@@ -285,6 +286,70 @@ function applySensorOffset(system: OpticalSystem, offsetMm: number): OpticalSyst
   return next
 }
 
+function uniqueGroupId(groups: OpticalGroup[]) {
+  let index = groups.length + 1
+  let id = `G${index}`
+  const used = new Set(groups.map((group) => group.id))
+  while (used.has(id)) {
+    index += 1
+    id = `G${index}`
+  }
+  return id
+}
+
+function defaultGroupFor(system: OpticalSystem): OpticalGroup {
+  const firstSurface = system.surfaces.find((surface) => surface.kind !== 'sensor') ?? system.surfaces[0]
+  return {
+    id: uniqueGroupId(system.groups ?? []),
+    name: '',
+    from_surface: firstSurface?.id ?? '',
+    to_surface: firstSurface?.id ?? '',
+  }
+}
+
+function groupSurfaceRange(group: OpticalGroup, surfaces: Surface[]) {
+  const fromIndex = surfaces.findIndex((surface) => surface.id === group.from_surface)
+  const toIndex = surfaces.findIndex((surface) => surface.id === group.to_surface)
+  return { fromIndex, toIndex }
+}
+
+function groupIssues(groups: OpticalGroup[], surfaces: Surface[]) {
+  const issues: Array<{ key: string; type: 'error' | 'warning'; messageKey: string; values?: Record<string, string> }> = []
+  const ranges = groups.map((group) => ({ group, ...groupSurfaceRange(group, surfaces) }))
+  const ids = new Set<string>()
+  for (const { group, fromIndex, toIndex } of ranges) {
+    if (ids.has(group.id)) {
+      issues.push({ key: `duplicate-${group.id}`, type: 'error', messageKey: 'surfaceTable.groups.duplicate_id', values: { group_id: group.id } })
+    }
+    ids.add(group.id)
+    if (fromIndex < 0 || toIndex < 0) {
+      issues.push({ key: `unknown-${group.id}`, type: 'error', messageKey: 'surfaceTable.groups.unknown_surface', values: { group_id: group.id } })
+      continue
+    }
+    if (fromIndex > toIndex) {
+      issues.push({ key: `range-${group.id}`, type: 'error', messageKey: 'surfaceTable.groups.invalid_range', values: { group_id: group.id } })
+    }
+  }
+
+  for (let leftIndex = 0; leftIndex < ranges.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < ranges.length; rightIndex += 1) {
+      const left = ranges[leftIndex]
+      const right = ranges[rightIndex]
+      if (left.fromIndex < 0 || left.toIndex < 0 || right.fromIndex < 0 || right.toIndex < 0) continue
+      if (left.fromIndex > left.toIndex || right.fromIndex > right.toIndex) continue
+      if (left.fromIndex <= right.toIndex && right.fromIndex <= left.toIndex) {
+        issues.push({
+          key: `overlap-${left.group.id}-${right.group.id}`,
+          type: 'warning',
+          messageKey: 'surfaceTable.groups.overlap',
+          values: { left: left.group.id, right: right.group.id },
+        })
+      }
+    }
+  }
+  return issues
+}
+
 function presetLabel(id: string, fallback: string, t: (key: string, options?: Record<string, unknown>) => string) {
   return t(`common.preset.items.${id}.name`, { defaultValue: fallback })
 }
@@ -462,6 +527,109 @@ function SurfaceTable({ surfaces, onOpenHelp }: { surfaces: Surface[]; onOpenHel
         </tbody>
       </table>
     </div>
+  )
+}
+
+function GroupPanel({
+  system,
+  onAddGroup,
+  onUpdateGroup,
+  onRemoveGroup,
+  onOpenHelp,
+}: {
+  system: OpticalSystem
+  onAddGroup: () => void
+  onUpdateGroup: (index: number, patch: Partial<OpticalGroup>) => void
+  onRemoveGroup: (index: number) => void
+  onOpenHelp: (termId: string) => void
+}) {
+  const { t } = useTranslation(['surfaceTable'])
+  const groups = system.groups ?? []
+  const surfaces = system.surfaces
+  const issues = groupIssues(groups, surfaces)
+
+  return (
+    <section className="group-editor" aria-label={t('surfaceTable.groups.title')}>
+      <div className="panel-heading">
+        <div>
+          <h2>
+            <TermHelp termId="zoom_group" fallback={t('surfaceTable.groups.title')} onOpenHelp={onOpenHelp} />
+          </h2>
+          <p className="muted">{t('surfaceTable.groups.description')}</p>
+        </div>
+        <Button size="sm" kind="secondary" renderIcon={Add} onClick={onAddGroup}>
+          {t('surfaceTable.groups.add')}
+        </Button>
+      </div>
+      {groups.length ? (
+        <div className="group-list">
+          {groups.map((group, index) => {
+            const range = groupSurfaceRange(group, surfaces)
+            const rangeState = range.fromIndex < 0 || range.toIndex < 0 || range.fromIndex > range.toIndex ? 'invalid' : 'ok'
+            return (
+              <div key={`${group.id}-${index}`} className="group-row" data-testid="group-row" data-range-state={rangeState}>
+                <TextInput
+                  id={`group-id-${index}`}
+                  labelText={t('surfaceTable.groups.id')}
+                  value={group.id}
+                  onChange={(event) => onUpdateGroup(index, { id: event.target.value })}
+                />
+                <TextInput
+                  id={`group-name-${index}`}
+                  labelText={t('surfaceTable.groups.name')}
+                  value={group.name ?? ''}
+                  onChange={(event) => onUpdateGroup(index, { name: event.target.value })}
+                />
+                <Select
+                  id={`group-from-${index}`}
+                  labelText={t('surfaceTable.groups.from_surface')}
+                  value={group.from_surface}
+                  onChange={(event) => onUpdateGroup(index, { from_surface: event.target.value })}
+                >
+                  {surfaces.map((surface) => (
+                    <SelectItem key={surface.id} value={surface.id} text={surface.id} />
+                  ))}
+                </Select>
+                <Select
+                  id={`group-to-${index}`}
+                  labelText={t('surfaceTable.groups.to_surface')}
+                  value={group.to_surface}
+                  onChange={(event) => onUpdateGroup(index, { to_surface: event.target.value })}
+                >
+                  {surfaces.map((surface) => (
+                    <SelectItem key={surface.id} value={surface.id} text={surface.id} />
+                  ))}
+                </Select>
+                <Button
+                  hasIconOnly
+                  size="sm"
+                  kind="ghost"
+                  renderIcon={TrashCan}
+                  iconDescription={t('surfaceTable.groups.remove')}
+                  tooltipPosition="left"
+                  onClick={() => onRemoveGroup(index)}
+                />
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <p className="muted">{t('surfaceTable.groups.empty')}</p>
+      )}
+      {issues.length ? (
+        <div className="group-issues">
+          {issues.map((issue) => (
+            <InlineNotification
+              key={issue.key}
+              lowContrast
+              kind={issue.type}
+              title={t(issue.type === 'error' ? 'surfaceTable.groups.issue_error' : 'surfaceTable.groups.issue_warning')}
+              subtitle={t(issue.messageKey, issue.values)}
+            />
+          ))}
+        </div>
+      ) : null}
+    </section>
   )
 }
 
@@ -1306,6 +1474,39 @@ export function App() {
     markAnalysisDirty()
   }
 
+  const markSystemChanged = (nextSystem: OpticalSystem) => {
+    setSystem(nextSystem)
+    setSystemDirty(true)
+    setSystemId(null)
+    setSystemHash(null)
+    setValidation(null)
+    setTrace(undefined)
+    setChartResult(undefined)
+    setEvaluationPlane(undefined)
+    setFocusCurve([])
+    setFocusResult(undefined)
+    setAnalysisDirty(true)
+  }
+
+  const addGroup = () => {
+    const nextSystem = cloneSystem(system)
+    nextSystem.groups = [...(nextSystem.groups ?? []), defaultGroupFor(nextSystem)]
+    markSystemChanged(nextSystem)
+  }
+
+  const updateGroup = (index: number, patch: Partial<OpticalGroup>) => {
+    const nextSystem = cloneSystem(system)
+    const groups = nextSystem.groups ?? []
+    nextSystem.groups = groups.map((group, groupIndex) => (groupIndex === index ? { ...group, ...patch } : group))
+    markSystemChanged(nextSystem)
+  }
+
+  const removeGroup = (index: number) => {
+    const nextSystem = cloneSystem(system)
+    nextSystem.groups = (nextSystem.groups ?? []).filter((_, groupIndex) => groupIndex !== index)
+    markSystemChanged(nextSystem)
+  }
+
   const readImagePlanePolicyForm = () => {
     const modeElement = document.getElementById('image-plane-policy-mode') as HTMLSelectElement | null
     const applyToElement = document.getElementById('image-plane-apply-to') as HTMLSelectElement | null
@@ -1507,19 +1708,9 @@ export function App() {
     if (!window.confirm(t('analysis:analysis.write_back_confirm'))) return
     const nextSystem = applySensorOffset(system, offset as number)
     if (!nextSystem) return
-    setSystem(nextSystem)
-    setSystemDirty(true)
-    setSystemId(null)
-    setSystemHash(null)
-    setValidation(null)
-    setTrace(undefined)
-    setChartResult(undefined)
-    setEvaluationPlane(undefined)
-    setFocusCurve([])
-    setFocusResult(undefined)
+    markSystemChanged(nextSystem)
     setLastRequest(nextSystem)
     setLastResponse({ status: 'system_dirty', updated_surface: nextSystem.surfaces[sensorIndex(nextSystem) - 1]?.id, offset_mm: offset })
-    setAnalysisDirty(true)
   }
 
   return (
@@ -1612,6 +1803,7 @@ export function App() {
           {activeTab === 'system' ? (
             <div className="panel large-panel">
               <SurfaceTable surfaces={system.surfaces} onOpenHelp={setHelpTermId} />
+              <GroupPanel system={system} onAddGroup={addGroup} onUpdateGroup={updateGroup} onRemoveGroup={removeGroup} onOpenHelp={setHelpTermId} />
             </div>
           ) : null}
 

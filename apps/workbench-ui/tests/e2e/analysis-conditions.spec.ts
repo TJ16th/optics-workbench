@@ -215,6 +215,29 @@ test('analysis condition edits mark dirty and rerun preview with updated results
   await expect(page.getByText('full').first()).toBeVisible()
 })
 
+test('group edits mark the optical system dirty and show range warnings', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
+  await page.getByText('P003 Achromat Doublet 100mm Demo').click()
+
+  await page.getByRole('tab', { name: 'System' }).click()
+  await expect(page.getByText('Groups').first()).toBeVisible()
+  await expect(page.getByTestId('group-row')).toHaveCount(2)
+  await expect(page.getByText('Groups FOCUS_G and OIS_G overlap.')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Add group' }).click()
+  await expect(page.getByTestId('group-row')).toHaveCount(3)
+  await expect(page.getByTestId('system-dirty-status')).toContainText('system dirty')
+
+  await page.locator('#group-from-2').selectOption('S3')
+  await page.locator('#group-to-2').selectOption('S1')
+  await expect(page.getByText('Group G3 starts after its end surface.')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Remove group' }).last().click()
+  await expect(page.getByTestId('group-row')).toHaveCount(2)
+})
+
 test('P003 analysis charts render with glossary labels and geometric MTF note', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en')

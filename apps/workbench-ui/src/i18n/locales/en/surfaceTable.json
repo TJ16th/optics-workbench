@@ -13,6 +13,23 @@
       "id": "Engine surface identifier. It is not translated and is sent to the API as-is.",
       "kind": "Engine surface kind. It is not translated because it is a model identifier.",
       "surface_type": "Surface shape identifier such as plane, spherical, or aspherical_even."
+    },
+    "groups": {
+      "title": "Groups",
+      "description": "Define contiguous surface ranges used by zoom, focus, and decenter operations.",
+      "id": "Group ID",
+      "name": "Name",
+      "from_surface": "From surface",
+      "to_surface": "To surface",
+      "add": "Add group",
+      "remove": "Remove group",
+      "empty": "No groups are defined for this system.",
+      "issue_error": "Group error",
+      "issue_warning": "Group warning",
+      "duplicate_id": "Group {{group_id}} is duplicated.",
+      "unknown_surface": "Group {{group_id}} references an unknown surface.",
+      "invalid_range": "Group {{group_id}} starts after its end surface.",
+      "overlap": "Groups {{left}} and {{right}} overlap."
     }
   }
 }

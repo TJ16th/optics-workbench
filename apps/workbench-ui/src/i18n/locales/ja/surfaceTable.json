@@ -13,6 +13,23 @@
       "id": "エンジンの面識別子。翻訳せず、そのままAPIへ送信する。",
       "kind": "エンジンの面種別。モデル識別子なので翻訳しない。",
       "surface_type": "plane、spherical、aspherical_evenなどの面形状識別子。"
+    },
+    "groups": {
+      "title": "群",
+      "description": "ズーム、フォーカス、decenter操作で使う連続した面範囲を定義します。",
+      "id": "群ID",
+      "name": "名前",
+      "from_surface": "開始面",
+      "to_surface": "終了面",
+      "add": "群を追加",
+      "remove": "群を削除",
+      "empty": "この系には群が定義されていません。",
+      "issue_error": "群エラー",
+      "issue_warning": "群警告",
+      "duplicate_id": "群{{group_id}}が重複しています。",
+      "unknown_surface": "群{{group_id}}が未知の面を参照しています。",
+      "invalid_range": "群{{group_id}}の開始面が終了面より後にあります。",
+      "overlap": "群{{left}}と{{right}}の面範囲が重複しています。"
     }
   }
 }
