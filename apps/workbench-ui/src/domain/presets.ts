@@ -122,6 +122,14 @@ export const presets: Preset[] = [
         { id: 'S3', kind: 'refractive', surface_type: 'spherical', radius_mm: -125.0, thickness_after_mm: 96.0, material_after: 'AIR', semi_diameter_mm: 14 },
         { id: 'IMG', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 36, height_mm: 24 } },
       ],
+      groups: [
+        { id: 'FOCUS_G', name: 'Focus group', from_surface: 'S1', to_surface: 'S3' },
+        { id: 'OIS_G', name: 'OIS decenter/tilt group', from_surface: 'S2', to_surface: 'S3' },
+      ],
+      zoom_positions: [
+        { id: 'infinity', focal_length_nominal_mm: 100, group_positions: { FOCUS_G: { shift_x_mm: 0 } } },
+        { id: 'close_focus', focal_length_nominal_mm: 100, group_positions: { FOCUS_G: { shift_x_mm: 2 } } },
+      ],
     },
   },
   {

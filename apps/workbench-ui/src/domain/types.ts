@@ -47,6 +47,11 @@ export type OpticalSystem = {
   materials: Material[]
   surfaces: Surface[]
   groups?: Array<{ id: string; name?: string; from_surface: string; to_surface: string }>
+  zoom_positions?: Array<{
+    id: string
+    focal_length_nominal_mm?: number
+    group_positions: Record<string, { shift_x_mm?: number; shift_y_mm?: number; shift_z_mm?: number }>
+  }>
   metadata?: Record<string, unknown>
 }
 
