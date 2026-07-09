@@ -16,7 +16,8 @@
     "svg:export:test": "node apps/workbench-ui/scripts/svg-export-readback.mjs",
     "chart:test": "node apps/workbench-ui/scripts/chart-theme-tests.mjs",
     "ui:e2e": "playwright test --config apps/workbench-ui/playwright.config.ts",
-    "ci": "npm.cmd run ui:build && npm.cmd run i18n:check && npm.cmd run i18n:coverage && npm.cmd run i18n:test && npm.cmd run svg:export:test && npm.cmd run chart:test && npm.cmd run ui:e2e"
+    "pii:scan": "python scripts/pii_scan.py",
+    "ci": "npm run ui:build && npm run i18n:check && npm run i18n:coverage && npm run i18n:test && npm run svg:export:test && npm run chart:test && npm run ui:e2e"
   },
   "dependencies": {
     "@carbon/icons-react": "^11.78.0",
