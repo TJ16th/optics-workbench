@@ -67,6 +67,10 @@
       "system_id": "system_id"
     },
     "debug": {
+      "build_info": "Build Info",
+      "git_commit": "git_commit",
+      "git_dirty": "git_dirty",
+      "started_at": "started_at",
       "request": "Request",
       "response": "Response"
     },

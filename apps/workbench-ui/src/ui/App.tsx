@@ -2519,6 +2519,21 @@ export function App() {
 
           {activeTab === 'debug' ? (
             <div className="debug-grid">
+              <div className="panel">
+                <h2>{t('common.debug.build_info')}</h2>
+                <div className="metric-row">
+                  <span>{t('common.debug.git_commit')}</span>
+                  <code>{meta.data?.build_info?.git_commit ?? t('common.empty.dash')}</code>
+                </div>
+                <div className="metric-row">
+                  <span>{t('common.debug.git_dirty')}</span>
+                  <strong>{String(meta.data?.build_info?.git_dirty ?? t('common.empty.dash'))}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>{t('common.debug.started_at')}</span>
+                  <code>{meta.data?.build_info?.started_at ?? t('common.empty.dash')}</code>
+                </div>
+              </div>
               <div className="panel raw-panel">
                 <h2>{t('common.debug.request')}</h2>
                 <CodeSnippet type="multi" wrapText>

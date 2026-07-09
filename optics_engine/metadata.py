@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import os
 import platform
+import subprocess
+from datetime import datetime, timezone
 from importlib import metadata as importlib_metadata
+from pathlib import Path
 from typing import Any
 
 ENGINE_VERSION = "0.1.0"
@@ -99,6 +102,37 @@ VARIABLE_KEY_PATTERNS = [
     "{group_id}_shift_z_mm",
 ]
 
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_STARTED_AT = datetime.now(timezone.utc).isoformat()
+
+
+def _git_output(args: list[str]) -> str | None:
+    try:
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=_REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=2.0,
+        )
+    except Exception:
+        return None
+    return completed.stdout.strip()
+
+
+def _load_build_info() -> dict[str, Any]:
+    commit = _git_output(["rev-parse", "--short", "HEAD"]) or "unknown"
+    status = _git_output(["status", "--porcelain"])
+    return {
+        "git_commit": commit,
+        "git_dirty": True if status is None else bool(status),
+        "started_at": _STARTED_AT,
+    }
+
+
+BUILD_INFO = _load_build_info()
+
 
 def health_payload() -> dict[str, str]:
     return {"status": "ok"}
@@ -118,6 +152,7 @@ def meta_payload() -> dict[str, Any]:
         "result_schema_version": RESULT_SCHEMA_VERSION,
         "material_catalog_version": MATERIAL_CATALOG_VERSION,
         "preset_version": PRESET_VERSION,
+        "build_info": dict(BUILD_INFO),
         "capabilities": {
             "diffraction_psf": False,
             "async_jobs": False,

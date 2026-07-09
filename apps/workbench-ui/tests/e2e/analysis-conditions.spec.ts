@@ -16,6 +16,7 @@ async function mockEngine(
         result_schema_version: '2.3.0',
         material_catalog_version: 'test',
         preset_version: 'test',
+        build_info: { git_commit: 'test-build', git_dirty: false, started_at: '2026-07-10T00:00:00+00:00' },
         capabilities: {},
         enumerations: { metrics: [], error_codes: [], warning_codes: [], ray_status_codes: [], variable_key_patterns: [] },
       },
@@ -324,6 +325,19 @@ test('P003 slider preview keeps layout rays on education preview surface paths',
   expect(dragPreview.ray_sampling?.samples_per_field).toBe(5)
   expect(dragPreview.ray_sampling?.ray_aiming?.mode).toBe('paraxial')
   await expectLayoutRayPath(page, 5)
+})
+
+test('debug tab shows connected engine build info', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await page.getByRole('tab', { name: 'Debug' }).click()
+
+  const buildPanel = page.locator('.panel').filter({ has: page.getByRole('heading', { name: 'Build Info' }) })
+  await expect(buildPanel).toBeVisible()
+  await expect(buildPanel.getByText('git_commit', { exact: true })).toBeVisible()
+  await expect(buildPanel.getByText('test-build', { exact: true })).toBeVisible()
+  await expect(buildPanel.getByText('git_dirty', { exact: true })).toBeVisible()
+  await expect(buildPanel.getByText('false', { exact: true })).toBeVisible()
 })
 
 test('layout view fixture draws even-aspheric sag differently from a sphere', async ({ page }) => {

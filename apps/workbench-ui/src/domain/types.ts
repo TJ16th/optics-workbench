@@ -160,6 +160,11 @@ export type EngineMeta = {
   result_schema_version: string
   material_catalog_version: string
   preset_version: string
+  build_info?: {
+    git_commit: string
+    git_dirty: boolean
+    started_at: string
+  }
   capabilities: Record<string, unknown>
   enumerations?: {
     metrics: string[]
