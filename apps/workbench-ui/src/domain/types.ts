@@ -8,6 +8,13 @@ export type Material = {
   C?: number[]
 }
 
+export type VariableNumber = {
+  variable: string
+  default: number
+}
+
+export type ScalarNumber = number | VariableNumber
+
 export type Surface = {
   id: string
   kind: string
@@ -17,12 +24,12 @@ export type Surface = {
   asphere_coefficients?: Record<string, number>
   thickness_after_mm?: number
   material_after?: string
-  semi_diameter_mm?: number
+  semi_diameter_mm?: ScalarNumber
   aperture?: {
     shape: 'circle' | 'annulus' | 'polygon'
-    semi_diameter_mm?: number
-    outer_semi_diameter_mm?: number
-    inner_semi_diameter_mm?: number
+    semi_diameter_mm?: ScalarNumber
+    outer_semi_diameter_mm?: ScalarNumber
+    inner_semi_diameter_mm?: ScalarNumber
   }
   sensor?: {
     width_mm: number
@@ -75,6 +82,7 @@ export type RuntimeConfiguration = {
     roll_x_deg?: number
     rotation_center?: { reference?: string; offset_x_mm?: number; offset_y_mm?: number; offset_z_mm?: number }
   }>
+  variables?: Record<string, number>
 }
 
 export type AnalysisField = {

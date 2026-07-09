@@ -340,6 +340,18 @@ test('aperture slider updates stop radius through debounced preview', async ({ p
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByText('P003 Achromat Doublet 100mm Demo').click()
 
+  await page.getByRole('button', { name: 'Run Preview' }).click()
+  await expect.poll(() => registerRequests.length, { timeout: 3_000 }).toBe(1)
+  await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBeGreaterThanOrEqual(1)
+  const registeredSystem = registerRequests[0] as {
+    surfaces?: Array<{ id?: string; aperture?: { semi_diameter_mm?: { variable?: string; default?: number } }; semi_diameter_mm?: { variable?: string; default?: number } }>
+  }
+  const registeredStop = registeredSystem.surfaces?.find((surface) => surface.id === 'STOP')
+  expect(registeredStop?.semi_diameter_mm?.variable).toBe('iris_radius_mm')
+  expect(registeredStop?.semi_diameter_mm?.default).toBeCloseTo(10)
+  expect(registeredStop?.aperture?.semi_diameter_mm?.variable).toBe('iris_radius_mm')
+  const initialPreviewCount = previewRequests.length
+
   await expect(page.locator('#iris-radius-slider')).toBeVisible()
   await page.locator('#iris-radius-slider').evaluate((node) => {
     const input = node as HTMLInputElement
@@ -348,20 +360,23 @@ test('aperture slider updates stop radius through debounced preview', async ({ p
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
 
-  await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBeGreaterThanOrEqual(1)
-  const dragPreview = previewRequests[previewRequests.length - 1] as { ray_sampling?: { samples_per_field?: number; ray_aiming?: { mode?: string } } }
+  await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBeGreaterThan(initialPreviewCount)
+  const dragPreview = previewRequests[previewRequests.length - 1] as {
+    configuration?: { variables?: Record<string, number> }
+    ray_sampling?: { samples_per_field?: number; ray_aiming?: { mode?: string } }
+  }
+  expect(dragPreview.configuration?.variables?.iris_radius_mm).toBeCloseTo(5)
   expect(dragPreview.ray_sampling?.samples_per_field).toBe(5)
   expect(dragPreview.ray_sampling?.ray_aiming?.mode).toBe('paraxial')
-
-  const dragSystem = registerRequests[registerRequests.length - 1] as { surfaces?: Array<{ id?: string; aperture?: { semi_diameter_mm?: number }; semi_diameter_mm?: number }> }
-  const dragStop = dragSystem.surfaces?.find((surface) => surface.id === 'STOP')
-  expect(dragStop?.semi_diameter_mm).toBeCloseTo(5)
-  expect(dragStop?.aperture?.semi_diameter_mm).toBeCloseTo(5)
+  expect(registerRequests.length).toBe(1)
+  const dragPreviewCount = previewRequests.length
 
   await page.locator('#iris-radius-slider').dispatchEvent('mouseup')
-  await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBeGreaterThanOrEqual(2)
-  const commitPreview = previewRequests[previewRequests.length - 1] as { ray_sampling?: { samples_per_field?: number } }
+  await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBeGreaterThan(dragPreviewCount)
+  const commitPreview = previewRequests[previewRequests.length - 1] as { configuration?: { variables?: Record<string, number> }; ray_sampling?: { samples_per_field?: number } }
+  expect(commitPreview.configuration?.variables?.iris_radius_mm).toBeCloseTo(5)
   expect(commitPreview.ray_sampling?.samples_per_field).toBe(9)
+  expect(registerRequests.length).toBe(1)
   await expect(page.getByTestId('system-dirty-status')).toHaveCount(0)
   await expect(page.getByTestId('analysis-dirty-status')).toContainText('clean')
 })

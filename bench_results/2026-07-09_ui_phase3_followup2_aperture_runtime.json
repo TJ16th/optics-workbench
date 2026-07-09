@@ -1,0 +1,88 @@
+{
+  "task": "UI Phase 3 follow-up2",
+  "name": "aperture runtime configuration latency measurement",
+  "measured_at_jst": "2026-07-09T00:00:00+09:00",
+  "source_commit": "worktree-after-ebe116e",
+  "api_base": "http://127.0.0.1:8000",
+  "system": "P003 Achromat Doublet 100mm",
+  "fields": 3,
+  "wavelengths": 3,
+  "repeats": 20,
+  "adopted_ui_debounce_ms": 70,
+  "baseline": {
+    "aperture_drag_register_plus_preview_median_http_ms": 30.025,
+    "aperture_commit_register_plus_preview_median_http_ms": 31.474
+  },
+  "notes": [
+    "HTTP measurements were taken against the local FastAPI server on 127.0.0.1:8000.",
+    "The system is registered once; iris changes are sent as configuration.variables.iris_radius_mm.",
+    "Drag preview uses samples_per_field=5 and ray_aiming.mode=paraxial.",
+    "Commit preview uses samples_per_field=9 and ray_aiming.mode=paraxial."
+  ],
+  "results": [
+    {
+      "name": "aperture_drag_runtime_configuration",
+      "repeats": 20,
+      "median_http_ms": 4.321,
+      "p95_http_ms": 5.332,
+      "effective_ui_median_ms": 74.321,
+      "effective_ui_p95_ms": 75.333,
+      "rays": 45,
+      "arrived": 45,
+      "last_engine_profiling_ms": {
+        "validation_ms": 0.08420000085607171,
+        "layout_ms": 0.027300004148855805,
+        "ray_generation_and_aiming_ms": 0.3273000183980912,
+        "trace_ms": 1.3755999971181154,
+        "total_ms": 1.8144000205211341,
+        "total_rays": 45,
+        "cache_hit": null,
+        "aiming_failed_count": 0,
+        "aiming_iterations_max": 0
+      },
+      "request_configuration": {
+        "zoom_position": "infinity",
+        "group_positions": {
+          "FOCUS_G": {
+            "shift_x_mm": 0
+          }
+        },
+        "variables": {
+          "iris_radius_mm": 5
+        }
+      }
+    },
+    {
+      "name": "aperture_commit_runtime_configuration",
+      "repeats": 20,
+      "median_http_ms": 4.759,
+      "p95_http_ms": 5.045,
+      "effective_ui_median_ms": 74.759,
+      "effective_ui_p95_ms": 75.045,
+      "rays": 81,
+      "arrived": 81,
+      "last_engine_profiling_ms": {
+        "validation_ms": 0.08730002446100116,
+        "layout_ms": 0.02549999044276774,
+        "ray_generation_and_aiming_ms": 0.38240000139921904,
+        "trace_ms": 1.9822999893222004,
+        "total_ms": 2.4775000056251884,
+        "total_rays": 81,
+        "cache_hit": null,
+        "aiming_failed_count": 0,
+        "aiming_iterations_max": 0
+      },
+      "request_configuration": {
+        "zoom_position": "infinity",
+        "group_positions": {
+          "FOCUS_G": {
+            "shift_x_mm": 0
+          }
+        },
+        "variables": {
+          "iris_radius_mm": 5
+        }
+      }
+    }
+  ]
+}

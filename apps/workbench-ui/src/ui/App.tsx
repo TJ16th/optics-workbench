@@ -150,11 +150,25 @@ const surfaceColumns: Array<{
   { id: 'radius_mm', termId: 'radius_mm', value: (row) => row.radius_mm ?? 0 },
   { id: 'thickness_after_mm', termId: 'thickness_after_mm', value: (row) => row.thickness_after_mm ?? 0 },
   { id: 'material', termId: 'material', value: (row) => row.material_after ?? '-' },
-  { id: 'semi_diameter_mm', termId: 'semi_diameter_mm', value: (row) => row.semi_diameter_mm ?? row.aperture?.semi_diameter_mm ?? '-' },
+  { id: 'semi_diameter_mm', termId: 'semi_diameter_mm', value: (row) => formatScalarNumber(row.semi_diameter_mm ?? row.aperture?.semi_diameter_mm) },
 ]
 
 function cloneSystem(system: OpticalSystem): OpticalSystem {
   return JSON.parse(JSON.stringify(system))
+}
+
+function scalarNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (value && typeof value === 'object' && 'default' in value) {
+    const next = Number((value as { default?: unknown }).default)
+    return Number.isFinite(next) ? next : undefined
+  }
+  return undefined
+}
+
+function formatScalarNumber(value: unknown) {
+  const next = scalarNumber(value)
+  return next ?? '-'
 }
 
 function cloneFields(fields: AnalysisField[]): AnalysisField[] {
@@ -401,7 +415,7 @@ function hasNonzeroDecenterTilt(draft: DecenterTiltDraft) {
   return [draft.shiftY, draft.shiftZ, draft.tiltY, draft.tiltZ, draft.rollX].some((value) => Math.abs(value) > 1.0e-12)
 }
 
-function makeRuntimeConfiguration(system: OpticalSystem, zoomPositionId: string, focusGroupId: string, focusShiftMm: number, decenterTilt: DecenterTiltDraft): RuntimeConfiguration {
+function makeRuntimeConfiguration(system: OpticalSystem, zoomPositionId: string, focusGroupId: string, focusShiftMm: number, decenterTilt: DecenterTiltDraft, irisRadiusMm?: number): RuntimeConfiguration {
   const configuration: RuntimeConfiguration = {}
   if (zoomPositionId) configuration.zoom_position = zoomPositionId
   if (focusGroupId) {
@@ -433,6 +447,9 @@ function makeRuntimeConfiguration(system: OpticalSystem, zoomPositionId: string,
       ]
     }
   }
+  if (irisRadiusMm !== undefined && Number.isFinite(irisRadiusMm) && irisRadiusMm > 0) {
+    configuration.variables = { iris_radius_mm: irisRadiusMm }
+  }
   return configuration
 }
 
@@ -443,22 +460,15 @@ function apertureStopIndex(system: OpticalSystem) {
 function apertureStopRadius(system: OpticalSystem) {
   const stop = system.surfaces[apertureStopIndex(system)]
   if (!stop) return null
-  return stop.aperture?.semi_diameter_mm ?? stop.aperture?.outer_semi_diameter_mm ?? stop.semi_diameter_mm ?? null
+  return scalarNumber(stop.aperture?.semi_diameter_mm) ?? scalarNumber(stop.aperture?.outer_semi_diameter_mm) ?? scalarNumber(stop.semi_diameter_mm) ?? null
 }
 
-function withApertureStopRadius(system: OpticalSystem, radiusMm: number): OpticalSystem | undefined {
-  const index = apertureStopIndex(system)
-  if (index < 0 || !Number.isFinite(radiusMm) || radiusMm <= 0) return undefined
-  const next = cloneSystem(system)
-  const stop = next.surfaces[index]
-  stop.semi_diameter_mm = radiusMm
-  if (stop.aperture) {
-    stop.aperture.semi_diameter_mm = radiusMm
-    if (stop.aperture.outer_semi_diameter_mm !== undefined) stop.aperture.outer_semi_diameter_mm = radiusMm
-  } else {
-    stop.aperture = { shape: 'circle', semi_diameter_mm: radiusMm }
+function surfaceSemiDiameter(surface: Surface, configuration?: RuntimeConfiguration) {
+  if (surface.kind === 'aperture_stop') {
+    const irisRadius = configuration?.variables?.iris_radius_mm
+    if (typeof irisRadius === 'number' && Number.isFinite(irisRadius) && irisRadius > 0) return irisRadius
   }
-  return next
+  return scalarNumber(surface.semi_diameter_mm) ?? scalarNumber(surface.aperture?.semi_diameter_mm) ?? 8
 }
 
 function presetLabel(id: string, fallback: string, t: (key: string, options?: Record<string, unknown>) => string) {
@@ -638,7 +648,7 @@ function LayoutView({
       <line x1="24" x2="696" y1={centerY} y2={centerY} className="axis-line" />
       {positions.map(({ surface, x }) => {
         const sx = xScale(x)
-        const semiD = typeof surface.semi_diameter_mm === 'number' ? surface.semi_diameter_mm : typeof surface.aperture?.semi_diameter_mm === 'number' ? surface.aperture.semi_diameter_mm : 8
+        const semiD = surfaceSemiDiameter(surface, configuration)
         const h = apertureY(semiD)
         const transform = groupVisualTransform(system, surface.id, configuration)
         const sy = centerY - Math.max(-52, Math.min(52, transform.shiftY * 10))
@@ -1947,7 +1957,7 @@ export function App() {
     setFocusShiftMm(0)
     setDecenterTiltDraft(nextDecenterTilt)
     decenterTiltDraftRef.current = nextDecenterTilt
-    const nextConfiguration = makeRuntimeConfiguration(nextSystem, nextZoom, nextGroup, 0, nextDecenterTilt)
+    const nextConfiguration = makeRuntimeConfiguration(nextSystem, nextZoom, nextGroup, 0, nextDecenterTilt, nextIris)
     runtimeConfigurationRef.current = nextConfiguration
     setRuntimeConfiguration(nextConfiguration)
     irisRadiusRef.current = nextIris
@@ -2085,7 +2095,7 @@ export function App() {
   }
 
   const setMotionConfiguration = (nextZoom: string, nextFocusGroup: string, nextFocusShift: number, commit = false) => {
-    const nextConfiguration = makeRuntimeConfiguration(system, nextZoom, nextFocusGroup, nextFocusShift, decenterTiltDraftRef.current)
+    const nextConfiguration = makeRuntimeConfiguration(system, nextZoom, nextFocusGroup, nextFocusShift, decenterTiltDraftRef.current, irisRadiusRef.current)
     setZoomPositionId(nextZoom)
     setFocusGroupId(nextFocusGroup)
     setFocusShiftMm(nextFocusShift)
@@ -2106,30 +2116,32 @@ export function App() {
 
   const setApertureRadius = (value: number, commit = false) => {
     const nextRadius = Math.max(0.1, value)
-    const nextSystem = withApertureStopRadius(system, nextRadius)
-    if (!nextSystem) return
+    const nextConfiguration = makeRuntimeConfiguration(system, zoomPositionId, focusGroupId, focusShiftMm, decenterTiltDraftRef.current, nextRadius)
     irisRadiusRef.current = nextRadius
     setIrisRadiusMm(nextRadius)
-    markSystemChanged(nextSystem)
-    scheduleMotionPreview(runtimeConfigurationRef.current, nextSystem)
+    runtimeConfigurationRef.current = nextConfiguration
+    setRuntimeConfiguration(nextConfiguration)
+    markAnalysisDirty()
+    scheduleMotionPreview(nextConfiguration)
     if (commit) {
       if (sliderPreviewTimerRef.current) window.clearTimeout(sliderPreviewTimerRef.current)
-      void runMotionPreview(runtimeConfigurationRef.current, false, nextSystem, true)
+      void runMotionPreview(nextConfiguration, false)
     }
   }
 
   const commitApertureRadius = () => {
-    const nextSystem = withApertureStopRadius(system, irisRadiusRef.current)
-    if (!nextSystem) return
+    const nextConfiguration = makeRuntimeConfiguration(system, zoomPositionId, focusGroupId, focusShiftMm, decenterTiltDraftRef.current, irisRadiusRef.current)
+    runtimeConfigurationRef.current = nextConfiguration
+    setRuntimeConfiguration(nextConfiguration)
     if (sliderPreviewTimerRef.current) window.clearTimeout(sliderPreviewTimerRef.current)
-    void runMotionPreview(runtimeConfigurationRef.current, false, nextSystem, true)
+    void runMotionPreview(nextConfiguration, false)
   }
 
   const updateDecenterTilt = (patch: Partial<DecenterTiltDraft>, commit = false) => {
     const nextDraft = { ...decenterTiltDraftRef.current, ...patch }
     decenterTiltDraftRef.current = nextDraft
     setDecenterTiltDraft(nextDraft)
-    const nextConfiguration = makeRuntimeConfiguration(system, zoomPositionId, focusGroupId, focusShiftMm, nextDraft)
+    const nextConfiguration = makeRuntimeConfiguration(system, zoomPositionId, focusGroupId, focusShiftMm, nextDraft, irisRadiusRef.current)
     runtimeConfigurationRef.current = nextConfiguration
     setRuntimeConfiguration(nextConfiguration)
     markAnalysisDirty()

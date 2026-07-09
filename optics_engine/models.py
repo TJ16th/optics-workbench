@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 import numpy as np
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
 class OpticsError(Exception):
@@ -113,6 +113,13 @@ class Aperture(BaseModel):
     outer_semi_diameter_mm: float | None = None
     inner_semi_diameter_mm: float | None = None
 
+    @field_validator("semi_diameter_mm", "outer_semi_diameter_mm", "inner_semi_diameter_mm", mode="before")
+    @classmethod
+    def _coerce_variable_number(cls, value):
+        if isinstance(value, dict) and "variable" in value:
+            return value.get("default")
+        return value
+
 
 class Sensor(BaseModel):
     width_mm: float
@@ -150,6 +157,13 @@ class Surface(BaseModel):
     sensor: Sensor | None = None
     eye: EyeReference | None = None
     focal_length_mm: float | None = None
+
+    @field_validator("semi_diameter_mm", mode="before")
+    @classmethod
+    def _coerce_variable_number(cls, value):
+        if isinstance(value, dict) and "variable" in value:
+            return value.get("default")
+        return value
 
 
 class Group(BaseModel):

@@ -89,7 +89,20 @@ def _unit_disk_samples(count: int, distribution: str = "hexapolar") -> np.ndarra
     return pts[:count]
 
 
-def _aperture_radius(compiled: CompiledSystem) -> tuple[int | None, float, float]:
+def _configuration_variables(configuration: dict[str, Any] | None) -> dict[str, Any]:
+    variables = (configuration or {}).get("variables", {})
+    return variables if isinstance(variables, dict) else {}
+
+
+def _runtime_iris_radius(configuration: dict[str, Any] | None) -> float | None:
+    variables = _configuration_variables(configuration)
+    if "iris_radius_mm" not in variables:
+        return None
+    value = float(variables["iris_radius_mm"])
+    return value if np.isfinite(value) and value > 0.0 else None
+
+
+def _aperture_radius(compiled: CompiledSystem, configuration: dict[str, Any] | None = None) -> tuple[int | None, float, float]:
     idx = compiled.aperture_stop_index
     if idx is None:
         return None, 1.0, 0.0
@@ -102,6 +115,9 @@ def _aperture_radius(compiled: CompiledSystem) -> tuple[int | None, float, float
             inner = surface.aperture.inner_semi_diameter_mm or 0.0
         elif surface.aperture.shape == "circle":
             outer = surface.aperture.semi_diameter_mm or surface.aperture.outer_semi_diameter_mm or outer
+    runtime_outer = _runtime_iris_radius(configuration)
+    if runtime_outer is not None:
+        outer = runtime_outer
     return idx, float(outer), float(inner)
 
 
@@ -110,8 +126,14 @@ def _target_points_for_stop(compiled: CompiledSystem, samples: np.ndarray) -> np
     return _target_points_for_stop_with_layout(compiled, samples, layout.centers_mm)
 
 
-def _target_points_for_stop_with_layout(compiled: CompiledSystem, samples: np.ndarray, centers_mm: np.ndarray, rotations: np.ndarray | None = None) -> np.ndarray:
-    stop_idx, outer, inner = _aperture_radius(compiled)
+def _target_points_for_stop_with_layout(
+    compiled: CompiledSystem,
+    samples: np.ndarray,
+    centers_mm: np.ndarray,
+    rotations: np.ndarray | None = None,
+    configuration: dict[str, Any] | None = None,
+) -> np.ndarray:
+    stop_idx, outer, inner = _aperture_radius(compiled, configuration)
     stop_center = centers_mm[stop_idx] if stop_idx is not None else centers_mm[0]
     stop_rotation = np.eye(3) if rotations is None or stop_idx is None else rotations[stop_idx]
     yz = samples.copy()
@@ -127,6 +149,18 @@ def _target_points_for_stop_with_layout(compiled: CompiledSystem, samples: np.nd
     return stop_center + local_targets @ stop_rotation.T
 
 
+def _aperture_pass_with_runtime(points: np.ndarray, surface, surface_idx: int, compiled: CompiledSystem, configuration: dict[str, Any] | None) -> np.ndarray:
+    if compiled.aperture_stop_index == surface_idx:
+        runtime_outer = _runtime_iris_radius(configuration)
+        if runtime_outer is not None:
+            r = np.sqrt(points[:, 1] * points[:, 1] + points[:, 2] * points[:, 2])
+            inner = 0.0
+            if surface.aperture is not None and surface.aperture.shape == "annulus":
+                inner = surface.aperture.inner_semi_diameter_mm or 0.0
+            return (r <= runtime_outer + 1.0e-9) & (r >= inner - 1.0e-9)
+    return aperture_pass(points, surface)
+
+
 def _trace_raw(
     compiled: CompiledSystem,
     origins: np.ndarray,
@@ -138,6 +172,7 @@ def _trace_raw(
     store_path: bool = True,
     centers_mm: np.ndarray | None = None,
     rotations: np.ndarray | None = None,
+    configuration: dict[str, Any] | None = None,
 ) -> TraceResult:
     n_rays = origins.shape[0]
     current_origins = origins.copy()
@@ -198,7 +233,7 @@ def _trace_raw(
                     }
                 )
 
-        passes = aperture_pass(local_points[valid_indices], surface)
+        passes = _aperture_pass_with_runtime(local_points[valid_indices], surface, surface_idx, compiled, configuration)
         blocked = valid_indices[~passes]
         status[blocked] = STATUS_BLOCKED
         valid_indices = valid_indices[passes]
@@ -267,6 +302,7 @@ def _aim_origin_to_stop(
     *,
     tolerance_mm: float,
     max_iterations: int,
+    configuration: dict[str, Any] | None = None,
 ) -> tuple[np.ndarray, bool, int]:
     stop_idx = compiled.aperture_stop_index
     if stop_idx is None:
@@ -288,6 +324,7 @@ def _aim_origin_to_stop(
             store_path=True,
             centers_mm=centers_mm,
             rotations=rotations,
+            configuration=configuration,
         )
         if result.status[0] != STATUS_ALIVE or not result.paths:
             return None
@@ -355,9 +392,9 @@ def trace_forward(
     store_path = bool(options.get("store_path", False))
 
     samples = _unit_disk_samples(samples_per_field, distribution)
-    targets = _target_points_for_stop_with_layout(compiled, samples, centers_mm, rotations)
+    targets = _target_points_for_stop_with_layout(compiled, samples, centers_mm, rotations, configuration)
     first_x = centers_mm[0, 0]
-    stop_idx, stop_outer, _ = _aperture_radius(compiled)
+    stop_idx, stop_outer, _ = _aperture_radius(compiled, configuration)
     launch_x = min(first_x, targets[0, 0]) - max(100.0, 10.0 * stop_outer)
 
     origins: list[np.ndarray] = []
@@ -384,6 +421,7 @@ def trace_forward(
                         rotations,
                         tolerance_mm=tolerance_mm,
                         max_iterations=max_iterations,
+                        configuration=configuration,
                     )
                 else:
                     origin = target - direction * ((target[0] - launch_x) / direction[0])
@@ -407,6 +445,7 @@ def trace_forward(
         store_path=store_path,
         centers_mm=centers_mm,
         rotations=rotations,
+        configuration=configuration,
     )
     t_trace = time.perf_counter()
     aiming_ok_array = np.array(aiming_ok, dtype=bool)

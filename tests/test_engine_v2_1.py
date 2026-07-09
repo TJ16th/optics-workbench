@@ -88,6 +88,37 @@ def test_health_and_meta_payloads_advertise_v2_3_capabilities_and_enumerations()
     assert "{surface_id}_curvature" in meta["enumerations"]["variable_key_patterns"]
 
 
+def test_runtime_iris_radius_variable_controls_trace_stop_targets():
+    system = load_system(
+        {
+            "name": "runtime iris variable",
+            "materials": [{"id": "AIR", "type": "constant", "n": 1.0}],
+            "surfaces": [
+                {
+                    "id": "STOP",
+                    "kind": "aperture_stop",
+                    "surface_type": "plane",
+                    "semi_diameter_mm": {"variable": "iris_radius_mm", "default": 5.0},
+                    "aperture": {"shape": "circle", "semi_diameter_mm": {"variable": "iris_radius_mm", "default": 5.0}},
+                    "thickness_after_mm": 50.0,
+                },
+                {"id": "IMG", "kind": "sensor", "surface_type": "plane", "sensor": {"width_mm": 20.0, "height_mm": 20.0}},
+            ],
+        }
+    )
+    compiled = compile_system(system)
+    result = trace_forward(
+        compiled,
+        [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}],
+        {"samples_per_field": 3, "pupil_distribution": "fan_y"},
+        [587.56],
+        {"store_path": True, "configuration": {"variables": {"iris_radius_mm": 2.0}}},
+    )
+    stop_points = [entry["local_point_mm"] for path in result.paths for entry in path if entry["surface_id"] == "STOP"]
+    assert max(abs(point[1]) for point in stop_points) <= 2.0 + 1.0e-9
+    assert result.status.tolist() == ["alive", "alive", "alive"]
+
+
 def test_image_plane_policy_paraxial_image_moves_evaluation_plane_without_mutating_system():
     compiled = compile_system(thin_lens_system(focal_length=100.0, sensor_x=95.0))
     fields = [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}]
