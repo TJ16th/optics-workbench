@@ -50,6 +50,11 @@
     "previewing": "previewing",
     "preview_ready": "ready",
     "group_motion_debounce": "Dragging uses paraxial preview with {{rays}} rays per field after {{ms}} ms debounce.",
+    "aperture_motion": "Aperture Motion",
+    "aperture_motion_empty": "This system has no aperture stop.",
+    "iris_radius_mm": "Iris radius",
+    "iris_radius_detail": "Aperture diameter {{diameter}} mm",
+    "aperture_motion_debounce": "Stopping down uses the same {{ms}} ms debounced preview path with {{rays}} rays per field.",
     "validation": "Validation",
     "run_validation": "Run validation.",
     "no_validation_issues": "No validation issues."

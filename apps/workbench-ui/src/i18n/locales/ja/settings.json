@@ -50,6 +50,11 @@
     "previewing": "preview中",
     "preview_ready": "待機中",
     "group_motion_debounce": "ドラッグ中は{{ms}} msデバウンス後に、fieldあたり{{rays}}本の近軸previewを実行します。",
+    "aperture_motion": "絞り操作",
+    "aperture_motion_empty": "この系にはaperture_stopがありません。",
+    "iris_radius_mm": "絞り半径",
+    "iris_radius_detail": "開口直径 {{diameter}} mm",
+    "aperture_motion_debounce": "絞り操作も{{ms}} msデバウンス、fieldあたり{{rays}}本のpreview経路を使います。",
     "validation": "Validation",
     "run_validation": "検証を実行してください。",
     "no_validation_issues": "Validation issueはありません。"

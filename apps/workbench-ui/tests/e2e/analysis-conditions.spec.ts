@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test'
 
-async function mockEngine(page: import('@playwright/test').Page, options: { failArtifacts?: boolean; previewRequests?: unknown[] } = {}) {
+async function mockEngine(
+  page: import('@playwright/test').Page,
+  options: { failArtifacts?: boolean; previewRequests?: unknown[]; registerRequests?: unknown[] } = {},
+) {
   await page.route('http://127.0.0.1:8000/v1/health', async (route) => {
     await route.fulfill({ json: { status: 'ok' } })
   })
@@ -18,6 +21,7 @@ async function mockEngine(page: import('@playwright/test').Page, options: { fail
     })
   })
   await page.route('http://127.0.0.1:8000/v1/systems/register', async (route) => {
+    options.registerRequests?.push(route.request().postDataJSON())
     await route.fulfill({ json: { system_id: 'system-test', system_hash: 'hash-test' } })
   })
   await page.route('http://127.0.0.1:8000/v1/solve/best-focus', async (route) => {
@@ -273,6 +277,40 @@ test('group motion sliders send runtime configuration through debounced preview'
   }
   expect(commitPreview.configuration?.group_positions?.FOCUS_G?.shift_x_mm).toBeCloseTo(1.5)
   expect(commitPreview.ray_sampling?.samples_per_field).toBe(9)
+  await expect(page.getByTestId('analysis-dirty-status')).toContainText('clean')
+})
+
+test('aperture slider updates stop radius through debounced preview', async ({ page }) => {
+  const previewRequests: unknown[] = []
+  const registerRequests: unknown[] = []
+  await mockEngine(page, { previewRequests, registerRequests })
+  await page.goto('/?lng=en')
+  await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
+  await page.getByText('P003 Achromat Doublet 100mm Demo').click()
+
+  await expect(page.locator('#iris-radius-slider')).toBeVisible()
+  await page.locator('#iris-radius-slider').evaluate((node) => {
+    const input = node as HTMLInputElement
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(input, '5')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+
+  await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBeGreaterThanOrEqual(1)
+  const dragPreview = previewRequests[previewRequests.length - 1] as { ray_sampling?: { samples_per_field?: number; ray_aiming?: { mode?: string } } }
+  expect(dragPreview.ray_sampling?.samples_per_field).toBe(5)
+  expect(dragPreview.ray_sampling?.ray_aiming?.mode).toBe('paraxial')
+
+  const dragSystem = registerRequests[registerRequests.length - 1] as { surfaces?: Array<{ id?: string; aperture?: { semi_diameter_mm?: number }; semi_diameter_mm?: number }> }
+  const dragStop = dragSystem.surfaces?.find((surface) => surface.id === 'STOP')
+  expect(dragStop?.semi_diameter_mm).toBeCloseTo(5)
+  expect(dragStop?.aperture?.semi_diameter_mm).toBeCloseTo(5)
+
+  await page.locator('#iris-radius-slider').dispatchEvent('mouseup')
+  await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBeGreaterThanOrEqual(2)
+  const commitPreview = previewRequests[previewRequests.length - 1] as { ray_sampling?: { samples_per_field?: number } }
+  expect(commitPreview.ray_sampling?.samples_per_field).toBe(9)
+  await expect(page.getByTestId('system-dirty-status')).toHaveCount(0)
   await expect(page.getByTestId('analysis-dirty-status')).toContainText('clean')
 })
 

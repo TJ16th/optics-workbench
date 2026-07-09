@@ -383,6 +383,31 @@ function makeRuntimeConfiguration(system: OpticalSystem, zoomPositionId: string,
   return configuration
 }
 
+function apertureStopIndex(system: OpticalSystem) {
+  return system.surfaces.findIndex((surface) => surface.kind === 'aperture_stop')
+}
+
+function apertureStopRadius(system: OpticalSystem) {
+  const stop = system.surfaces[apertureStopIndex(system)]
+  if (!stop) return null
+  return stop.aperture?.semi_diameter_mm ?? stop.aperture?.outer_semi_diameter_mm ?? stop.semi_diameter_mm ?? null
+}
+
+function withApertureStopRadius(system: OpticalSystem, radiusMm: number): OpticalSystem | undefined {
+  const index = apertureStopIndex(system)
+  if (index < 0 || !Number.isFinite(radiusMm) || radiusMm <= 0) return undefined
+  const next = cloneSystem(system)
+  const stop = next.surfaces[index]
+  stop.semi_diameter_mm = radiusMm
+  if (stop.aperture) {
+    stop.aperture.semi_diameter_mm = radiusMm
+    if (stop.aperture.outer_semi_diameter_mm !== undefined) stop.aperture.outer_semi_diameter_mm = radiusMm
+  } else {
+    stop.aperture = { shape: 'circle', semi_diameter_mm: radiusMm }
+  }
+  return next
+}
+
 function presetLabel(id: string, fallback: string, t: (key: string, options?: Record<string, unknown>) => string) {
   return t(`common.preset.items.${id}.name`, { defaultValue: fallback })
 }
@@ -762,6 +787,67 @@ function GroupMotionPanel({
         {configJson}
       </CodeSnippet>
       <p className="muted">{t('settings:settings.group_motion_debounce', { ms: sliderPreviewDebounceMs, rays: sliderPreviewSamplesPerField })}</p>
+    </section>
+  )
+}
+
+function ApertureMotionPanel({
+  system,
+  irisRadiusMm,
+  irisMaxRadiusMm,
+  isPreviewing,
+  onSetIrisRadius,
+  onCommit,
+  onOpenHelp,
+}: {
+  system: OpticalSystem
+  irisRadiusMm: number
+  irisMaxRadiusMm: number
+  isPreviewing: boolean
+  onSetIrisRadius: (value: number, commit?: boolean) => void
+  onCommit: () => void
+  onOpenHelp: (termId: string) => void
+}) {
+  const { t } = useTranslation(['settings', 'units'])
+  const radius = apertureStopRadius(system)
+  if (radius === null || irisMaxRadiusMm <= 0) {
+    return (
+      <section className="panel">
+        <h2>{t('settings:settings.aperture_motion')}</h2>
+        <p className="muted">{t('settings:settings.aperture_motion_empty')}</p>
+      </section>
+    )
+  }
+  const minRadius = Math.max(0.5, irisMaxRadiusMm * 0.1)
+  return (
+    <section className="panel group-motion-panel">
+      <div className="condition-heading">
+        <h2>
+          <TermHelp termId="aperture_stop" fallback={t('settings:settings.aperture_motion')} onOpenHelp={onOpenHelp} />
+        </h2>
+        <Tag type={isPreviewing ? 'blue' : 'gray'}>{isPreviewing ? t('settings:settings.previewing') : t('settings:settings.preview_ready')}</Tag>
+      </div>
+      <div className="slider-control">
+        <label htmlFor="iris-radius-slider">{t('settings:settings.iris_radius_mm')}</label>
+        <input
+          id="iris-radius-slider"
+          type="range"
+          min={minRadius}
+          max={irisMaxRadiusMm}
+          step={0.1}
+          value={irisRadiusMm}
+          onChange={(event) => onSetIrisRadius(Number(event.target.value))}
+          onMouseUp={onCommit}
+          onTouchEnd={onCommit}
+        />
+        <div className="slider-meta">
+          <strong>
+            {formatFixed(irisRadiusMm, 2)} {t('units:units.mm')}
+          </strong>
+          <span>{t('settings:settings.iris_radius_detail', { diameter: formatFixed(irisRadiusMm * 2, 2) })}</span>
+        </div>
+      </div>
+      <p className="muted">{t('settings:settings.aperture_motion_debounce', { ms: sliderPreviewDebounceMs, rays: sliderPreviewSamplesPerField })}</p>
     </section>
   )
 }
@@ -1531,6 +1617,9 @@ export function App() {
   const [focusShiftMm, setFocusShiftMm] = useState(0)
   const [runtimeConfiguration, setRuntimeConfiguration] = useState<RuntimeConfiguration>({})
   const runtimeConfigurationRef = useRef<RuntimeConfiguration>({})
+  const [irisRadiusMm, setIrisRadiusMm] = useState(() => apertureStopRadius(presets[0].system) ?? 1)
+  const [irisMaxRadiusMm, setIrisMaxRadiusMm] = useState(() => apertureStopRadius(presets[0].system) ?? 1)
+  const irisRadiusRef = useRef(irisRadiusMm)
   const sliderPreviewTimerRef = useRef<number | undefined>()
   const motionPreviewSequenceRef = useRef(0)
   const [sliderPreviewPending, setSliderPreviewPending] = useState(false)
@@ -1618,12 +1707,16 @@ export function App() {
   const resetMotionControls = (nextSystem: OpticalSystem) => {
     const nextZoom = nextSystem.zoom_positions?.[0]?.id ?? ''
     const nextGroup = motionGroupIds(nextSystem)[0] ?? ''
+    const nextIris = apertureStopRadius(nextSystem) ?? 1
     setZoomPositionId(nextZoom)
     setFocusGroupId(nextGroup)
     setFocusShiftMm(0)
     const nextConfiguration = makeRuntimeConfiguration(nextSystem, nextZoom, nextGroup, 0)
     runtimeConfigurationRef.current = nextConfiguration
     setRuntimeConfiguration(nextConfiguration)
+    irisRadiusRef.current = nextIris
+    setIrisRadiusMm(nextIris)
+    setIrisMaxRadiusMm(nextIris)
   }
 
   const markSystemChanged = (nextSystem: OpticalSystem) => {
@@ -1710,12 +1803,28 @@ export function App() {
     setActiveTab('preview')
   }
 
-  const runMotionPreview = async (configuration: RuntimeConfiguration, lowResolution: boolean) => {
+  const resolvePreviewSystemId = async (previewSystem: OpticalSystem, rememberRegistration: boolean) => {
+    if (previewSystem === system && systemId) return systemId
+    const result = await registerSystem(apiBase, previewSystem)
+    if (rememberRegistration) {
+      setSystemId(result.system_id)
+      setSystemHash(result.system_hash)
+      setSystemDirty(false)
+    }
+    return result.system_id
+  }
+
+  const runMotionPreview = async (
+    configuration: RuntimeConfiguration,
+    lowResolution: boolean,
+    previewSystem: OpticalSystem = system,
+    rememberRegistration = !lowResolution,
+  ) => {
     const sequence = motionPreviewSequenceRef.current + 1
     motionPreviewSequenceRef.current = sequence
     setSliderPreviewPending(true)
     try {
-      const id = await ensureRegisteredSystem()
+      const id = await resolvePreviewSystemId(previewSystem, rememberRegistration)
       const request = makeAnalysisRequest(id, {
         configuration,
         ...(lowResolution ? { samplesPerField: sliderPreviewSamplesPerField, aimingMode: 'paraxial' } : {}),
@@ -1732,10 +1841,10 @@ export function App() {
     }
   }
 
-  const scheduleMotionPreview = (configuration: RuntimeConfiguration) => {
+  const scheduleMotionPreview = (configuration: RuntimeConfiguration, previewSystem: OpticalSystem = system) => {
     if (sliderPreviewTimerRef.current) window.clearTimeout(sliderPreviewTimerRef.current)
     sliderPreviewTimerRef.current = window.setTimeout(() => {
-      void runMotionPreview(configuration, true)
+      void runMotionPreview(configuration, true, previewSystem, false)
     }, sliderPreviewDebounceMs)
   }
 
@@ -1757,6 +1866,27 @@ export function App() {
   const commitMotionConfiguration = () => {
     if (sliderPreviewTimerRef.current) window.clearTimeout(sliderPreviewTimerRef.current)
     void runMotionPreview(runtimeConfigurationRef.current, false)
+  }
+
+  const setApertureRadius = (value: number, commit = false) => {
+    const nextRadius = Math.max(0.1, value)
+    const nextSystem = withApertureStopRadius(system, nextRadius)
+    if (!nextSystem) return
+    irisRadiusRef.current = nextRadius
+    setIrisRadiusMm(nextRadius)
+    markSystemChanged(nextSystem)
+    scheduleMotionPreview(runtimeConfigurationRef.current, nextSystem)
+    if (commit) {
+      if (sliderPreviewTimerRef.current) window.clearTimeout(sliderPreviewTimerRef.current)
+      void runMotionPreview(runtimeConfigurationRef.current, false, nextSystem, true)
+    }
+  }
+
+  const commitApertureRadius = () => {
+    const nextSystem = withApertureStopRadius(system, irisRadiusRef.current)
+    if (!nextSystem) return
+    if (sliderPreviewTimerRef.current) window.clearTimeout(sliderPreviewTimerRef.current)
+    void runMotionPreview(runtimeConfigurationRef.current, false, nextSystem, true)
   }
 
   const validateMutation = useMutation({
@@ -2180,6 +2310,16 @@ export function App() {
             onSetFocusGroup={(id, commit) => setMotionConfiguration(zoomPositionId, id, focusShiftMm, commit)}
             onSetFocusShift={(value, commit) => setMotionConfiguration(zoomPositionId, focusGroupId, value, commit)}
             onCommit={commitMotionConfiguration}
+          />
+
+          <ApertureMotionPanel
+            system={system}
+            irisRadiusMm={irisRadiusMm}
+            irisMaxRadiusMm={irisMaxRadiusMm}
+            isPreviewing={sliderPreviewPending}
+            onSetIrisRadius={setApertureRadius}
+            onCommit={commitApertureRadius}
+            onOpenHelp={setHelpTermId}
           />
 
           <section className="panel">
