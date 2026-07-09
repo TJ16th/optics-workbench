@@ -56,6 +56,10 @@
         "P006": {
           "name": "ケプラー式afocal望遠鏡デモ",
           "summary": "終端にeye_referenceを持つafocal望遠鏡。像面ポリシー操作は無効化されます。"
+        },
+        "P007": {
+          "name": "Fast Positive-Negative Meniscus Pair 50mm Demo",
+          "summary": "F/1.8 positive-negative meniscus pair for Layout View curvature checks."
         }
       }
     },

@@ -453,6 +453,30 @@ test('layout view scales stop, sensor, and eye symbols from physical dimensions'
   expect(await layoutSurfaceScale(page, 'EYE')).toMatchObject({ semiDiameterMm: 2, visualHalfHeightPx: 20, rawHalfHeightPx: 8, clamped: true })
 })
 
+test('P007 fast meniscus pair preset renders strong positive and negative curvature', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await selectPresetOption(page, 'P007 Fast Positive-Negative Meniscus Pair 50mm Demo')
+
+  const profiles = page.locator('#layout-svg path.surface-refractive')
+  await expect(profiles).toHaveCount(4)
+  await expect(page.locator('#layout-svg path.glass-element')).toHaveCount(2)
+  await expect(page.locator('#layout-svg')).toContainText('S1')
+  await expect(page.locator('#layout-svg')).toContainText('S4')
+  expect(await layoutSurfaceScale(page, 'STOP')).toMatchObject({ semiDiameterMm: 13.2, visualHalfHeightPx: 52.8, rawHalfHeightPx: 52.8, clamped: false })
+
+  const positiveProfile = (await profiles.nth(0).getAttribute('d')) ?? ''
+  const negativeProfile = (await profiles.nth(2).getAttribute('d')) ?? ''
+  const positiveXs = positiveProfile.match(/-?\d+(?:\.\d+)?/g)?.map(Number).filter((_, index) => index % 2 === 0) ?? []
+  const negativeXs = negativeProfile.match(/-?\d+(?:\.\d+)?/g)?.map(Number).filter((_, index) => index % 2 === 0) ?? []
+  expect(positiveXs[0]).toBeGreaterThan(positiveXs[12])
+  expect(negativeXs[0]).toBeLessThan(negativeXs[12])
+
+  await page.getByRole('button', { name: 'Run Preview' }).click()
+  await expectLayoutRayPath(page, 6)
+  expect(Number(await page.locator('#layout-svg').getAttribute('data-total-rays'))).toBe(81)
+})
+
 test('right pane scrolls independently and keeps center pane stable', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en')

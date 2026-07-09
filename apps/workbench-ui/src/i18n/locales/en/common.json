@@ -56,6 +56,10 @@
         "P006": {
           "name": "Keplerian Afocal Telescope Demo",
           "summary": "Afocal telescope with an eye_reference terminal plane; image-plane policy controls are intentionally disabled."
+        },
+        "P007": {
+          "name": "Fast Positive-Negative Meniscus Pair 50mm Demo",
+          "summary": "Fast F/1.8 two-group meniscus pair for checking strong positive and negative curvature in the layout view."
         }
       }
     },

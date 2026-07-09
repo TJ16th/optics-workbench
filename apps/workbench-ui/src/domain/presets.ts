@@ -163,6 +163,35 @@ export const presets: Preset[] = [
       ],
     },
   },
+  {
+    id: 'P007',
+    name: 'Fast Positive-Negative Meniscus Pair 50mm Demo',
+    summary: 'Fast F/1.8 two-group meniscus pair for checking strong positive and negative curvature in the layout view.',
+    recommendedAnalysis: ['preview', 'spot', 'ray_fan', 'paraxial'],
+    system: {
+      name: 'P007 Fast Positive-Negative Meniscus Pair 50mm',
+      units: 'mm',
+      optical_axis: '+X',
+      system_type: 'focal',
+      wavelengths_nm: { primary: 587.56, samples: [486.13, 587.56, 656.27] },
+      materials: commonMaterials,
+      surfaces: [
+        { id: 'S1', kind: 'refractive', surface_type: 'spherical', radius_mm: 14.0, thickness_after_mm: 5.0, material_after: 'N-BK7', semi_diameter_mm: 18 },
+        { id: 'S2', kind: 'refractive', surface_type: 'spherical', radius_mm: 60.0, thickness_after_mm: 3.0, material_after: 'AIR', semi_diameter_mm: 17 },
+        {
+          id: 'STOP',
+          kind: 'aperture_stop',
+          surface_type: 'plane',
+          thickness_after_mm: 3.0,
+          semi_diameter_mm: 13.2,
+          aperture: { shape: 'circle', semi_diameter_mm: 13.2 },
+        },
+        { id: 'S3', kind: 'refractive', surface_type: 'spherical', radius_mm: -35.0, thickness_after_mm: 3.0, material_after: 'N-F2', semi_diameter_mm: 16 },
+        { id: 'S4', kind: 'refractive', surface_type: 'spherical', radius_mm: -100.0, thickness_after_mm: 31.8, material_after: 'AIR', semi_diameter_mm: 17 },
+        { id: 'IMG', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 36, height_mm: 24 } },
+      ],
+    },
+  },
 ]
 
 export const visualFixturePresets: Preset[] = [
