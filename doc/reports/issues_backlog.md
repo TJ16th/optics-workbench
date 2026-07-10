@@ -21,7 +21,7 @@ G5時点のGitHub Issue草案です。現在の `doc/work_orders/active/` で直
 - GitHubリポジトリ作成とpush
 - 公開前チェックリスト
 
-## Issue: Snapshot zip exportを実装する
+## Issue: Snapshot zip exportを実装する [issue: #1]
 
 ラベル案: `ui`
 
@@ -42,7 +42,7 @@ Phase 2では小容量snapshotの単一JSON exportのみ実装済みです。仕
 - exportしたzipからsnapshotとartifactを復元できる。
 - partial snapshotでも欠損情報が保持される。
 
-## Issue: Snapshot比較をチャート重ね合わせまで拡張する
+## Issue: Snapshot比較をチャート重ね合わせまで拡張する [issue: #2]
 
 ラベル案: `ui`
 
@@ -62,7 +62,7 @@ Phase 2では小容量snapshotの単一JSON exportのみ実装済みです。仕
 - 不一致条件では警告とdisabled状態が表示される。
 - ja/en切替後もラベルが現在ロケールで表示される。
 
-## Issue: Raw JSON/YAML advanced editorを実装する
+## Issue: Raw JSON/YAML advanced editorを実装する [issue: #3]
 
 ラベル案: `ui`, `good-first-issue`
 
@@ -82,7 +82,7 @@ UI仕様ではRaw JSON/YAML編集が定義されていますが、現状は高�
 - 無効入力では構造化エラーを表示し、既存systemを壊さない。
 - raw表示では識別子を翻訳しない。
 
-## Issue: PNG exportの画像比較テストを追加する
+## Issue: PNG exportの画像比較テストを追加する [issue: #4]
 
 ラベル案: `ui`, `testing`, `good-first-issue`
 
@@ -102,7 +102,7 @@ SVG exportはテキストreadbackでja/enラベルを検証済みです。一方
 - ja/enそれぞれの代表ケースで成功する。
 - テストが環境差で過度に不安定にならない。
 
-## Issue: 高密度spot/散布表示のPlotly scattergl対応
+## Issue: 高密度spot/散布表示のPlotly scattergl対応 [issue: #5]
 
 ラベル案: `ui`, `performance`
 
@@ -129,7 +129,7 @@ P2-2では、点数の多いspot/散布表示にPlotly `scattergl` を使う規�
 - ja/enラベルがi18nテストで担保される。
 - export可否または代替形式が仕様・README・UIのいずれかで明示される。
 
-## Issue: supplement glossaryを本体用語集へ統合する
+## Issue: supplement glossaryを本体用語集へ統合する [issue: #6]
 
 ラベル案: `ui`, `docs`
 
@@ -149,7 +149,7 @@ v2.3/P2対応で不足した用語・エラーコードは `glossary.supplement.
 - `npm run i18n:coverage` が通る。
 - 用語本文の人間レビュー結果が反映されている。
 
-## Issue: axis_convention import/exportを実装する
+## Issue: axis_convention import/exportを実装する [issue: #7]
 
 ラベル案: `engine`, `docs`
 
@@ -168,7 +168,7 @@ v2.3/P2対応で不足した用語・エラーコードは `glossary.supplement.
 - 単純な球面レンズ系をZ軸表現から取り込み、内部 `+X` 系で同じ近軸量になる。
 - 変換規約がドキュメント化されている。
 
-## Issue: 回折PSF・波面収差・FFT瞳関数を追加する
+## Issue: 回折PSF・波面収差・FFT瞳関数を追加する [issue: #8]
 
 ラベル案: `engine`
 
@@ -187,7 +187,7 @@ v2.3/P2対応で不足した用語・エラーコードは `glossary.supplement.
 - 理想円形瞳でAiry disk相当の基礎検証ができる。
 - APIレスポンスのartifact方針が既存PSF/MTFと整合する。
 
-## Issue: 視覚系のプリズム・正立像モデルを拡張する
+## Issue: 視覚系のプリズム・正立像モデルを拡張する [issue: #9]
 
 ラベル案: `engine`
 
@@ -206,7 +206,7 @@ Phase 8でafocal、eye_reference、射出瞳、アイボックス、角度MTF等
 - プリズムありafocal系で射出瞳と像反転状態を評価できる。
 - 双眼鏡プリセットで左右チャンネル差を表示できる。
 
-## Issue: 長時間解析向けjob/WebSocketセッションを検討する
+## Issue: 長時間解析向けjob/WebSocketセッションを検討する [issue: #10]
 
 ラベル案: `engine`, `ui`
 
