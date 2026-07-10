@@ -1,0 +1,630 @@
+{
+  "benchmark_schema": 2,
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.14.3"
+  },
+  "git_dirty": true,
+  "measured_at_jst": "2026-07-11T01:55:41+09:00",
+  "profile": "smoke",
+  "result_file": "bench_results/20260711_015541_85eea4a.json",
+  "results": [
+    {
+      "context": {
+        "field_count": 3,
+        "fields": [
+          {
+            "id": "center",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "pos_y_5",
+            "theta_y_deg": 5.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "pos_z_5",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 5.0
+          }
+        ],
+        "ray_aiming_mode": "full",
+        "samples_per_field": 9,
+        "surface_count": 14,
+        "surface_ray_count": 1134,
+        "total_rays": 81,
+        "wavelength_count": 3,
+        "wavelengths_nm": [
+          486.13,
+          587.56,
+          656.27
+        ]
+      },
+      "details": {
+        "aiming_failed": 0,
+        "aiming_iterations_max": 3,
+        "arrived": 81,
+        "blocked": 0,
+        "rays": 81
+      },
+      "max_ms": 155.20889998879284,
+      "mean_ms": 142.58951999945566,
+      "median_ms": 139.7450999938883,
+      "min_ms": 133.75010000891052,
+      "name": "trace preview full aiming: 3 fields x 3 wavelengths x 9 rays",
+      "p95_ms": 155.20889998879284,
+      "per_ray_us_median": 1725.248148072695,
+      "per_surface_ray_us_median": 123.23201057662106,
+      "repeats": 5,
+      "samples_ms": [
+        155.20889998879284,
+        149.8213000013493,
+        134.42220000433736,
+        133.75010000891052,
+        139.7450999938883
+      ],
+      "warmups": 1
+    },
+    {
+      "context": {
+        "field_count": 3,
+        "fields": [
+          {
+            "id": "center",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "pos_y_5",
+            "theta_y_deg": 5.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "pos_z_5",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 5.0
+          }
+        ],
+        "ray_aiming_mode": "paraxial",
+        "samples_per_field": 9,
+        "surface_count": 14,
+        "surface_ray_count": 1134,
+        "total_rays": 81,
+        "wavelength_count": 3,
+        "wavelengths_nm": [
+          486.13,
+          587.56,
+          656.27
+        ]
+      },
+      "details": {
+        "aiming_failed": 0,
+        "aiming_iterations_max": 0,
+        "arrived": 81,
+        "blocked": 0,
+        "rays": 81
+      },
+      "max_ms": 4.344200016930699,
+      "mean_ms": 4.233139997813851,
+      "median_ms": 4.20469997334294,
+      "min_ms": 4.172900022240356,
+      "name": "trace preview paraxial aiming: 3 fields x 3 wavelengths x 9 rays",
+      "p95_ms": 4.344200016930699,
+      "per_ray_us_median": 51.909876214110376,
+      "per_surface_ray_us_median": 3.7078483010078838,
+      "repeats": 5,
+      "samples_ms": [
+        4.20469997334294,
+        4.172900022240356,
+        4.193199973087758,
+        4.344200016930699,
+        4.2507000034675
+      ],
+      "warmups": 1
+    },
+    {
+      "context": {
+        "field_count": 3,
+        "fields": [
+          {
+            "id": "center",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "pos_y_5",
+            "theta_y_deg": 5.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "pos_z_5",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 5.0
+          }
+        ],
+        "ray_aiming_mode": "off",
+        "samples_per_field": 9,
+        "surface_count": 14,
+        "surface_ray_count": 1134,
+        "total_rays": 81,
+        "wavelength_count": 3,
+        "wavelengths_nm": [
+          486.13,
+          587.56,
+          656.27
+        ]
+      },
+      "details": {
+        "aiming_failed": 0,
+        "aiming_iterations_max": 0,
+        "arrived": 81,
+        "blocked": 0,
+        "rays": 81
+      },
+      "max_ms": 4.530300007900223,
+      "mean_ms": 4.318440001225099,
+      "median_ms": 4.225300013786182,
+      "min_ms": 4.206499987049028,
+      "name": "trace preview off aiming: 3 fields x 3 wavelengths x 9 rays",
+      "p95_ms": 4.530300007900223,
+      "per_ray_us_median": 52.164197701063976,
+      "per_surface_ray_us_median": 3.7260141215045697,
+      "repeats": 5,
+      "samples_ms": [
+        4.211599996779114,
+        4.418500000610948,
+        4.225300013786182,
+        4.206499987049028,
+        4.530300007900223
+      ],
+      "warmups": 1
+    },
+    {
+      "context": {
+        "field_count": 1,
+        "fields": [
+          {
+            "id": "center",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 0.0
+          }
+        ],
+        "ray_aiming_mode": "off",
+        "samples_per_field": 10000,
+        "surface_count": 14,
+        "surface_ray_count": 140000,
+        "total_rays": 10000,
+        "wavelength_count": 1,
+        "wavelengths_nm": [
+          587.56
+        ]
+      },
+      "details": {
+        "aiming_failed": 0,
+        "aiming_iterations_max": 0,
+        "arrived": 10000,
+        "blocked": 0,
+        "rays": 10000
+      },
+      "max_ms": 119.41359998309053,
+      "mean_ms": 102.64909999095835,
+      "median_ms": 98.38710000622086,
+      "min_ms": 94.24049998051487,
+      "name": "trace high-count off aiming: 1 field x 1 wavelength x 10000 rays",
+      "p95_ms": 119.41359998309053,
+      "per_ray_us_median": 9.838710000622086,
+      "per_surface_ray_us_median": 0.7027650000444348,
+      "repeats": 5,
+      "samples_ms": [
+        119.41359998309053,
+        104.49279999011196,
+        98.38710000622086,
+        96.71149999485351,
+        94.24049998051487
+      ],
+      "warmups": 1
+    },
+    {
+      "context": {
+        "field_count": 3,
+        "fields": [
+          {
+            "id": "center",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "pos_y_5",
+            "theta_y_deg": 5.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "pos_z_5",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 5.0
+          }
+        ],
+        "ray_aiming_mode": "paraxial",
+        "samples_per_field": 25,
+        "surface_count": 14,
+        "surface_ray_count": 1050,
+        "total_rays": 75,
+        "wavelength_count": 1,
+        "wavelengths_nm": [
+          587.56
+        ]
+      },
+      "details": {
+        "aiming_failed": 0,
+        "aiming_iterations_max": 0,
+        "arrived": 75,
+        "blocked": 0,
+        "rays": 75
+      },
+      "max_ms": 4.187400016235188,
+      "mean_ms": 3.703979996498674,
+      "median_ms": 3.637899993918836,
+      "min_ms": 3.4921999904327095,
+      "name": "education preview direct paraxial: 3 fields x 1 wavelength x 25 rays",
+      "p95_ms": 4.187400016235188,
+      "per_ray_us_median": 48.50533325225115,
+      "per_surface_ray_us_median": 3.464666660875082,
+      "repeats": 5,
+      "samples_ms": [
+        3.5376999876461923,
+        3.4921999904327095,
+        4.187400016235188,
+        3.6646999942604452,
+        3.637899993918836
+      ],
+      "warmups": 1
+    },
+    {
+      "context": {
+        "field_count": 5,
+        "fields": [
+          {
+            "id": "center",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "pos_y_5",
+            "theta_y_deg": 5.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "pos_z_5",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 5.0
+          },
+          {
+            "id": "neg_y_5",
+            "theta_y_deg": -5.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "neg_z_5",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": -5.0
+          }
+        ],
+        "ray_aiming_mode": "full",
+        "samples_per_field": 21,
+        "surface_count": 14,
+        "surface_ray_count": 4410,
+        "total_rays": 315,
+        "wavelength_count": 3,
+        "wavelengths_nm": [
+          486.13,
+          587.56,
+          656.27
+        ]
+      },
+      "details": {
+        "aiming_failed": 0,
+        "aiming_iterations_max": 3,
+        "arrived": 315,
+        "blocked": 0,
+        "rays": 315
+      },
+      "max_ms": 598.1127000122797,
+      "mean_ms": 566.8044999998529,
+      "median_ms": 560.3799000091385,
+      "min_ms": 548.2738999999128,
+      "name": "trace spot full aiming: 5 fields x 3 wavelengths x 21 rays",
+      "p95_ms": 598.1127000122797,
+      "per_ray_us_median": 1778.9838095528207,
+      "per_surface_ray_us_median": 127.07027211091577,
+      "repeats": 5,
+      "samples_ms": [
+        548.2738999999128,
+        598.1127000122797,
+        550.3468999813776,
+        576.9090999965556,
+        560.3799000091385
+      ],
+      "warmups": 1
+    },
+    {
+      "context": {
+        "field_count": 1,
+        "fields": [
+          {
+            "id": "center",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 0.0
+          }
+        ],
+        "ray_aiming_mode": "full",
+        "samples_per_field": 64,
+        "surface_count": 14,
+        "surface_ray_count": 896,
+        "total_rays": 64,
+        "wavelength_count": 1,
+        "wavelengths_nm": [
+          587.56
+        ]
+      },
+      "details": {
+        "grid": [
+          32,
+          32
+        ],
+        "total_energy": 64.0
+      },
+      "max_ms": 0.3026000049430877,
+      "mean_ms": 0.2806599950417876,
+      "median_ms": 0.2841999812517315,
+      "min_ms": 0.2552999940235168,
+      "name": "geometric PSF from 64-ray full-aim trace",
+      "p95_ms": 0.3026000049430877,
+      "per_ray_us_median": 4.440624707058305,
+      "per_surface_ray_us_median": 0.3171874790755932,
+      "repeats": 5,
+      "samples_ms": [
+        0.2841999812517315,
+        0.26580001576803625,
+        0.2552999940235168,
+        0.2953999792225659,
+        0.3026000049430877
+      ],
+      "warmups": 1
+    },
+    {
+      "context": {
+        "field_count": 1,
+        "fields": [
+          {
+            "id": "center",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 0.0
+          }
+        ],
+        "ray_aiming_mode": "full",
+        "samples_per_field": 64,
+        "surface_count": 14,
+        "surface_ray_count": 896,
+        "total_rays": 64,
+        "wavelength_count": 1,
+        "wavelengths_nm": [
+          587.56
+        ]
+      },
+      "details": {
+        "mtf40_radial": 0.09049487938724055,
+        "points": 4
+      },
+      "max_ms": 0.13920001219958067,
+      "mean_ms": 0.12332000187598169,
+      "median_ms": 0.11979998089373112,
+      "min_ms": 0.11809999705292284,
+      "name": "geometric MTF from 64-ray full-aim trace",
+      "p95_ms": 0.13920001219958067,
+      "per_ray_us_median": 1.8718747014645487,
+      "per_surface_ray_us_median": 0.13370533581889635,
+      "repeats": 5,
+      "samples_ms": [
+        0.11979998089373112,
+        0.13920001219958067,
+        0.11809999705292284,
+        0.11990001075901091,
+        0.1196000084746629
+      ],
+      "warmups": 1
+    },
+    {
+      "context": {
+        "field_count": 5,
+        "fields": [
+          {
+            "id": "center",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "pos_y_15",
+            "theta_y_deg": 15.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "neg_y_15",
+            "theta_y_deg": -15.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "pos_z_15",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 15.0
+          },
+          {
+            "id": "neg_z_15",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": -15.0
+          }
+        ],
+        "ray_aiming_mode": "full",
+        "samples_per_field": 9,
+        "surface_count": 14,
+        "surface_ray_count": 1890,
+        "total_rays": 135,
+        "wavelength_count": 3,
+        "wavelengths_nm": [
+          486.13,
+          587.56,
+          656.27
+        ]
+      },
+      "details": {
+        "min_relative_illumination": 0.8705127018922199,
+        "outer_field_cos4_check": {
+          "cos4_factor": 0.8705127018922199,
+          "field_id": "pos_y_15",
+          "measured_minus_cos4": 0.0,
+          "relative_illumination": 0.8705127018922199,
+          "theta_y_deg": 15.0,
+          "theta_z_deg": 0.0,
+          "throughput": 1.0
+        },
+        "rows": [
+          {
+            "cos4_factor": 1.0,
+            "field_id": "center",
+            "measured_minus_cos4": 0.0,
+            "relative_illumination": 1.0,
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 0.0,
+            "throughput": 1.0
+          },
+          {
+            "cos4_factor": 0.8705127018922199,
+            "field_id": "pos_y_15",
+            "measured_minus_cos4": 0.0,
+            "relative_illumination": 0.8705127018922199,
+            "theta_y_deg": 15.0,
+            "theta_z_deg": 0.0,
+            "throughput": 1.0
+          },
+          {
+            "cos4_factor": 0.8705127018922199,
+            "field_id": "neg_y_15",
+            "measured_minus_cos4": 0.0,
+            "relative_illumination": 0.8705127018922199,
+            "theta_y_deg": -15.0,
+            "theta_z_deg": 0.0,
+            "throughput": 1.0
+          },
+          {
+            "cos4_factor": 0.8705127018922199,
+            "field_id": "pos_z_15",
+            "measured_minus_cos4": 0.0,
+            "relative_illumination": 0.8705127018922199,
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 15.0,
+            "throughput": 1.0
+          },
+          {
+            "cos4_factor": 0.8705127018922199,
+            "field_id": "neg_z_15",
+            "measured_minus_cos4": 0.0,
+            "relative_illumination": 0.8705127018922199,
+            "theta_y_deg": 0.0,
+            "theta_z_deg": -15.0,
+            "throughput": 1.0
+          }
+        ]
+      },
+      "max_ms": 262.5271999859251,
+      "mean_ms": 252.3970999987796,
+      "median_ms": 252.80640000710264,
+      "min_ms": 246.17179998313077,
+      "name": "relative illumination full aiming: 5 fields x 3 wavelengths, 15 deg outer fields",
+      "p95_ms": 262.5271999859251,
+      "per_ray_us_median": 1872.640000052612,
+      "per_surface_ray_us_median": 133.76000000375802,
+      "repeats": 5,
+      "samples_ms": [
+        246.81710000731982,
+        262.5271999859251,
+        252.80640000710264,
+        253.66300001041964,
+        246.17179998313077
+      ],
+      "warmups": 1
+    },
+    {
+      "context": {
+        "field_count": 3,
+        "fields": [
+          {
+            "id": "center",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "pos_y_5",
+            "theta_y_deg": 5.0,
+            "theta_z_deg": 0.0
+          },
+          {
+            "id": "pos_z_5",
+            "theta_y_deg": 0.0,
+            "theta_z_deg": 5.0
+          }
+        ],
+        "ray_aiming_mode": "full",
+        "samples_per_field": 9,
+        "surface_count": 14,
+        "surface_ray_count": 1134,
+        "total_rays": 81,
+        "wavelength_count": 3,
+        "wavelengths_nm": [
+          486.13,
+          587.56,
+          656.27
+        ]
+      },
+      "details": {
+        "score": 8.481512538782612,
+        "status": "ok"
+      },
+      "max_ms": 306.08149999170564,
+      "mean_ms": 293.19403999252245,
+      "median_ms": 291.3209999969695,
+      "min_ms": 283.99629998602904,
+      "name": "evaluate fast_design_score full aiming",
+      "p95_ms": 306.08149999170564,
+      "per_ray_us_median": 3596.555555518142,
+      "per_surface_ray_us_median": 256.896825394153,
+      "repeats": 5,
+      "samples_ms": [
+        284.6306999854278,
+        299.9407000024803,
+        291.3209999969695,
+        306.08149999170564,
+        283.99629998602904
+      ],
+      "warmups": 1
+    }
+  ],
+  "settings": {
+    "analysis_samples": 64,
+    "preview_samples": 9,
+    "repeats": 5,
+    "spot_samples": 21,
+    "warmups": 1
+  },
+  "source_commit": "85eea4a",
+  "system": {
+    "aspheres": 2,
+    "name": "spec_like_12_refractive_asphere_lens",
+    "refractive_surfaces": 12,
+    "surfaces": 14,
+    "wavelengths": [
+      486.13,
+      587.56,
+      656.27
+    ]
+  }
+}

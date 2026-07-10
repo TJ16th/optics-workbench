@@ -326,6 +326,17 @@ def _thin_lens_transform_scalar(local_point: np.ndarray, local_dir: np.ndarray, 
     )
 
 
+def _material_indices_for_wavelengths(compiled: CompiledSystem, material_id: str | None, wavelengths_nm: np.ndarray) -> np.ndarray:
+    material_id = material_id or "AIR"
+    if wavelengths_nm.size == 0:
+        return np.array([], dtype=float)
+    if np.all(wavelengths_nm == wavelengths_nm[0]):
+        return np.full(wavelengths_nm.shape, compiled.material_index(material_id, float(wavelengths_nm[0])), dtype=float)
+    unique, inverse = np.unique(wavelengths_nm, return_inverse=True)
+    values = np.array([compiled.material_index(material_id, float(wavelength)) for wavelength in unique], dtype=float)
+    return values[inverse]
+
+
 def _trace_raw(
     compiled: CompiledSystem,
     origins: np.ndarray,
@@ -348,7 +359,7 @@ def _trace_raw(
     eye_theta_y = np.full(n_rays, np.nan)
     eye_theta_z = np.full(n_rays, np.nan)
     propagation_sign = np.ones(n_rays, dtype=int)
-    current_n = np.array([compiled.material_index("AIR", wl) for wl in wavelengths_nm], dtype=float)
+    current_n = _material_indices_for_wavelengths(compiled, "AIR", wavelengths_nm)
     paths: list[list[dict[str, Any]]] = [[] for _ in range(n_rays)]
     field_ids = field_ids or ["field"] * n_rays
     if centers_mm is None:
@@ -375,44 +386,44 @@ def _trace_raw(
             points_alive, valid_alive = intersect_sphere(local_origins, local_dirs_alive, x_vertex, 0.0)
         local_points_alive = points_alive.copy()
         points_alive = points_alive @ rotation.T + center
-        local_points = np.full_like(current_origins, np.nan)
-        local_points[alive] = local_points_alive
-        points = np.full_like(current_origins, np.nan)
-        points[alive] = points_alive
 
         invalid_indices = alive_indices[~valid_alive]
         status[invalid_indices] = STATUS_MISSED
         valid_indices = alive_indices[valid_alive]
         if valid_indices.size == 0:
             continue
+        valid_local_points = local_points_alive[valid_alive]
+        valid_points = points_alive[valid_alive]
 
         if store_path:
-            for ray_idx in valid_indices:
+            for offset, ray_idx in enumerate(valid_indices):
                 paths[ray_idx].append(
                     {
                         "surface_id": surface.id,
-                        "point_mm": points[ray_idx].tolist(),
-                        "local_point_mm": local_points[ray_idx].tolist(),
+                        "point_mm": valid_points[offset].tolist(),
+                        "local_point_mm": valid_local_points[offset].tolist(),
                         "direction": current_dirs[ray_idx].tolist(),
                         "status": str(status[ray_idx]),
                     }
                 )
 
-        passes = _aperture_pass_with_runtime(local_points[valid_indices], surface, surface_idx, compiled, configuration)
+        passes = _aperture_pass_with_runtime(valid_local_points, surface, surface_idx, compiled, configuration)
         blocked = valid_indices[~passes]
         status[blocked] = STATUS_BLOCKED
         valid_indices = valid_indices[passes]
         if valid_indices.size == 0:
             continue
+        valid_local_points = valid_local_points[passes]
+        valid_points = valid_points[passes]
 
-        current_origins[valid_indices] = points[valid_indices]
+        current_origins[valid_indices] = valid_points
 
         if stop_at_surface_index is not None and surface_idx == stop_at_surface_index:
             break
 
         if surface.kind == "refractive":
-            normals = surface_normals_for_surface(local_points[valid_indices], x_vertex, surface)
-            n_after = np.array([compiled.material_index(surface.material_after, wl) for wl in wavelengths_nm[valid_indices]])
+            normals = surface_normals_for_surface(valid_local_points, x_vertex, surface)
+            n_after = _material_indices_for_wavelengths(compiled, surface.material_after, wavelengths_nm[valid_indices])
             local_in_dirs = current_dirs[valid_indices] @ rotation
             out_dirs_local, refract_ok = refract(local_in_dirs, normals, current_n[valid_indices], n_after)
             tir_indices = valid_indices[~refract_ok]
@@ -421,21 +432,21 @@ def _trace_raw(
             current_dirs[ok_indices] = out_dirs_local[refract_ok] @ rotation.T
             current_n[ok_indices] = n_after[refract_ok]
         elif surface.kind == "mirror":
-            normals = surface_normals_for_surface(local_points[valid_indices], x_vertex, surface)
+            normals = surface_normals_for_surface(valid_local_points, x_vertex, surface)
             local_in_dirs = current_dirs[valid_indices] @ rotation
             current_dirs[valid_indices] = reflect(local_in_dirs, normals) @ rotation.T
             propagation_sign[valid_indices] *= -1
         elif surface.kind == "thin_lens":
             local_out = thin_lens_transform(
-                local_points[valid_indices],
+                valid_local_points,
                 current_dirs[valid_indices] @ rotation,
                 x_vertex,
                 float(surface.focal_length_mm),
             )
             current_dirs[valid_indices] = local_out @ rotation.T
         elif surface.kind == "sensor":
-            sensor_y[valid_indices] = local_points[valid_indices, 1]
-            sensor_z[valid_indices] = local_points[valid_indices, 2]
+            sensor_y[valid_indices] = valid_local_points[:, 1]
+            sensor_z[valid_indices] = valid_local_points[:, 2]
         elif surface.kind == "eye_reference":
             local_dirs = current_dirs[valid_indices] @ rotation
             eye_theta_y[valid_indices] = np.rad2deg(np.arctan2(local_dirs[:, 1], local_dirs[:, 0]))

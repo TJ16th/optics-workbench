@@ -283,6 +283,48 @@ def run_benchmark(profile: str) -> dict[str, Any]:
             )
         )
 
+    high_count_samples = 10000
+    cases.append(
+        (
+            "trace high-count off aiming: 1 field x 1 wavelength x 10000 rays",
+            lambda: trace_forward(
+                compiled,
+                [FIELDS_3[0]],
+                {"samples_per_field": high_count_samples, "pupil_distribution": "grid", "ray_aiming": {"mode": "off"}},
+                [587.56],
+            ),
+            case_context(
+                fields=[FIELDS_3[0]],
+                wavelengths=[587.56],
+                samples_per_field=high_count_samples,
+                surface_count=surface_count,
+                ray_aiming_mode="off",
+            ),
+            summarize_trace,
+        )
+    )
+
+    education_preview_samples = 25
+    cases.append(
+        (
+            "education preview direct paraxial: 3 fields x 1 wavelength x 25 rays",
+            lambda: trace_forward(
+                compiled,
+                FIELDS_3,
+                {"samples_per_field": education_preview_samples, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}},
+                [587.56],
+            ),
+            case_context(
+                fields=FIELDS_3,
+                wavelengths=[587.56],
+                samples_per_field=education_preview_samples,
+                surface_count=surface_count,
+                ray_aiming_mode="paraxial",
+            ),
+            summarize_trace,
+        )
+    )
+
     spot_samples = int(settings["spot_samples"])
     cases.append(
         (
