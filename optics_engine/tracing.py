@@ -161,6 +161,171 @@ def _aperture_pass_with_runtime(points: np.ndarray, surface, surface_idx: int, c
     return aperture_pass(points, surface)
 
 
+def _normalize_vec(vector: np.ndarray) -> np.ndarray:
+    norm = float(np.linalg.norm(vector))
+    return np.zeros_like(vector, dtype=float) if norm <= 0.0 else vector / norm
+
+
+def _asphere_sag_and_slope_scalar(r: float, radius_mm: float, conic: float, coefficients: dict[str, float]) -> tuple[float, float]:
+    c = 0.0 if abs(radius_mm) < 1.0e-10 else 1.0 / radius_mm
+    r2 = r * r
+    if abs(c) < 1.0e-10:
+        base = 0.0
+        base_slope = 0.0
+    else:
+        q = 1.0 - (1.0 + conic) * c * c * r2
+        sqrt_q = float(np.sqrt(max(q, 1.0e-10)))
+        base = c * r2 / (1.0 + sqrt_q)
+        h = max(1.0e-6, abs(r) * 1.0e-6)
+        r_plus = r + h
+        r_minus = max(0.0, r - h)
+        q_plus = 1.0 - (1.0 + conic) * c * c * r_plus * r_plus
+        q_minus = 1.0 - (1.0 + conic) * c * c * r_minus * r_minus
+        sag_plus = c * r_plus * r_plus / (1.0 + float(np.sqrt(max(q_plus, 1.0e-10))))
+        sag_minus = c * r_minus * r_minus / (1.0 + float(np.sqrt(max(q_minus, 1.0e-10))))
+        base_slope = (sag_plus - sag_minus) / max(r_plus - r_minus, 1.0e-10)
+
+    extra = 0.0
+    extra_slope = 0.0
+    for key, value in coefficients.items():
+        if not key.startswith("A"):
+            continue
+        order = int(key[1:])
+        extra += float(value) * (r**order)
+        if order > 0:
+            extra_slope += order * float(value) * (r ** (order - 1))
+    return base + extra, base_slope + extra_slope
+
+
+def _intersect_surface_scalar(origin: np.ndarray, direction: np.ndarray, surface) -> np.ndarray | None:
+    if surface.surface_type == "plane" or (surface.kind not in {"refractive", "mirror"} and surface.surface_type != "aspherical_even"):
+        denom = direction[0]
+        if abs(denom) <= 1.0e-10:
+            return None
+        t = -origin[0] / denom
+        return origin + direction * t if np.isfinite(t) and t >= -1.0e-8 else None
+
+    radius = float(surface.radius_mm)
+    if abs(radius) < 1.0e-10:
+        denom = direction[0]
+        if abs(denom) <= 1.0e-10:
+            return None
+        t = -origin[0] / denom
+        return origin + direction * t if np.isfinite(t) and t >= -1.0e-8 else None
+
+    center = np.array([radius, 0.0, 0.0], dtype=float)
+    oc = origin - center
+    b = 2.0 * float(np.dot(oc, direction))
+    c = float(np.dot(oc, oc)) - radius * radius
+    disc = b * b - 4.0 * c
+    if disc < 0.0:
+        return None
+    sqrt_disc = float(np.sqrt(max(disc, 0.0)))
+    t1 = (-b - sqrt_disc) / 2.0
+    t2 = (-b + sqrt_disc) / 2.0
+    t = t1 if t1 >= -1.0e-8 else t2
+    if not np.isfinite(t) or t < -1.0e-8:
+        return None
+
+    if surface.surface_type != "aspherical_even":
+        return origin + direction * t
+
+    for _ in range(12):
+        point = origin + direction * t
+        y = float(point[1])
+        z = float(point[2])
+        r = float(np.sqrt(y * y + z * z))
+        sag, slope = _asphere_sag_and_slope_scalar(r, radius, float(surface.conic), surface.asphere_coefficients)
+        f = point[0] - sag
+        drdt = 0.0 if r <= 1.0e-10 else (y * direction[1] + z * direction[2]) / r
+        dfdt = direction[0] - slope * drdt
+        if abs(dfdt) <= 1.0e-10:
+            return None
+        delta = f / dfdt
+        t -= delta
+        if abs(delta) >= 1.0e6:
+            return None
+        if abs(delta) < 1.0e-10:
+            break
+    return origin + direction * t if np.isfinite(t) and t >= -1.0e-8 else None
+
+
+def _surface_normal_scalar(local_point: np.ndarray, surface) -> np.ndarray:
+    if surface.surface_type == "plane" or abs(float(surface.radius_mm)) < 1.0e-10:
+        if surface.surface_type != "aspherical_even":
+            return np.array([1.0, 0.0, 0.0], dtype=float)
+    if surface.surface_type != "aspherical_even":
+        return _normalize_vec(local_point - np.array([float(surface.radius_mm), 0.0, 0.0], dtype=float))
+
+    y = float(local_point[1])
+    z = float(local_point[2])
+    r = float(np.sqrt(y * y + z * z))
+    _, slope = _asphere_sag_and_slope_scalar(r, float(surface.radius_mm), float(surface.conic), surface.asphere_coefficients)
+    dsdy = 0.0 if r <= 1.0e-10 else slope * y / r
+    dsdz = 0.0 if r <= 1.0e-10 else slope * z / r
+    return _normalize_vec(np.array([1.0, -dsdy, -dsdz], dtype=float))
+
+
+def _aperture_pass_scalar(local_point: np.ndarray, surface, surface_idx: int, compiled: CompiledSystem, configuration: dict[str, Any] | None) -> bool:
+    radius = float(np.sqrt(local_point[1] * local_point[1] + local_point[2] * local_point[2]))
+    runtime_outer = _runtime_iris_radius(configuration) if compiled.aperture_stop_index == surface_idx else None
+    if runtime_outer is not None:
+        inner = 0.0
+        if surface.aperture is not None and surface.aperture.shape == "annulus":
+            inner = surface.aperture.inner_semi_diameter_mm or 0.0
+        return radius <= runtime_outer + 1.0e-9 and radius >= inner - 1.0e-9
+    if surface.aperture is not None:
+        aperture = surface.aperture
+        if aperture.shape == "annulus":
+            outer = aperture.outer_semi_diameter_mm if aperture.outer_semi_diameter_mm is not None else aperture.semi_diameter_mm
+            inner = aperture.inner_semi_diameter_mm or 0.0
+            return True if outer is None else radius <= outer + 1.0e-9 and radius >= inner - 1.0e-9
+        if aperture.shape == "circle":
+            outer = aperture.semi_diameter_mm or aperture.outer_semi_diameter_mm or surface.semi_diameter_mm
+            return True if outer is None else radius <= outer + 1.0e-9
+        raise NotImplementedError("polygon apertures are reserved for a later phase")
+    if surface.semi_diameter_mm is None:
+        if getattr(surface, "kind", None) == "eye_reference" and getattr(surface, "eye", None) is not None:
+            return radius <= surface.eye.pupil_diameter_mm / 2.0 + 1.0e-9
+        return True
+    return radius <= surface.semi_diameter_mm + 1.0e-9
+
+
+def _refract_scalar(direction: np.ndarray, normal: np.ndarray, n_before: float, n_after: float) -> np.ndarray | None:
+    oriented = normal.copy()
+    cos_i = -float(np.dot(oriented, direction))
+    if cos_i < 0.0:
+        oriented *= -1.0
+        cos_i = -float(np.dot(oriented, direction))
+    eta = n_before / n_after
+    k = 1.0 - eta * eta * (1.0 - cos_i * cos_i)
+    if k < -1.0e-12:
+        return None
+    out = eta * direction + (eta * cos_i - float(np.sqrt(max(k, 0.0)))) * oriented
+    return _normalize_vec(out)
+
+
+def _reflect_scalar(direction: np.ndarray, normal: np.ndarray) -> np.ndarray:
+    return _normalize_vec(direction - 2.0 * float(np.dot(direction, normal)) * normal)
+
+
+def _thin_lens_transform_scalar(local_point: np.ndarray, local_dir: np.ndarray, focal_length_mm: float) -> np.ndarray:
+    dx = local_dir[0]
+    if abs(dx) <= 1.0e-10:
+        return np.zeros(3, dtype=float)
+    sign = 1.0 if dx >= 0.0 else -1.0
+    return _normalize_vec(
+        np.array(
+            [
+                sign,
+                sign * (local_dir[1] / dx - local_point[1] / focal_length_mm),
+                sign * (local_dir[2] / dx - local_point[2] / focal_length_mm),
+            ],
+            dtype=float,
+        )
+    )
+
+
 def _trace_raw(
     compiled: CompiledSystem,
     origins: np.ndarray,
@@ -291,6 +456,53 @@ def _trace_raw(
     )
 
 
+def _trace_to_surface_point(
+    compiled: CompiledSystem,
+    origin: np.ndarray,
+    direction: np.ndarray,
+    wavelength_nm: float,
+    surface_index: int,
+    centers_mm: np.ndarray,
+    rotations: np.ndarray,
+    configuration: dict[str, Any] | None = None,
+) -> np.ndarray | None:
+    current_origin = origin.astype(float, copy=True)
+    current_dir = _normalize_vec(direction.astype(float, copy=False))
+    current_n = compiled.material_index("AIR", wavelength_nm)
+
+    for idx, surface in enumerate(compiled.surfaces[: surface_index + 1]):
+        center = centers_mm[idx]
+        rotation = rotations[idx]
+        local_origin = (current_origin - center) @ rotation
+        local_dir = current_dir @ rotation
+        local_point = _intersect_surface_scalar(local_origin, local_dir, surface)
+        if local_point is None:
+            return None
+        if not _aperture_pass_scalar(local_point, surface, idx, compiled, configuration):
+            return None
+
+        point = local_point @ rotation.T + center
+        current_origin = point
+        if idx == surface_index:
+            return point
+
+        if surface.kind == "refractive":
+            normal = _surface_normal_scalar(local_point, surface)
+            n_after = compiled.material_index(surface.material_after, wavelength_nm)
+            out_dir_local = _refract_scalar(local_dir, normal, current_n, n_after)
+            if out_dir_local is None:
+                return None
+            current_dir = out_dir_local @ rotation.T
+            current_n = n_after
+        elif surface.kind == "mirror":
+            normal = _surface_normal_scalar(local_point, surface)
+            current_dir = _reflect_scalar(local_dir, normal) @ rotation.T
+        elif surface.kind == "thin_lens":
+            current_dir = _thin_lens_transform_scalar(local_point, local_dir, float(surface.focal_length_mm)) @ rotation.T
+
+    return None
+
+
 def _aim_origin_to_stop(
     compiled: CompiledSystem,
     launch_x: float,
@@ -314,23 +526,18 @@ def _aim_origin_to_stop(
     p = target[1:3] - direction[1:3] * ((stop_x - launch_x) / direction[0])
 
     def residual(param: np.ndarray) -> np.ndarray | None:
-        origin = np.array([[launch_x, param[0], param[1]]], dtype=float)
-        result = _trace_raw(
+        origin = np.array([launch_x, param[0], param[1]], dtype=float)
+        point = _trace_to_surface_point(
             compiled,
             origin,
-            direction.reshape(1, 3),
-            np.array([wavelength_nm], dtype=float),
-            stop_at_surface_index=stop_idx,
-            store_path=True,
+            direction,
+            wavelength_nm,
+            stop_idx,
             centers_mm=centers_mm,
             rotations=rotations,
             configuration=configuration,
         )
-        if result.status[0] != STATUS_ALIVE or not result.paths:
-            return None
-        if result.paths[0]:
-            point = np.array(result.paths[0][-1]["point_mm"], dtype=float)
-        else:
+        if point is None:
             return None
         return point[1:3] - target[1:3]
 
