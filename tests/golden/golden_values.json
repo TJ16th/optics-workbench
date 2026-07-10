@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "systems": {
+    "achromat_doublet_100mm": {
+      "paraxial_by_wavelength_nm": {
+        "486.13": {
+          "back_focal_length_mm": 93.3858577252041,
+          "effective_focal_length_mm": 100.04483759247398,
+          "f_number": 4.001793503698959,
+          "paraxial_image_position_mm": 108.8858577252041,
+          "principal_plane_2_mm": 8.841020132730122
+        },
+        "587.56": {
+          "back_focal_length_mm": 93.33699484632511,
+          "effective_focal_length_mm": 99.97412328039455,
+          "f_number": 3.9989649312157822,
+          "paraxial_image_position_mm": 108.83699484632511,
+          "principal_plane_2_mm": 8.862871565930561
+        },
+        "656.27": {
+          "back_focal_length_mm": 93.38546515623807,
+          "effective_focal_length_mm": 100.01585647436475,
+          "f_number": 4.00063425897459,
+          "paraxial_image_position_mm": 108.88546515623807,
+          "principal_plane_2_mm": 8.869608681873316
+        }
+      },
+      "spot_587_56_center_9_rays": {
+        "arrived_count": 9,
+        "blocked_count": 0,
+        "centroid_y_mm": 0.0,
+        "centroid_z_mm": 0.0,
+        "failed_count": 0,
+        "rms_radius_mm": 0.014646079358022505
+      }
+    },
+    "cassegrain_v2_3": {
+      "paraxial_by_wavelength_nm": {
+        "587.56": {
+          "back_focal_length_mm": 1049.9999999999998,
+          "effective_focal_length_mm": 2999.9999999999995,
+          "f_number": null,
+          "paraxial_image_position_mm": 399.9999999999998,
+          "principal_plane_2_mm": -2600.0
+        }
+      },
+      "spot_587_56_center_9_rays": {
+        "arrived_count": 9,
+        "blocked_count": 0,
+        "centroid_y_mm": 0.0,
+        "centroid_z_mm": 0.0,
+        "failed_count": 0,
+        "rms_radius_mm": 5.486111928940417e-08
+      }
+    }
+  }
+}
