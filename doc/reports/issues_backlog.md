@@ -187,7 +187,7 @@ v2.3/P2対応で不足した用語・エラーコードは `glossary.supplement.
 
 ## Issue: variable binding registryをCompiledSystemに保持する
 
-ラベル案: `engine`, `architecture`
+ラベル案: `engine`
 
 ### 背景
 
@@ -312,7 +312,7 @@ Phase 8でafocal、eye_reference、射出瞳、アイボックス、角度MTF等
 
 ## Issue: 最適化APIにmulti-configuration（複数zoom_position/フォーカス位置）評価を追加する
 
-ラベル案: `engine`, `architecture`
+ラベル案: `engine`
 
 ### 背景
 

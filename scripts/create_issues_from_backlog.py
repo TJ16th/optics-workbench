@@ -20,6 +20,7 @@ When run in GitHub Actions, pass ``GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}``.
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import json
 import re
 import subprocess
@@ -29,6 +30,14 @@ from pathlib import Path
 
 ISSUE_HEADER_RE = re.compile(r"^## Issue: (?P<title>.+?)(?:\s*\[issue: #(?P<num>\d+)\])?\s*$")
 LABEL_LINE_RE = re.compile(r"^ラベル案:\s*(?P<labels>.+)$")
+DEFAULT_LABEL_COLOR = "ededed"
+
+
+@dataclass
+class IssueRunResult:
+    created: list[tuple[str, str]]
+    skipped: list[tuple[str, str | None]]
+    failed: list[tuple[str, str]]
 
 
 def parse_backlog(text: str) -> list[dict]:
@@ -68,7 +77,7 @@ def parse_backlog(text: str) -> list[dict]:
 
 def issue_exists(repo: str, title: str) -> str | None:
     """Return an existing issue number if an all-state issue has the same title."""
-    result = subprocess.run(
+    result = run_gh(
         [
             "gh",
             "issue",
@@ -81,10 +90,7 @@ def issue_exists(repo: str, title: str) -> str | None:
             f'"{title}" in:title',
             "--json",
             "number,title",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
+        ]
     )
     for item in json.loads(result.stdout or "[]"):
         if item["title"].strip() == title:
@@ -92,12 +98,119 @@ def issue_exists(repo: str, title: str) -> str | None:
     return None
 
 
+def run_gh(command: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(command, capture_output=True, text=True, check=True)
+
+
+def list_labels(repo: str) -> set[str]:
+    result = run_gh(
+        [
+            "gh",
+            "label",
+            "list",
+            "--repo",
+            repo,
+            "--limit",
+            "1000",
+            "--json",
+            "name",
+        ]
+    )
+    return {item["name"] for item in json.loads(result.stdout or "[]")}
+
+
+def create_label(repo: str, label: str) -> None:
+    run_gh(
+        [
+            "gh",
+            "label",
+            "create",
+            label,
+            "--repo",
+            repo,
+            "--color",
+            DEFAULT_LABEL_COLOR,
+        ]
+    )
+
+
+def ensure_labels(repo: str, labels: list[str], known_labels: set[str]) -> None:
+    for label in labels:
+        if label in known_labels:
+            continue
+        try:
+            create_label(repo, label)
+        except subprocess.CalledProcessError:
+            # Another workflow run may have created the label after list_labels().
+            known_labels.update(list_labels(repo))
+            if label not in known_labels:
+                raise
+        else:
+            known_labels.add(label)
+
+
 def create_issue(repo: str, title: str, body: str, labels: list[str]) -> str:
     command = ["gh", "issue", "create", "--repo", repo, "--title", title, "--body", body]
     for label in labels:
         command += ["--label", label]
-    result = subprocess.run(command, capture_output=True, text=True, check=True)
-    return result.stdout.strip().splitlines()[-1]
+    result = run_gh(command)
+    output_lines = result.stdout.strip().splitlines()
+    if not output_lines:
+        raise RuntimeError("gh issue create returned no output")
+    return output_lines[-1]
+
+
+def command_error_message(exc: BaseException) -> str:
+    if isinstance(exc, subprocess.CalledProcessError):
+        detail = (exc.stderr or exc.stdout or str(exc)).strip()
+        return detail or str(exc)
+    return str(exc)
+
+
+def process_issues(repo: str, issues: list[dict], dry_run: bool) -> IssueRunResult:
+    result = IssueRunResult(created=[], skipped=[], failed=[])
+    known_labels = set() if dry_run else list_labels(repo)
+
+    for item in issues:
+        if item["already_created"]:
+            result.skipped.append((item["title"], item["issue_number"]))
+            print(f"SKIP (already annotated, #{item['issue_number']}): {item['title']}")
+            continue
+        if dry_run:
+            print(f"[dry-run] would create: {item['title']} (labels: {item['labels']})")
+            result.created.append((item["title"], "DRYRUN"))
+            continue
+
+        try:
+            duplicate = issue_exists(repo, item["title"])
+            if duplicate:
+                print(f"SKIP (duplicate found, #{duplicate}): {item['title']}")
+                result.skipped.append((item["title"], duplicate))
+                continue
+            ensure_labels(repo, item["labels"], known_labels)
+            url = create_issue(repo, item["title"], item["body"], item["labels"])
+        except (subprocess.CalledProcessError, json.JSONDecodeError, RuntimeError) as exc:
+            message = command_error_message(exc)
+            print(f"FAILED: {item['title']} -> {message}", file=sys.stderr)
+            result.failed.append((item["title"], message))
+            continue
+
+        print(f"CREATED: {item['title']} -> {url}")
+        result.created.append((item["title"], url))
+
+    return result
+
+
+def annotate_created_issues(text: str, created: list[tuple[str, str]]) -> str:
+    new_text = text
+    for title, url in created:
+        number = url.rstrip("/").rsplit("/", 1)[-1]
+        new_text = new_text.replace(
+            f"## Issue: {title}",
+            f"## Issue: {title} [issue: #{number}]",
+            1,
+        )
+    return new_text
 
 
 def main() -> int:
@@ -118,51 +231,31 @@ def main() -> int:
         print("No '## Issue: ...' entries found.")
         return 0
 
-    created: list[tuple[str, str]] = []
-    skipped: list[tuple[str, str | None]] = []
     pending = [issue for issue in issues if not issue["already_created"]]
 
     print(f"Parsed issues: {len(issues)}")
     print(f"Pending issues: {len(pending)}")
 
-    for item in issues:
-        if item["already_created"]:
-            skipped.append((item["title"], item["issue_number"]))
-            print(f"SKIP (already annotated, #{item['issue_number']}): {item['title']}")
-            continue
-        if args.dry_run:
-            print(f"[dry-run] would create: {item['title']} (labels: {item['labels']})")
-            created.append((item["title"], "DRYRUN"))
-            continue
-        duplicate = issue_exists(args.repo, item["title"])
-        if duplicate:
-            print(f"SKIP (duplicate found, #{duplicate}): {item['title']}")
-            skipped.append((item["title"], duplicate))
-            continue
-        url = create_issue(args.repo, item["title"], item["body"], item["labels"])
-        print(f"CREATED: {item['title']} -> {url}")
-        created.append((item["title"], url))
+    result = process_issues(args.repo, issues, args.dry_run)
 
     print("\n=== Summary ===")
-    print(f"created: {len(created)}, skipped(existing): {len(skipped)}")
-    for title, url in created:
+    print(
+        f"created: {len(result.created)}, "
+        f"skipped(existing): {len(result.skipped)}, failed: {len(result.failed)}"
+    )
+    for title, url in result.created:
         print(f"  + {title}: {url}")
-    for title, number in skipped:
+    for title, number in result.skipped:
         print(f"  = {title}: #{number}")
+    for title, message in result.failed:
+        print(f"  ! {title}: {message}")
 
-    if args.annotate and created and not args.dry_run:
-        new_text = text
-        for title, url in created:
-            number = url.rstrip("/").rsplit("/", 1)[-1]
-            new_text = new_text.replace(
-                f"## Issue: {title}",
-                f"## Issue: {title} [issue: #{number}]",
-                1,
-            )
+    if args.annotate and result.created and not args.dry_run:
+        new_text = annotate_created_issues(text, result.created)
         args.file.write_text(new_text, encoding="utf-8")
         print(f"\nAnnotated {args.file} with created issue numbers.")
 
-    return 0
+    return 1 if result.failed else 0
 
 
 if __name__ == "__main__":
