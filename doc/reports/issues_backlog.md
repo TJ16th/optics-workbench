@@ -327,3 +327,60 @@ Phase 8でafocal、eye_reference、射出瞳、アイボックス、角度MTF等
 ### 受け入れ条件
 
 - エンジン仕様への追記案が作成される。
+
+## Issue: 有限距離物体のWorkbench UI対応
+
+ラベル案: `ui`, `engine`
+
+### 背景
+
+エンジン仕様5.2では `object_points` / `position_mm` による有限距離物体点が定義されているが、現行Workbenchの `AnalysisField` とfield editorは `type: angular` の無限遠field角だけを扱う。P001-P007のUIプリセットもすべて角度fieldで評価されるため、有限距離物体の追跡をUIから試す入口がない。
+
+### 対応案
+
+- field editorに有限距離物体点モードを追加し、物点IDと `position_mm` を入力できるようにする。
+- API送信前に、エンジンが対応する有限距離field形式へ正規化する。
+- 未対応の解析では明示的にdisabledまたは警告表示にする。
+
+### 受け入れ条件
+
+- UIから有限距離物体点を定義し、preview/spot相当の追跡で利用できる。
+- angular fieldとfinite object fieldの違いが条件表示・snapshotに保存される。
+
+## Issue: field角とセンサーサイズ/EFLの関係をUIで可視化する
+
+ラベル案: `ui`, `docs`
+
+### 背景
+
+現行UIのfield editorは `theta_y_deg` / `theta_z_deg` の直接入力であり、センサーサイズや近軸EFLから自動計算される画角ではない。UI仕様15章では `sensor_paraxial` / `sensor_reverse_trace` 方針が定義されているが、Workbench上ではユーザーが指定したfield角と、センサー範囲・EFL・像高 `h = f tan(theta)` の関係を十分に確認できない。
+
+### 対応案
+
+- field editorまたは解析条件パネルに、近軸EFL由来の予想像高とセンサー内外判定を表示する。
+- 将来の `field_source_policy` 実装では `object_angle` と `sensor_paraxial` を切り替え可能にする。
+- snapshot条件にもfield sourceを保持する。
+
+### 受け入れ条件
+
+- 現在のfield角がセンサー半幅/半高に対してどの程度の像高になるかUI上で確認できる。
+- 角度直接指定とセンサー由来fieldの違いがユーザーに明確に示される。
+
+## Issue: OIS群シフト時の有効径自動評価を高度化する
+
+ラベル案: `engine`, `ui`
+
+### 背景
+
+R9-13では、Workbench UIに±5 mmのシフト上限明示と、対象群の最小有効径・絞り半径・シフト量から見る簡易ケラレ警告を追加した。ただし実際のOIS設計では、前後面の有効径、field、瞳位置、群シフト状態ごとの非対称光束を考慮して有効径を決める必要がある。
+
+### 対応案
+
+- decenter状態の代表field/瞳サンプルに対して、面ごとの必要有効径と余裕を計算するエンジン解析を追加する。
+- UIでは群ごとの最大シフト量と、面ごとの不足余裕を一覧表示する。
+- 現行の簡易警告は高速プレビュー用として残し、詳細解析結果で上書きできるようにする。
+
+### 受け入れ条件
+
+- OIS群を最大シフトさせた状態で、面ごとの有効径不足を定量的に確認できる。
+- field/波長/絞り条件を変えた場合に警告が更新される。

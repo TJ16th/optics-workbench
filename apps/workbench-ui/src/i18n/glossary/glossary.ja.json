@@ -348,7 +348,7 @@
     "longitudinal_aberration": {
       "label": "縦収差",
       "en_term": "Longitudinal Aberration",
-      "short": "瞳高さごとの焦点位置の光軸方向ずれ。球面収差の表示に使う。",
+      "short": "瞳高さごとの焦点位置の光軸方向ずれ。単色では主に球面収差を示し、複数波長の重ね描きでは軸上色収差も示す。",
       "lesson_mode": null
     },
     "spherical_aberration": {

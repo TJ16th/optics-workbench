@@ -348,7 +348,7 @@
     "longitudinal_aberration": {
       "label": "Longitudinal Aberration",
       "en_term": "Longitudinal Aberration",
-      "short": "Axial shift of focus versus pupil height; the classic display of spherical aberration.",
+      "short": "Axial focus shift versus pupil height. In one wavelength it mainly shows spherical aberration; overlaid wavelengths also show axial chromatic aberration.",
       "lesson_mode": null
     },
     "spherical_aberration": {

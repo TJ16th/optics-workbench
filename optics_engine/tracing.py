@@ -459,10 +459,17 @@ def trace_forward(
         }
     )
     if include_analysis_metadata:
+        from .paraxial import analyze_paraxial
+
+        paraxial = analyze_paraxial(compiled, configuration, wavelengths[0])
         result.metadata.update(
             {
                 "pupil_distribution": distribution,
                 "wavelengths_nm": [float(wavelength) for wavelength in wavelengths],
+                "paraxial": {
+                    "paraxial_image_position_mm": paraxial.paraxial_image_position_mm,
+                    "principal_plane_positions_mm": list(paraxial.principal_plane_positions_mm),
+                },
                 "evaluated_fields": [
                     {
                         "id": str(field.get("id", f"field_{idx + 1}")),

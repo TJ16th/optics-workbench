@@ -1303,12 +1303,16 @@ ray_sampling:
 | ray path | 光線経路 |
 | spot diagram | センサー上の光線分布 |
 | ray fan | 瞳座標に対する横収差 |
-| longitudinal aberration | 縦収差 |
+| longitudinal aberration | 縦収差（単色では球面収差・縦方向焦点ずれ、複数波長重ね描きでは軸上色収差を含む） |
 | chromatic aberration | 色収差 |
 | distortion | 歪曲 |
 | field curvature | 像面湾曲 |
 | astigmatism | 非点収差 |
 | M/S image surface | M像面・S像面 |
+
+longitudinal aberration は、単一波長で見る場合は瞳高に対する焦点位置の前後ずれ、すなわち主に球面収差の診断図である。
+複数波長を同じ図に重ねる場合は、波長ごとの焦点位置差も含まれるため、軸上色収差の読み取りにも使う。
+この仕様では、単色版と複数波長版を同じAPI/表示名で扱うが、凡例と波長条件で意味を区別する。
 | PSF | 点像分布 |
 | MTF | 空間周波数応答 |
 | relative illumination | 周辺光量 |

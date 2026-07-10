@@ -102,7 +102,7 @@ async function mockEngine(
             const isImage = surfaceIndex === registeredSurfaceIds.length - 1
             const bend = y * (1 - surfaceIndex / (last + 1))
             const point = [isImage ? 103.5 : surfaceIndex * 3, isImage ? index / 100 : bend, isImage ? -index / 100 : 0]
-            return { surface_id: surfaceId, point_mm: point, local_point_mm: [0, point[1], point[2]] }
+            return { surface_id: surfaceId, point_mm: point, local_point_mm: [0, point[1], point[2]], direction: [1, 0, 0] }
           })
         }),
         metadata: {
@@ -111,6 +111,7 @@ async function mockEngine(
           samples_per_field: samples,
           pupil_distribution: request.ray_sampling?.pupil_distribution,
           ray_aiming_mode: request.ray_sampling?.ray_aiming?.mode,
+          paraxial: { paraxial_image_position_mm: 100, principal_plane_positions_mm: [null, 50] },
           profiling: { trace_ms: 1.25, total_rays: total },
         },
       },
@@ -350,7 +351,9 @@ test('layout view uses trace path polylines when preview returns surface hits', 
   await page.getByText('P002 N-BK7 Biconvex Singlet 50mm Demo').click()
   await page.getByRole('button', { name: 'Run Preview' }).click()
 
-  await expectLayoutRayPath(page, 4)
+  await expectLayoutRayPath(page, 5)
+  await expect(page.getByTestId('layout-paraxial-image-marker')).toBeVisible()
+  await expect(page.getByTestId('layout-principal-plane-marker')).toHaveCount(1)
 })
 
 test('P003 slider preview keeps layout rays on education preview surface paths', async ({ page }) => {
@@ -371,7 +374,7 @@ test('P003 slider preview keeps layout rays on education preview surface paths',
   const dragPreview = previewRequests[previewRequests.length - 1] as { ray_sampling?: { samples_per_field?: number; ray_aiming?: { mode?: string } } }
   expect(dragPreview.ray_sampling?.samples_per_field).toBe(5)
   expect(dragPreview.ray_sampling?.ray_aiming?.mode).toBe('paraxial')
-  await expectLayoutRayPath(page, 5)
+  await expectLayoutRayPath(page, 6)
   const totalRays = Number(await page.locator('#layout-svg').getAttribute('data-total-rays'))
   const displayedRays = Number(await page.locator('#layout-svg').getAttribute('data-displayed-rays'))
   expect(totalRays).toBeGreaterThan(displayedRays)
@@ -498,7 +501,7 @@ test('P007 fast meniscus pair preset renders strong positive and negative curvat
   expect(negativeXs[0]).toBeLessThan(negativeXs[12])
 
   await page.getByRole('button', { name: 'Run Preview' }).click()
-  await expectLayoutRayPath(page, 6)
+  await expectLayoutRayPath(page, 7)
   expect(Number(await page.locator('#layout-svg').getAttribute('data-total-rays'))).toBe(81)
 })
 
@@ -702,6 +705,14 @@ test('decenter tilt sliders send configuration and expose evaluated symmetric fi
   await expect(page.getByTestId('evaluated-fields')).toContainText('field_y-10_z0')
   await expect(page.getByTestId('evaluated-fields')).toContainText('field_y10_z0')
   await expect(page.getByTestId('analysis-dirty-status')).toContainText('clean')
+
+  await page.locator('#shift-y-slider').evaluate((node) => {
+    const input = node as HTMLInputElement
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(input, '4.5')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await expect(page.getByText('Possible vignetting')).toBeVisible()
 })
 
 test('P002 and P003 analysis charts render standard aberration panels without collapsed labels', async ({ page }) => {

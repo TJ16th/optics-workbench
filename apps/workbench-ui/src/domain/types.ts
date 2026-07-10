@@ -207,6 +207,10 @@ export type TraceResponse = {
     pupil_distribution?: string
     ray_aiming_mode?: string
     samples_per_field?: number
+    paraxial?: {
+      paraxial_image_position_mm?: number | null
+      principal_plane_positions_mm?: Array<number | null>
+    }
     profiling?: Record<string, number | boolean | null>
     [key: string]: unknown
   }

@@ -141,6 +141,7 @@ const wavelengthPresets: Array<{ id: string; label: string; wavelength_nm: numbe
 
 const sliderPreviewDebounceMs = 70
 const sliderPreviewSamplesPerField = 5
+const decenterShiftLimitMm = 5
 
 const surfaceColumns: Array<{
   id: string
@@ -478,6 +479,11 @@ function apertureStopRadius(system: OpticalSystem) {
   return scalarNumber(stop.aperture?.outer_semi_diameter_mm) ?? scalarNumber(stop.aperture?.semi_diameter_mm) ?? scalarNumber(stop.semi_diameter_mm) ?? null
 }
 
+function apertureStopRadiusForLayout(system: OpticalSystem, configuration?: RuntimeConfiguration) {
+  const stop = system.surfaces[apertureStopIndex(system)]
+  return stop ? surfaceSemiDiameter(stop, configuration) : null
+}
+
 function surfaceSemiDiameter(surface: Surface, configuration?: RuntimeConfiguration) {
   if (surface.kind === 'sensor') {
     const sensorHeight = scalarNumber(surface.sensor?.height_mm)
@@ -493,6 +499,25 @@ function surfaceSemiDiameter(surface: Surface, configuration?: RuntimeConfigurat
     return scalarNumber(surface.aperture?.outer_semi_diameter_mm) ?? scalarNumber(surface.aperture?.semi_diameter_mm) ?? scalarNumber(surface.semi_diameter_mm) ?? 8
   }
   return scalarNumber(surface.semi_diameter_mm) ?? scalarNumber(surface.aperture?.semi_diameter_mm) ?? 8
+}
+
+function groupShiftClearance(system: OpticalSystem, draft: DecenterTiltDraft, configuration?: RuntimeConfiguration) {
+  const shift = Math.hypot(draft.shiftY, draft.shiftZ)
+  if (!draft.targetGroupId || shift <= 1.0e-9) return null
+  const group = (system.groups ?? []).find((item) => item.id === draft.targetGroupId)
+  if (!group) return null
+  const range = groupSurfaceRange(group, system.surfaces)
+  if (range.fromIndex < 0 || range.toIndex < range.fromIndex) return null
+  const groupSemiDiameters = system.surfaces
+    .slice(range.fromIndex, range.toIndex + 1)
+    .filter((surface) => surface.kind !== 'sensor' && surface.kind !== 'eye_reference')
+    .map((surface) => surfaceSemiDiameter(surface, configuration))
+    .filter((value) => Number.isFinite(value) && value > 0)
+  const groupRadius = Math.min(...groupSemiDiameters)
+  const stopRadius = apertureStopRadiusForLayout(system, configuration)
+  if (!Number.isFinite(groupRadius) || !Number.isFinite(stopRadius)) return null
+  const clearance = groupRadius - (stopRadius as number) - shift
+  return { shift, clearance }
 }
 
 function presetLabel(id: string, fallback: string, t: (key: string, options?: Record<string, unknown>) => string) {
@@ -664,12 +689,31 @@ function edgeThicknessMm(left: Surface, right: Surface, leftX: number, rightX: n
   return rightX + rightSag - (leftX + leftSag)
 }
 
-function rayPathD(path: NonNullable<TraceResponse['paths']>[number], xScale: (x: number) => number, centerY: number, yScale: number) {
+function offsetRayPoint(point: number[], direction: number[] | undefined, distanceMm: number, sign: -1 | 1) {
+  if (!direction || direction.length < 3 || !direction.every((value) => Number.isFinite(value))) return null
+  return [point[0] + sign * direction[0] * distanceMm, point[1] + sign * direction[1] * distanceMm, point[2] + sign * direction[2] * distanceMm]
+}
+
+function rayPathD(
+  path: NonNullable<TraceResponse['paths']>[number],
+  xScale: (x: number) => number,
+  centerY: number,
+  yScale: number,
+  objectExtensionMm: number,
+  imageExtensionMm: number,
+) {
   const points = path
     .map((entry) => entry.point_mm)
     .filter((point) => point.length >= 3 && point.every((value) => Number.isFinite(value)))
   if (points.length < 2) return null
-  return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${xScale(point[0])} ${centerY - point[1] * yScale}`).join(' ')
+  const firstDirection = path.find((entry) => entry.direction)?.direction
+  const lastDirection = [...path].reverse().find((entry) => entry.direction)?.direction
+  const extendedPoints = [...points]
+  const objectPoint = offsetRayPoint(points[0], firstDirection, objectExtensionMm, -1)
+  if (objectPoint) extendedPoints.unshift(objectPoint)
+  const imagePoint = imageExtensionMm > 0 ? offsetRayPoint(points[points.length - 1], lastDirection, imageExtensionMm, 1) : null
+  if (imagePoint) extendedPoints.push(imagePoint)
+  return extendedPoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${xScale(point[0])} ${centerY - point[1] * yScale}`).join(' ')
 }
 
 function wavelengthClass(wavelength: number | undefined) {
@@ -758,7 +802,26 @@ function LayoutView({
   const positions = systemPositions(system)
   const evalX = evaluationPlane?.evaluation_plane_x_mm
   const solvedX = evaluationPlane?.solved_evaluation_plane_x_mm
-  const xs = [...positions.map((row) => row.x), ...(Number.isFinite(evalX) ? [evalX as number] : []), ...(Number.isFinite(solvedX) ? [solvedX as number] : [])]
+  const apertureStopId = system.surfaces.find((surface) => surface.kind === 'aperture_stop')?.id
+  const tracePaths = layoutRayItems(trace, apertureStopId)
+  const baseXs = positions.map((row) => row.x)
+  const baseMinX = Math.min(...baseXs, 0)
+  const baseMaxX = Math.max(...baseXs, 1)
+  const baseSpan = Math.max(1, baseMaxX - baseMinX)
+  const objectExtensionMm = Math.max(8, baseSpan * 0.2)
+  const hasSensor = system.surfaces.some((surface) => surface.kind === 'sensor')
+  const paraxial = trace?.metadata.paraxial
+  const paraxialImageX = paraxial?.paraxial_image_position_mm
+  const principalPlaneXs = paraxial?.principal_plane_positions_mm ?? []
+  const xs = [
+    ...baseXs,
+    baseMinX - objectExtensionMm,
+    ...(!hasSensor ? [baseMaxX + objectExtensionMm] : []),
+    ...(Number.isFinite(evalX) ? [evalX as number] : []),
+    ...(Number.isFinite(solvedX) ? [solvedX as number] : []),
+    ...(Number.isFinite(paraxialImageX) ? [paraxialImageX as number] : []),
+    ...principalPlaneXs.filter((x): x is number => Number.isFinite(x)),
+  ]
   const minX = Math.min(...xs, 0)
   const maxX = Math.max(...xs, 1)
   const span = Math.max(1, maxX - minX)
@@ -773,8 +836,6 @@ function LayoutView({
     ?.map((y, index) => ({ y, z: trace.sensor_z_mm[index], status: trace.status[index] }))
     .filter((point) => Number.isFinite(point.y) && point.status === 'alive')
     .slice(0, 24)
-  const apertureStopId = system.surfaces.find((surface) => surface.kind === 'aperture_stop')?.id
-  const tracePaths = layoutRayItems(trace, apertureStopId)
   const surfaceViews = positions.map(({ surface, x }, index) => {
     const semiD = surfaceSemiDiameter(surface, configuration)
     const h = apertureY(semiD)
@@ -827,6 +888,7 @@ function LayoutView({
       aria-label={t('layoutView.optical_layout_aria')}
       data-total-rays={trace?.status.length ?? 0}
       data-displayed-rays={tracePaths.length || tracePoints?.length || 0}
+      data-paraxial-image-x-mm={Number.isFinite(paraxialImageX) ? paraxialImageX : undefined}
     >
       <title>{t('layoutView.optical_layout')}</title>
       <line x1="24" x2="696" y1={centerY} y2={centerY} className="axis-line" />
@@ -873,9 +935,27 @@ function LayoutView({
           </text>
         </g>
       ) : null}
+      {Number.isFinite(paraxialImageX) ? (
+        <g data-testid="layout-paraxial-image-marker">
+          <line x1={xScale(paraxialImageX as number)} x2={xScale(paraxialImageX as number)} y1={centerY - 66} y2={centerY + 66} className="focal-marker-line" />
+          <text x={xScale(paraxialImageX as number) + 6} y={centerY - 72} className="surface-label">
+            F'
+          </text>
+        </g>
+      ) : null}
+      {principalPlaneXs.map((x, index) =>
+        Number.isFinite(x) ? (
+          <g key={`principal-${index}`} data-testid="layout-principal-plane-marker">
+            <line x1={xScale(x as number)} x2={xScale(x as number)} y1={centerY - 50} y2={centerY + 50} className="principal-plane-line" />
+            <text x={xScale(x as number) + 6} y={centerY + 66 + index * 12} className="surface-label">
+              H{index + 1}
+            </text>
+          </g>
+        ) : null,
+      )}
       {tracePaths?.length
         ? tracePaths.map(({ path, className, index, fieldIndex, wavelengthIndex, sampleIndex, sampleRole, stopY }) => {
-            const d = rayPathD(path, xScale, centerY, rayYScale)
+            const d = rayPathD(path, xScale, centerY, rayYScale, objectExtensionMm, hasSensor ? 0 : objectExtensionMm)
             return d ? (
               <path
                 key={index}
@@ -1227,6 +1307,7 @@ function DecenterTiltPanel({
     decenters: runtimeConfiguration.decenters ?? [],
     tilts: runtimeConfiguration.tilts ?? [],
   })
+  const clearance = groupShiftClearance(system, draft, runtimeConfiguration)
   return (
     <section className="panel group-motion-panel">
       <div className="condition-heading">
@@ -1241,12 +1322,24 @@ function DecenterTiltPanel({
         ))}
       </Select>
       <div className="slider-grid">
-        <SliderControl id="shift-y-slider" label={t('settings:settings.shift_y_mm')} value={draft.shiftY} min={-5} max={5} step={0.1} unit={t('units:units.mm')} onChange={(value) => onUpdateDraft({ shiftY: value })} onCommit={onCommit} />
-        <SliderControl id="shift-z-slider" label={t('settings:settings.shift_z_mm')} value={draft.shiftZ} min={-5} max={5} step={0.1} unit={t('units:units.mm')} onChange={(value) => onUpdateDraft({ shiftZ: value })} onCommit={onCommit} />
+        <SliderControl id="shift-y-slider" label={t('settings:settings.shift_y_mm')} value={draft.shiftY} min={-decenterShiftLimitMm} max={decenterShiftLimitMm} step={0.1} unit={t('units:units.mm')} onChange={(value) => onUpdateDraft({ shiftY: value })} onCommit={onCommit} />
+        <SliderControl id="shift-z-slider" label={t('settings:settings.shift_z_mm')} value={draft.shiftZ} min={-decenterShiftLimitMm} max={decenterShiftLimitMm} step={0.1} unit={t('units:units.mm')} onChange={(value) => onUpdateDraft({ shiftZ: value })} onCommit={onCommit} />
         <SliderControl id="tilt-y-slider" label={t('settings:settings.tilt_y_deg')} value={draft.tiltY} min={-5} max={5} step={0.1} unit={t('units:units.deg')} onChange={(value) => onUpdateDraft({ tiltY: value })} onCommit={onCommit} />
         <SliderControl id="tilt-z-slider" label={t('settings:settings.tilt_z_deg')} value={draft.tiltZ} min={-5} max={5} step={0.1} unit={t('units:units.deg')} onChange={(value) => onUpdateDraft({ tiltZ: value })} onCommit={onCommit} />
         <SliderControl id="roll-x-slider" label={t('settings:settings.roll_x_deg')} value={draft.rollX} min={-5} max={5} step={0.1} unit={t('units:units.deg')} onChange={(value) => onUpdateDraft({ rollX: value })} onCommit={onCommit} />
       </div>
+      <p className="muted">{t('settings:settings.decenter_shift_limit', { limit: decenterShiftLimitMm })}</p>
+      {clearance && clearance.clearance < 0 ? (
+        <InlineNotification
+          lowContrast
+          kind="warning"
+          title={t('settings:settings.decenter_vignetting_warning')}
+          subtitle={t('settings:settings.decenter_vignetting_warning_detail', {
+            shift: formatFixed(clearance.shift, 2),
+            margin: formatFixed(clearance.clearance, 2),
+          })}
+        />
+      ) : null}
       <Select
         id="rotation-reference"
         labelText={t('settings:settings.rotation_center')}

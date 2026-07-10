@@ -548,6 +548,18 @@ body {
   stroke-dasharray: 3 4;
 }
 
+.focal-marker-line {
+  stroke: #24a148;
+  stroke-width: 1.6;
+  stroke-dasharray: 4 3;
+}
+
+.principal-plane-line {
+  stroke: #8a3ffc;
+  stroke-width: 1.2;
+  stroke-dasharray: 2 3;
+}
+
 .stop-dot {
   fill: var(--ow-amber);
 }

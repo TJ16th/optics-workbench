@@ -86,6 +86,8 @@ def test_sensor_intersection_and_spot_for_thin_lens():
     assert np.all(trace.status == "alive")
     assert np.nanmax(np.abs(trace.sensor_y_mm)) < 1e-9
     assert np.nanmax(np.abs(trace.sensor_z_mm)) < 1e-9
+    assert trace.metadata["paraxial"]["paraxial_image_position_mm"] == pytest_approx(100.0)
+    assert trace.metadata["paraxial"]["principal_plane_positions_mm"][1] == pytest_approx(0.0)
     spot = analyze_spot(trace)
     assert spot.arrived_count == 9
     assert spot.rms_radius_mm < 1e-9
