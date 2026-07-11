@@ -537,3 +537,23 @@ R26の確認で、P002のLayout View代表光線（lower / center / upper）はs
 
 - `samples_per_field`変更時の代表光線の見え方がsampling由来であることをUI上で理解できる。
 - 表示文言はi18n ja/en両方に追加され、`npm run i18n:coverage`が通る。
+
+## Issue: P005/P006のpreview/traceでNaN JSON serializationエラーが発生する
+
+ラベル案: `engine`, `testing`
+
+### 背景
+
+R29の全プリセット有効径見直し中、P005（coaxial Cassegrain）とP006（afocal telescope）で`/v1/education/preview`および`/v1/trace/forward`が`400`を返した。`ray_aiming.mode`を`full` / `paraxial` / `off`に変えても、いずれも`Out of range float values are not JSON compliant: nan`となり、P005/P006の実光線ベース評価を継続できなかった。
+
+### 対応案
+
+- P005/P006のtrace resultまたはmetadataに`NaN`が混入する経路を特定する。
+- APIレスポンス直前で非有限値を構造化エラーまたは`null`へ正規化する方針を決め、エンジン仕様の非有限値扱いと整合させる。
+- P005/P006に対する`/v1/education/preview`および`/v1/trace/forward`の回帰テストを追加する。
+
+### 受け入れ条件
+
+- P005/P006のpreview/traceがJSON serialization errorで失敗しない。
+- 非有限値が発生する場合も、`severity / code / params / message_en`の構造化エラーまたは仕様で定めた正規化値として返る。
+- R29のような全プリセット横断評価で、P001〜P007を同一手順で評価できる。
