@@ -740,12 +740,13 @@ def _layout_baseline_rays(
     configuration: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
     stop_idx = compiled.aperture_stop_index
-    if stop_idx is None:
-        return []
+    # A system without an explicit stop still needs stable layout rays.  Its
+    # first surface is also the launch reference used by the regular trace.
+    reference_idx = 0 if stop_idx is None else stop_idx
     samples = np.array([[0.0, 0.0], [-1.0, 0.0], [1.0, 0.0]], dtype=float)
     roles = ["chief", "marginal_lower", "marginal_upper"]
     targets = _target_points_for_stop_with_layout(compiled, samples, centers_mm, rotations, configuration)
-    stop_id = compiled.surfaces[stop_idx].id
+    stop_id = compiled.surfaces[reference_idx].id
     rows: list[dict[str, Any]] = []
     for field_index, field in enumerate(fields):
         direction = field_direction(float(field.get("theta_y_deg", 0.0)), float(field.get("theta_z_deg", 0.0)))

@@ -803,7 +803,7 @@ function layoutBaselineRayItems(trace?: TraceResponse) {
       index,
       className: `ray-line ray-baseline ray-baseline-${ray.role} ${wavelengthClass(ray.wavelength_nm)}`,
     }))
-    .filter((ray) => (ray.status === 'alive' || ray.status === 'aiming_failed') && ray.path.length >= 2)
+    .filter((ray) => (ray.status === 'alive' || ray.status === 'aiming_failed' || ray.status === 'blocked') && ray.path.length >= 2)
 }
 
 function LayoutView({

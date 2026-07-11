@@ -103,6 +103,39 @@ def test_p005_p006_trace_and_preview_support_all_aiming_modes_without_nan(preset
         assert all(value is None or math.isfinite(value) for value in body["sensor_z_mm"])
 
 
+@pytest.mark.parametrize(
+    ("preset_id", "center_path"),
+    [
+        ("P005", ["M1", "M2", "IMG"]),
+        ("P006", ["STOP", "OBJ", "EYEPIECE", "EYE"]),
+    ],
+)
+def test_p005_p006_preview_returns_visible_baseline_paths(preset_id: str, center_path: list[str]):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    from optics_engine.api.main import app
+
+    preset = next(item for item in _shipped_presets() if item["id"] == preset_id)
+    client = TestClient(app)
+    registered = client.post("/v1/systems/register", json=preset["system"])
+    assert registered.status_code == 200, f"{preset_id} register: {registered.text}"
+    payload = _trace_payload(registered.json()["system_id"], preset["system"]["wavelengths_nm"]["samples"], "full")
+    payload["fields"] = [
+        {"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0},
+        {"id": "edge-y", "type": "angular", "theta_y_deg": 10.0, "theta_z_deg": 0.0},
+        {"id": "edge-z", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 10.0},
+    ]
+    payload["options"]["include_layout_baseline_rays"] = True
+    response = client.post("/v1/education/preview", json=payload)
+    assert response.status_code == 200, f"{preset_id} preview: {response.text}"
+    baseline = response.json()["metadata"]["layout_baseline_rays"]
+    assert len(baseline) == 9
+    center = [ray for ray in baseline if ray["field_id"] == "center"]
+    assert {ray["role"] for ray in center} == {"chief", "marginal_lower", "marginal_upper"}
+    assert all([hit["surface_id"] for hit in ray["path"]] == center_path for ray in center)
+    _assert_json_finite_or_null(baseline)
+
+
 def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_results():
     expected_statuses = {
         "P001": {"alive": 27},

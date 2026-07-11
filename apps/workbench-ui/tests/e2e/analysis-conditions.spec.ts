@@ -428,6 +428,24 @@ test('layout view legend explains ray, wavelength, element, and marker styles', 
   await expect(legend).toContainText('H1/H2 principal plane')
   await expect(legend).toContainText('STOP')
   await expect(legend).toContainText('IMG')
+  await expect(legend.locator('.legend-line.ray-f')).toHaveCSS('border-top-color', 'rgb(15, 98, 254)')
+  await expect(legend.locator('.legend-line.ray-d')).toHaveCSS('border-top-color', 'rgb(36, 161, 72)')
+  await expect(legend.locator('.legend-line.ray-c')).toHaveCSS('border-top-color', 'rgb(218, 30, 40)')
+})
+
+test('P005 preview renders baseline paths through both mirrors and the image plane', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
+  await page.getByText('P005 Coaxial Cassegrain Telescope Demo').click()
+  await page.getByRole('button', { name: 'Run Preview' }).click()
+  const baseline = page.locator('#layout-svg path[data-ray-layer="baseline"]')
+  await expect(baseline).toHaveCount(9)
+  await expect(baseline.first()).toHaveCSS('stroke-width', '2.1px')
+  const paths = await baseline.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('d') ?? ''))
+  expect(paths.every((path) => (path.match(/L/g) ?? []).length >= 2)).toBe(true)
+  const lengths = await baseline.evaluateAll((nodes) => nodes.map((node) => (node as SVGPathElement).getTotalLength()))
+  expect(lengths.every((length) => length > 0)).toBe(true)
 })
 
 test('P003 slider preview keeps layout rays on education preview surface paths', async ({ page }) => {

@@ -742,6 +742,18 @@ body {
   stroke: #da1e28;
 }
 
+.legend-line.ray-f {
+  border-color: #0f62fe;
+}
+
+.legend-line.ray-d {
+  border-color: #24a148;
+}
+
+.legend-line.ray-c {
+  border-color: #da1e28;
+}
+
 .spot-strip {
   width: 100%;
   max-width: 260px;
