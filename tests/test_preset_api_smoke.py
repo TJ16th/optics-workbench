@@ -11,7 +11,7 @@ import pytest
 import numpy as np
 
 from optics_engine import analyze_paraxial, compile_system, load_system, trace_forward
-from optics_engine.core import reflect, surface_normals_for_surface
+from optics_engine.core import asphere_sag_and_slope, reflect, surface_normals_for_surface
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -231,6 +231,9 @@ def test_p005_mirror_reflections_match_the_vector_reflection_law():
             surface_index = compiled.surface_index(surface_id)
             surface = compiled.surfaces[surface_index]
             point = np.asarray([path[path_index]["point_mm"]], dtype=float)
+            radial_height = np.hypot(point[:, 1], point[:, 2])
+            sag, _ = asphere_sag_and_slope(radial_height, surface.radius_mm, surface.conic, surface.asphere_coefficients)
+            assert point[0, 0] == pytest.approx(compiled.surface_positions_mm[surface_index] + sag[0], abs=1.0e-9)
             incoming = np.asarray(path[path_index]["direction"], dtype=float)
             outgoing = np.asarray(path[path_index + 1]["direction"], dtype=float)
             normal = surface_normals_for_surface(point, compiled.surface_positions_mm[surface_index], surface)

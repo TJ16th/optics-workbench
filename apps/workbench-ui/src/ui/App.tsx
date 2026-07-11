@@ -682,9 +682,7 @@ function surfaceProfilePoints(
     const rayHeightMm = fromHeightMm + t * (toHeightMm - fromHeightMm)
     const normalizedHeight = rayHeightMm / semiDiameterMm
     const pixelOffset = normalizedHeight * h
-    // Long-radius mirrors are nearly flat at layout scale; amplify only their
-    // displayed sag so the reflecting curvature and sign remain legible.
-    const sag = surfaceSagMm(surface, rayHeightMm) * (surface.kind === 'mirror' ? 8 : 1)
+    const sag = surfaceSagMm(surface, rayHeightMm)
     const tiltedX = normalizedHeight * tiltDx
     return { x: xScale(vertexX + sag) + tiltedX, y: sy + pixelOffset }
   })
