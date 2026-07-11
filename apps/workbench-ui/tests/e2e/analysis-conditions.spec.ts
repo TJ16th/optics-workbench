@@ -664,6 +664,10 @@ test('layout view scales stop, sensor, and eye symbols from physical dimensions'
   const p005M2Scale = await layoutSurfaceScale(page, 'M2')
   expect(p005M2Scale).toMatchObject({ semiDiameterMm: 40, rawHalfHeightPx: 160, clamped: true })
   expect(p005M2Scale.visualHalfHeightPx).toBeCloseTo(36.8)
+  const p005Stop = page.locator('#layout-svg [data-surface-id="STOP"]')
+  expect(Number(await p005Stop.getAttribute('data-annulus-inner-radius-px'))).toBeCloseTo(p005M2Scale.visualHalfHeightPx)
+  expect(Number(await p005Stop.getAttribute('data-annulus-outer-radius-px'))).toBeCloseTo(92)
+  expect(Number(await p005Stop.locator('.stop-annulus-marker').getAttribute('r'))).toBeCloseTo(p005M2Scale.visualHalfHeightPx)
   expect(await layoutSurfaceScale(page, 'IMG')).toMatchObject({ semiDiameterMm: 15, visualHalfHeightPx: 20, rawHalfHeightPx: 60, clamped: true })
 
   await selectPresetOption(page, 'P006 Keplerian Afocal Telescope Demo')

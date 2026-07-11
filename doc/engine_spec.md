@@ -1161,6 +1161,8 @@ sensor / eye_reference
 
 面ローカル座標で sqrt(y^2 + z^2) > semi_diameter_mm の場合、光線を遮光する。annulus開口では inner/outer の両判定を行う。
 
+面自身の `semi_diameter_mm` による有効径判定は外径側の遮光のみを扱う。内径側（中央）の遮光が必要な場合は annulus 形状の絞り面を別途配置する（ミラー等の後続面自身から内径遮蔽を導出する拡張は未実装であり、Issueバックログで検討中）。
+
 ### 17.4 ミラーを含む系の追跡【v2新設】
 
 * ミラー面通過時に propagation_sign を反転する

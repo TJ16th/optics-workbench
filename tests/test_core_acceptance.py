@@ -134,6 +134,10 @@ def test_circle_and_annulus_aperture_checks():
     assert aperture_pass(points, circle).tolist() == [True, True, False]
     assert aperture_pass(points, annulus).tolist() == [False, True, False]
 
+    mirror = Surface(id="M", kind="mirror", semi_diameter_mm=4.0)
+    mirror_points = np.array([[0.0, 0.0, 0.0], [0.0, 3.0, 0.0], [0.0, 5.0, 0.0]])
+    assert aperture_pass(mirror_points, mirror).tolist() == [True, True, False]
+
 
 def test_refractive_single_lens_paraxial_matches_lensmaker_thin_limit():
     system = load_system(

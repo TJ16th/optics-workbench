@@ -971,6 +971,7 @@ function LayoutView({
         const className = `surface-line surface-${surface.kind}${transform.active ? ' surface-configured' : ''}${cementedBoundary ? ' surface-cemented' : ''}`
         const labelY = sy + h + 22 + (labelRows.get(surface.id) ?? 0) * 13
         const isAnnulusStop = surface.kind === 'aperture_stop' && Boolean(annulusInnerSemiD)
+        const annulusInnerRadiusPx = isAnnulusStop && semiD > 0 ? h * (annulusInnerSemiD as number) / semiD : undefined
         return (
           <g
             key={surface.id}
@@ -985,6 +986,8 @@ function LayoutView({
             data-raw-half-height-px={rawH}
             data-scale-clamped={Math.abs(h - rawH) > 1.0e-9 ? 'true' : 'false'}
             data-annulus-inner-semi-diameter-mm={annulusInnerSemiD}
+            data-annulus-inner-radius-px={annulusInnerRadiusPx}
+            data-annulus-outer-radius-px={isAnnulusStop ? h : undefined}
           >
             {isAnnulusStop
               ? null
@@ -993,7 +996,7 @@ function LayoutView({
                 : <line x1={sx - tiltDx} x2={sx + tiltDx} y1={sy - h} y2={sy + h} className={className} />}
             {surface.kind === 'sensor' ? <rect x={sx - 3} y={sy - h} width="6" height={h * 2} className="sensor-plane" /> : null}
             {isAnnulusStop
-              ? <circle cx={sx} cy={sy} r={Math.max(4, Math.min(7, h * 0.12))} className="stop-annulus-marker" />
+              ? <circle cx={sx} cy={sy} r={annulusInnerRadiusPx} className="stop-annulus-marker" />
               : surface.kind === 'aperture_stop'
                 ? <circle cx={sx} cy={sy} r={Math.max(3, Math.min(6, h * 0.12))} className="stop-dot" />
                 : null}
