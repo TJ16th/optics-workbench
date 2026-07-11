@@ -39,3 +39,17 @@
 
 - `codex_p0_task6_kickoff.md` は作業対象外の未追跡active指示書として残した。
 - UI/エンジンプロセスの `/v1/meta build_info.git_commit` 確認は、R27コミット作成後に最終報告で実施結果を示す。
+
+## R27b build_info確認追記
+
+R27b確認タスクで、ローカルのエンジンAPIとUI開発サーバーを再起動し、`GET /v1/meta` の `build_info.git_commit` が確認時点のHEADと一致することを確認した。
+
+- 確認日時: 2026-07-11
+- 確認時点のHEAD: `99a28320e97a25c88caea90c475cf40b3d8c91c9` (`99a2832`)
+- `/v1/meta build_info.git_commit`: `99a2832`
+- `/v1/meta build_info.git_dirty`: `true`
+- UI到達確認: `http://127.0.0.1:5173/` が `200 OK`
+
+`git_dirty: true` は、確認時点で `doc/work_orders/active/codex_r27b_verify_build_info.md` が未追跡active指示書として存在したためであり、R27実装ファイルまたはP0 task6成果物の未コミット変更によるものではない。
+
+R27完了報告時に「`codex_p0_task6_kickoff.md` は作業対象外の未追跡active指示書として残した」と記載した点は、当時P0 task6がR27とは別タスクとして未着手だったことを示すもので、R27対象外という理解で正しい。その後、P0 task6は別コミット `99a2832` で完了済みである。
