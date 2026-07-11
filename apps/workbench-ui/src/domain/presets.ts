@@ -27,7 +27,7 @@ export const presets: Preset[] = [
     recommendedAnalysis: ['preview', 'spot', 'paraxial'],
     recommendedFields: [
       { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
-      { id: 'mid-y', type: 'angular', theta_y_deg: 12.813585, theta_z_deg: 0 },
+      { id: 'mid-y', type: 'angular', theta_y_deg: 12.813585, theta_z_deg: 0, preset_label: 'image_height_70pct' },
       { id: 'edge-y', type: 'angular', theta_y_deg: 18, theta_z_deg: 0 },
     ],
     system: {
@@ -65,7 +65,7 @@ export const presets: Preset[] = [
     recommendedAnalysis: ['preview', 'spot', 'chromatic'],
     recommendedFields: [
       { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
-      { id: 'mid-y', type: 'angular', theta_y_deg: 9.900092, theta_z_deg: 0 },
+      { id: 'mid-y', type: 'angular', theta_y_deg: 9.900092, theta_z_deg: 0, preset_label: 'image_height_70pct' },
       { id: 'edge-y', type: 'angular', theta_y_deg: 14, theta_z_deg: 0 },
     ],
     system: {
@@ -97,7 +97,7 @@ export const presets: Preset[] = [
     recommendedAnalysis: ['paraxial', 'preview'],
     recommendedFields: [
       { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
-      { id: 'mid-y', type: 'angular', theta_y_deg: 0.196001, theta_z_deg: 0 },
+      { id: 'mid-y', type: 'angular', theta_y_deg: 0.196001, theta_z_deg: 0, preset_label: 'image_height_70pct' },
       { id: 'edge-y', type: 'angular', theta_y_deg: 0.28, theta_z_deg: 0 },
     ],
     system: {
@@ -121,7 +121,7 @@ export const presets: Preset[] = [
     recommendedAnalysis: ['preview', 'ray_fan', 'mtf', 'distortion', 'field_curvature'],
     recommendedFields: [
       { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
-      { id: 'mid-y', type: 'angular', theta_y_deg: 7.036366, theta_z_deg: 0 },
+      { id: 'mid-y', type: 'angular', theta_y_deg: 7.036366, theta_z_deg: 0, preset_label: 'image_height_70pct' },
       { id: 'edge-y', type: 'angular', theta_y_deg: 10, theta_z_deg: 0 },
     ],
     system: {
@@ -198,7 +198,7 @@ export const presets: Preset[] = [
     recommendedAnalysis: ['preview', 'spot', 'ray_fan', 'paraxial'],
     recommendedFields: [
       { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
-      { id: 'mid-y', type: 'angular', theta_y_deg: 1.050122, theta_z_deg: 0 },
+      { id: 'mid-y', type: 'angular', theta_y_deg: 1.050122, theta_z_deg: 0, preset_label: 'image_height_70pct' },
       { id: 'edge-y', type: 'angular', theta_y_deg: 1.5, theta_z_deg: 0 },
     ],
     system: {

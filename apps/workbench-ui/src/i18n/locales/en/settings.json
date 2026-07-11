@@ -12,6 +12,7 @@
     "stale_results_detail": "Analysis conditions changed. Run preview again before comparing or saving results.",
     "fields": "Fields",
     "field_id": "Field ID",
+    "field_id_70pct": "70% Image Height Field ID",
     "theta_y_deg": "Theta Y (deg)",
     "theta_z_deg": "Theta Z (deg)",
     "field_angle_infinity_hint": "Theta Y and Theta Z specify directions to objects at infinity.",

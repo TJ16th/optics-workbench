@@ -90,6 +90,7 @@ export type AnalysisField = {
   type: 'angular'
   theta_y_deg: number
   theta_z_deg: number
+  preset_label?: 'image_height_70pct'
 }
 
 export type WavelengthSample = {

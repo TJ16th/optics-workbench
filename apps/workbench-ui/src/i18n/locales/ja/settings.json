@@ -12,6 +12,7 @@
     "stale_results_detail": "解析条件が変更されました。比較や保存の前にPreviewを再実行してください。",
     "fields": "Field",
     "field_id": "Field ID",
+    "field_id_70pct": "70%像高field ID",
     "theta_y_deg": "Theta Y (deg)",
     "theta_z_deg": "Theta Z (deg)",
     "field_angle_infinity_hint": "Theta Y / Theta Zは無限遠物点への方向角です。",

@@ -339,6 +339,8 @@ test('shipped preset selection resets fields to recommended values', async ({ pa
     await expect(page.locator('#field-2-id')).toHaveValue('edge-y')
     await expect(page.locator('#field-1-theta-y')).toHaveValue(middle)
     await expect(page.locator('#field-2-theta-y')).toHaveValue(edge)
+    const expectedMidLabel = presetName.includes('P006') ? 'Field ID' : '70% Image Height Field ID'
+    await expect(page.locator('label[for="field-1-id"]')).toHaveText(expectedMidLabel)
   }
 })
 

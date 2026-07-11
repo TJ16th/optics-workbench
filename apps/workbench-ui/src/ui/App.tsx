@@ -2133,7 +2133,7 @@ function AnalysisConditionPanel({
             <div className="condition-row field-row" key={`${field.id}-${index}`} data-testid="field-row">
               <TextInput
                 id={`field-${index}-id`}
-                labelText={t('settings:settings.field_id')}
+                labelText={field.preset_label === 'image_height_70pct' ? t('settings:settings.field_id_70pct') : t('settings:settings.field_id')}
                 value={field.id}
                 onChange={(event) => onUpdateField(index, { id: event.target.value })}
               />

@@ -188,3 +188,24 @@ def test_shipped_focal_preset_mid_fields_use_seventy_percent_image_height():
         assert center["theta_y_deg"] == pytest.approx(0.0)
         expected_midpoint = math.degrees(math.atan(0.7 * math.tan(math.radians(edge["theta_y_deg"]))))
         assert midpoint["theta_y_deg"] == pytest.approx(expected_midpoint, abs=1.0e-6)
+
+
+def test_seventy_percent_image_height_field_flows_through_preview_and_spot():
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    from optics_engine.api.main import app
+
+    preset = next(item for item in _shipped_presets() if item["id"] == "P001")
+    client = TestClient(app)
+    registered = client.post("/v1/systems/register", json=preset["system"])
+    assert registered.status_code == 200, registered.text
+    payload = _trace_payload(registered.json()["system_id"], preset["system"]["wavelengths_nm"]["samples"], "full")
+    payload["fields"] = preset["recommendedFields"]
+
+    preview = client.post("/v1/education/preview", json=payload)
+    assert preview.status_code == 200, preview.text
+    assert [field["id"] for field in preview.json()["metadata"]["evaluated_fields"]] == ["center", "mid-y", "edge-y"]
+
+    spot = client.post("/v1/analysis/spot", json=payload)
+    assert spot.status_code == 200, spot.text
+    assert spot.json()["arrived_count"] > 0
