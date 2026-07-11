@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Optics Engine Latency Harness</title>
+  <style>
+    :root { color-scheme: light; font-family: Arial, sans-serif; background: #f4f4f4; color: #161616; }
+    body { margin: 0; padding: 24px; }
+    main { max-width: 980px; margin: 0 auto; display: grid; gap: 16px; }
+    section { background: #fff; border: 1px solid #d0d0d0; padding: 16px; }
+    h1, h2 { margin: 0 0 12px; }
+    h1 { font-size: 22px; }
+    h2 { font-size: 16px; }
+    label { display: grid; gap: 6px; font-size: 13px; color: #525252; }
+    input[type="range"] { width: 100%; }
+    input[type="text"] { width: 100%; padding: 8px; border: 1px solid #8d8d8d; }
+    button { padding: 9px 14px; border: 0; background: #0f62fe; color: white; cursor: pointer; }
+    button.secondary { background: #393939; }
+    button:disabled { background: #a8a8a8; cursor: default; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 16px; }
+    .controls { display: grid; gap: 12px; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid #e0e0e0; padding: 8px 0; }
+    .row:first-child { border-top: 0; }
+    .value { font-weight: 700; }
+    .ok { color: #198038; }
+    .warn { color: #b28600; }
+    .bad { color: #da1e28; }
+    .mono { font-family: Consolas, monospace; font-size: 12px; }
+    .buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+<main>
+  <section>
+    <h1>Optics Engine Latency Harness</h1>
+    <p class="mono">Serve this file from an allowed dev origin, for example: python -m http.server 5175 -d benchmarks</p>
+    <label>API base
+      <input id="apiBase" type="text" value="http://127.0.0.1:8000">
+    </label>
+    <div class="buttons">
+      <button id="register">Register system</button>
+      <button id="runSweep" class="secondary">Run 10s continuous sweep</button>
+    </div>
+    <p id="status" class="mono">Idle.</p>
+  </section>
+
+  <section class="grid">
+    <div class="controls">
+      <h2>Interactive controls</h2>
+      <label>Iris radius mm <span id="irisLabel" class="value">8.00</span>
+        <input id="iris" type="range" min="2" max="10" step="0.05" value="8">
+      </label>
+      <label>Focus group shift_x mm <span id="focusLabel" class="value">0.00</span>
+        <input id="focus" type="range" min="-3" max="3" step="0.02" value="0">
+      </label>
+    </div>
+    <div>
+      <h2>Request shape</h2>
+      <div class="row"><span>Endpoint</span><span class="mono">POST /v1/education/preview</span></div>
+      <div class="row"><span>Fields</span><span class="value">3</span></div>
+      <div class="row"><span>Samples / field</span><span class="value">5</span></div>
+      <div class="row"><span>Wavelengths</span><span class="value">1</span></div>
+      <div class="row"><span>Ray aiming</span><span class="value">paraxial</span></div>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div>
+      <h2>Live latency</h2>
+      <div class="row"><span>Completed requests</span><span id="completed" class="value">0</span></div>
+      <div class="row"><span>End-to-end latency ms</span><span id="latency" class="value">-</span></div>
+      <div class="row"><span>Effective fps</span><span id="fps" class="value">-</span></div>
+      <div class="row"><span>Queued while in-flight</span><span id="queued" class="value">0</span></div>
+      <div class="row"><span>Latest total rays</span><span id="rays" class="value">-</span></div>
+    </div>
+    <div>
+      <h2>Profiling breakdown ms</h2>
+      <div id="profileRows"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Bottleneck hint</h2>
+    <p id="hint" class="mono">No request completed yet.</p>
+  </section>
+</main>
+
+<script>
+const system = {
+  name: "latency_harness_thin_lens",
+  materials: [{ id: "AIR", type: "constant", n: 1.0 }],
+  wavelengths_nm: { primary: 587.56, samples: [587.56] },
+  surfaces: [
+    { id: "STOP", kind: "aperture_stop", thickness_after_mm: 5, semi_diameter_mm: { variable: "iris_radius_mm", default: 8 }, aperture: { shape: "circle", semi_diameter_mm: { variable: "iris_radius_mm", default: 8 } } },
+    { id: "TL", kind: "thin_lens", focal_length_mm: 50, semi_diameter_mm: 12, thickness_after_mm: 50 },
+    { id: "IMG", kind: "sensor", sensor: { width_mm: 36, height_mm: 24 } }
+  ],
+  groups: [{ id: "FOCUS_G", name: "Focus group", from_surface: "TL", to_surface: "TL" }]
+};
+
+const fields = [
+  { id: "center", type: "angular", theta_y_deg: 0, theta_z_deg: 0 },
+  { id: "edge-y", type: "angular", theta_y_deg: 10, theta_z_deg: 0 },
+  { id: "edge-z", type: "angular", theta_y_deg: 0, theta_z_deg: 10 }
+];
+
+let systemId = "";
+let inFlight = false;
+let pending = null;
+let queued = 0;
+let completed = 0;
+let windowTimes = [];
+let lastLatency = 0;
+
+const $ = (id) => document.getElementById(id);
+
+function setStatus(text, cls = "") {
+  $("status").textContent = text;
+  $("status").className = `mono ${cls}`;
+}
+
+function updateLabels() {
+  $("irisLabel").textContent = Number($("iris").value).toFixed(2);
+  $("focusLabel").textContent = Number($("focus").value).toFixed(2);
+}
+
+async function api(path, body) {
+  const response = await fetch(`${$("apiBase").value}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) throw new Error(`${path} ${response.status}: ${await response.text()}`);
+  return response.json();
+}
+
+async function registerSystem() {
+  setStatus("Registering system...");
+  const result = await api("/v1/systems/register", system);
+  systemId = result.system_id;
+  setStatus(`Registered: ${systemId}`, "ok");
+}
+
+function requestBody(values) {
+  return {
+    system_id: systemId,
+    fields,
+    wavelengths_nm: [587.56],
+    ray_sampling: {
+      samples_per_field: 5,
+      pupil_distribution: "grid",
+      ray_aiming: { mode: "paraxial" }
+    },
+    configuration: {
+      variables: { iris_radius_mm: values.iris },
+      group_positions: { FOCUS_G: { shift_x_mm: values.focus } }
+    },
+    options: { store_path: true, profiling: true }
+  };
+}
+
+function currentValues() {
+  return { iris: Number($("iris").value), focus: Number($("focus").value) };
+}
+
+function enqueuePreview() {
+  updateLabels();
+  pending = currentValues();
+  if (inFlight) {
+    queued += 1;
+    $("queued").textContent = String(queued);
+    return;
+  }
+  void drainQueue();
+}
+
+async function drainQueue() {
+  if (!systemId) await registerSystem();
+  if (!pending || inFlight) return;
+  const values = pending;
+  pending = null;
+  inFlight = true;
+  const started = performance.now();
+  try {
+    const result = await api("/v1/education/preview", requestBody(values));
+    lastLatency = performance.now() - started;
+    completed += 1;
+    renderResult(result);
+  } catch (error) {
+    setStatus(error.message, "bad");
+  } finally {
+    inFlight = false;
+    if (pending) void drainQueue();
+  }
+}
+
+function renderResult(result) {
+  const now = performance.now();
+  windowTimes = windowTimes.filter((item) => now - item < 1000);
+  windowTimes.push(now);
+  const fps = windowTimes.length;
+  $("completed").textContent = String(completed);
+  $("latency").textContent = lastLatency.toFixed(1);
+  $("fps").textContent = fps.toFixed(1);
+  $("fps").className = `value ${fps >= 10 ? "ok" : "warn"}`;
+  $("rays").textContent = String(result.metadata?.profiling?.total_rays ?? result.status?.length ?? "-");
+  setStatus(`Last response ok at ${new Date().toLocaleTimeString()}`, "ok");
+  renderProfile(result.metadata?.profiling || {});
+}
+
+function renderProfile(profile) {
+  const keys = ["validation_ms", "compile_ms", "layout_ms", "aiming_ms", "trace_ms", "layout_baseline_rays_ms", "analysis_postprocessing_ms", "total_ms"];
+  $("profileRows").innerHTML = keys.map((key) => {
+    const value = profile[key];
+    return `<div class="row"><span>${key}</span><span class="value">${Number.isFinite(value) ? value.toFixed(3) : "-"}</span></div>`;
+  }).join("");
+  const engineTotal = Number(profile.total_ms || 0);
+  const overhead = Math.max(0, lastLatency - engineTotal);
+  const stages = keys.map((key) => [key, Number(profile[key] || 0)]).concat([["http_serialization_overhead_ms", overhead]]);
+  stages.sort((a, b) => b[1] - a[1]);
+  const fps = windowTimes.length;
+  const reason = fps < 10 ? "Below 10 fps. " : "At or above 10 fps. ";
+  $("hint").textContent = `${reason}Largest observed stage: ${stages[0][0]} = ${stages[0][1].toFixed(3)} ms. Client e2e latency = ${lastLatency.toFixed(1)} ms, engine profiling total = ${engineTotal.toFixed(3)} ms.`;
+}
+
+async function runSweep() {
+  $("runSweep").disabled = true;
+  const started = performance.now();
+  const duration = 10000;
+  function tick() {
+    const elapsed = performance.now() - started;
+    const phase = Math.min(1, elapsed / duration);
+    $("iris").value = String(6 + 2 * Math.sin(phase * Math.PI * 8));
+    $("focus").value = String(2.5 * Math.sin(phase * Math.PI * 10));
+    enqueuePreview();
+    if (elapsed < duration) requestAnimationFrame(tick);
+    else $("runSweep").disabled = false;
+  }
+  tick();
+}
+
+$("register").addEventListener("click", () => registerSystem().catch((error) => setStatus(error.message, "bad")));
+$("runSweep").addEventListener("click", runSweep);
+$("iris").addEventListener("input", enqueuePreview);
+$("focus").addEventListener("input", enqueuePreview);
+updateLabels();
+</script>
+</body>
+</html>
