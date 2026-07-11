@@ -833,6 +833,13 @@ function LayoutView({
   const evalX = evaluationPlane?.evaluation_plane_x_mm
   const solvedX = evaluationPlane?.solved_evaluation_plane_x_mm
   const apertureStopId = system.surfaces.find((surface) => surface.kind === 'aperture_stop')?.id
+  const mirrorIncidentSigns = new Map<string, number>()
+  let propagationSign = 1
+  system.surfaces.forEach((surface) => {
+    if (surface.kind !== 'mirror') return
+    mirrorIncidentSigns.set(surface.id, propagationSign)
+    propagationSign *= -1
+  })
   const tracePaths = showDensityRays ? layoutRayItems(trace, apertureStopId) : []
   const baselinePaths = layoutBaselineRayItems(trace)
   const baseXs = positions.map((row) => row.x)
@@ -883,6 +890,7 @@ function LayoutView({
       semiD,
       h,
       annulusInnerSemiD,
+      mirrorIncidentSign: mirrorIncidentSigns.get(surface.id),
       rawH,
       sy,
       tiltDx,
@@ -932,7 +940,7 @@ function LayoutView({
       {glassElements.map((element) => (
         <path key={element.key} d={element.d} className={`glass-element${element.warning ? ' glass-element-warning' : ''}`} />
       ))}
-      {surfaceViews.map(({ surface, x, sx, sy, semiD, h, rawH, annulusInnerSemiD, tiltDx, transform, profilePoints, cementedBoundary }) => {
+      {surfaceViews.map(({ surface, x, sx, sy, semiD, h, rawH, annulusInnerSemiD, mirrorIncidentSign, tiltDx, transform, profilePoints, cementedBoundary }) => {
         const className = `surface-line surface-${surface.kind}${transform.active ? ' surface-configured' : ''}${cementedBoundary ? ' surface-cemented' : ''}`
         const profile = pointsPath(profilePoints)
         const labelY = sy + h + 22 + (labelRows.get(surface.id) ?? 0) * 13
@@ -943,6 +951,8 @@ function LayoutView({
             data-surface-id={surface.id}
             data-surface-kind={surface.kind}
             data-vertex-x-mm={x}
+            data-radius-mm={surface.radius_mm}
+            data-mirror-incident-sign={mirrorIncidentSign}
             data-semi-diameter-mm={semiD}
             data-visual-half-height-px={h}
             data-raw-half-height-px={rawH}
@@ -952,7 +962,11 @@ function LayoutView({
             {profilePoints.length > 2 ? <path d={profile} className={className} fill="none" /> : <line x1={sx - tiltDx} x2={sx + tiltDx} y1={sy - h} y2={sy + h} className={className} />}
             {surface.kind === 'sensor' ? <rect x={sx - 3} y={sy - h} width="6" height={h * 2} className="sensor-plane" /> : null}
             {annulusInnerSemiD ? <rect x={sx - 3} y={sy - obscurationHalfHeight} width="6" height={obscurationHalfHeight * 2} className="stop-obscuration" /> : null}
-            {surface.kind === 'aperture_stop' ? <circle cx={sx} cy={sy} r={Math.max(3, Math.min(6, h * 0.12))} className="stop-dot" /> : null}
+            {surface.kind === 'aperture_stop' && annulusInnerSemiD
+              ? <circle cx={sx} cy={sy} r={Math.max(4, Math.min(7, h * 0.12))} className="stop-annulus-marker" />
+              : surface.kind === 'aperture_stop'
+                ? <circle cx={sx} cy={sy} r={Math.max(3, Math.min(6, h * 0.12))} className="stop-dot" />
+                : null}
             {transform.active ? <circle cx={sx} cy={sy - h - 10} r="3.5" className="configured-dot" /> : null}
             <text x={sx} y={labelY} textAnchor="middle" className="surface-label">
               {surface.id}

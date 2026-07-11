@@ -694,6 +694,12 @@ body {
   fill: var(--ow-amber);
 }
 
+.stop-annulus-marker {
+  fill: #ffffff;
+  stroke: var(--ow-amber);
+  stroke-width: 3;
+}
+
 .stop-obscuration {
   fill: var(--ow-amber);
   opacity: 0.6;
