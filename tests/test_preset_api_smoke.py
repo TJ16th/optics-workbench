@@ -9,6 +9,8 @@ from typing import Any
 
 import pytest
 
+from optics_engine import analyze_paraxial, compile_system, load_system, trace_forward
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PRESETS_PATH = ROOT / "apps" / "workbench-ui" / "src" / "domain" / "presets.ts"
@@ -99,3 +101,44 @@ def test_p005_p006_trace_and_preview_support_all_aiming_modes_without_nan(preset
         _assert_json_finite_or_null(body)
         assert all(value is None or math.isfinite(value) for value in body["sensor_y_mm"])
         assert all(value is None or math.isfinite(value) for value in body["sensor_z_mm"])
+
+
+def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_results():
+    expected_statuses = {
+        "P001": {"alive": 27},
+        "P002": {"alive": 81},
+        "P003": {"alive": 81},
+        "P005": {"alive": 9, "blocked": 18},
+        "P006": {"alive": 1, "blocked": 26},
+        "P007": {"alive": 81},
+    }
+    expected_paraxial = {
+        "P001": (50.0, 50.0, 4.0),
+        "P002": (49.21298867869991, 47.53621678328241, 3.0758117924187443),
+        "P003": (93.14346592275818, 90.43162704589228, 4.657173296137909),
+        "P005": (3000.0, 1050.0, None),
+        "P006": (None, None, None),
+        "P007": (519.6281203750518, 452.04242770474303, 19.682883347539843),
+    }
+    fields = [
+        {"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0},
+        {"id": "edge-y", "type": "angular", "theta_y_deg": 10.0, "theta_z_deg": 0.0},
+        {"id": "edge-z", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 10.0},
+    ]
+    for preset in _shipped_presets():
+        compiled = compile_system(load_system(preset["system"]))
+        trace = trace_forward(
+            compiled,
+            fields,
+            {"samples_per_field": 9, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+            preset["system"]["wavelengths_nm"]["samples"],
+        )
+        statuses = {str(status): trace.status.tolist().count(status) for status in set(trace.status.tolist())}
+        assert statuses == expected_statuses[preset["id"]]
+        paraxial = analyze_paraxial(compiled)
+        actual = (paraxial.effective_focal_length_mm, paraxial.back_focal_length_mm, paraxial.f_number)
+        for value, expected in zip(actual, expected_paraxial[preset["id"]]):
+            if expected is None:
+                assert value is None
+            else:
+                assert value == pytest.approx(expected)
