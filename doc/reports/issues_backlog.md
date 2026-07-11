@@ -578,3 +578,102 @@ R29の全プリセット有効径見直し中、P005（coaxial Cassegrain）とP
 - 標準模型眼を1つafocal系の後段に接続し、網膜相当面でspot/MTFを評価できる。
 - 既存のafocal評価（射出瞳、角度MTF等）と矛盾しない。
 - afocal→focal接続の仕様拡張が必要なら、設計方針を別途エンジン仕様改訂として文書化する。
+
+## Issue: 実体を持つ後続面による内径側の固定遮蔽を自然に表現する
+
+ラベル案: `engine`
+
+### 背景
+
+カセグレン式望遠鏡の副鏡M2のように、後続する光学面自体の物理径が前段光束の中央遮蔽を生む場合がある。現行仕様は各面で外径超過を遮光する局所判定と、専用annulus面による内径遮蔽を持つが、後続面の`semi_diameter_mm`から前段の内径遮蔽を導出する表現はない。
+
+### 対応案
+
+- 面が前段光路へ投影する内径遮蔽を、明示的な参照またはコンパイル時に生成する遮蔽制約としてモデル化する。
+- 非局所遮蔽がray aiming、pupil sampling、paraxial pupil、実光線traceへ与える影響を統一して扱う。
+- 専用annulus面を自動挿入する方式と、面属性として遮蔽投影を持つ方式を比較する。
+
+### 受け入れ条件
+
+- 副鏡面の物理径から前段光束の中央遮蔽を表現できる。
+- 同じ遮蔽がaiming、sampling、traceで一貫して適用される。
+- 専用annulus面との重複遮蔽を検出または防止できる。
+
+## Issue: 実体を持たない固定内径遮蔽のannulus定義とUIを維持・整備する
+
+ラベル案: `engine`, `ui`
+
+### 背景
+
+鏡筒内壁や遮光環など、対応する光学面を持たない機械的制約には、現行の`mechanical_aperture`と`shape: annulus`が適している。エンジンの遮光判定は利用可能で、R47でSystemタブのinner/outer表示・編集は追加されたが、固定遮蔽としてのLayout View表現、検証、文書化を横断的に固定する必要がある。
+
+### 対応案
+
+- `mechanical_aperture`のannulusを固定内径遮蔽の標準表現として仕様化する。
+- Systemタブ、Layout View、validate、traceのinner/outer扱いを直接テストする。
+- `aperture_stop`のannulusとの役割差をUIと仕様で明確にする。
+
+### 受け入れ条件
+
+- mechanical annulusをSystemタブで表示・編集し、Layout Viewで単一の固定遮蔽として確認できる。
+- inner未満とouter超過の光線が決定論的に遮光される。
+- 主開口絞りとの役割差と併用規則が仕様に記載される。
+
+## Issue: mechanical_apertureをフォーカス・ズーム連動の可変位置・可変径に拡張する
+
+ラベル案: `engine`, `ui`
+
+### 背景
+
+マクロレンズ等では、フォーカス群の移動に連動して副絞りの位置と径が変化する。現行のgroups/zoom_positionsは群に含めた`mechanical_aperture`のX/Y/Z移動には利用できるが、`group_positions`はshiftだけを持ち、configurationごとの開口径変更は表現できない。
+
+### 対応案
+
+- mechanical apertureを既存groupへ所属させる位置変更手順を仕様とUIで明示する。
+- `group_positions`またはsurface overrideへconfiguration別の`semi_diameter_mm`/inner/outer値を追加する。
+- compile cache、validation、optimization variable、trace metadataへconfiguration依存径を反映する。
+
+### 受け入れ条件
+
+- focus/zoom positionごとにmechanical apertureの位置と径を決定論的に切り替えられる。
+- circleとannulusのconfiguration依存径をvalidate・trace・Layout Viewが同じ値で扱う。
+- 既存の固定mechanical apertureとの後方互換性を維持する。
+
+## Issue: mechanical_apertureにrectangle形状を追加する
+
+ラベル案: `engine`, `ui`
+
+### 背景
+
+マウント、ミラーボックス、センサー前枠などの矩形開口によるケラレは、circle/annulusでは正確に表現できない。実務上の利用頻度が比較的高い。
+
+### 対応案
+
+- `shape: rectangle`とY/Z方向の半幅または幅・高さをデータモデルへ追加する。
+- 回転・偏芯を含むローカル面座標で通過判定し、SystemタブとLayout Viewへ形状を表示する。
+
+### 受け入れ条件
+
+- 矩形内外の境界テストが通る。
+- rectangleを含む系をvalidate、compile、trace、表示できる。
+- circle/annulusの既存結果が変わらない。
+
+## Issue: mechanical_apertureのpolygon・花形輪郭表現を拡張する
+
+ラベル案: `engine`, `ui`
+
+### 背景
+
+正多角形の絞り羽根、角型・花形フードなどの輪郭によるケラレを扱うには、現行モデルで予約されている`polygon`を実用的な頂点・回転定義へ拡張する必要がある。教育上・実務上の優先度はrectangleより低いため、用途を精査してから着手する。
+
+### 対応案
+
+- 正多角形パラメータと任意頂点列のどちらを初期スコープにするか決める。
+- 凹形状、自己交差、頂点順、ローカル回転のvalidation規則を定義する。
+- traceとLayout Viewで同じ輪郭データを使用する。
+
+### 受け入れ条件
+
+- 採用したpolygon表現の内外判定と境界規約がテストされる。
+- 回転したpolygon開口をtraceとLayout Viewで一貫して扱える。
+- 教育用途と優先順位が仕様またはIssue判断に記録される。
