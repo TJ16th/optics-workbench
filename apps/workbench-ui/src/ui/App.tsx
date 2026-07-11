@@ -972,7 +972,7 @@ function LayoutView({
       {surfaceViews.map(({ surface, x, sx, sy, semiD, h, rawH, annulusInnerSemiD, mirrorIncidentSign, centralHoleSemiDiameter, tiltDx, transform, profilePoints, profileSegments, cementedBoundary }) => {
         const className = `surface-line surface-${surface.kind}${transform.active ? ' surface-configured' : ''}${cementedBoundary ? ' surface-cemented' : ''}`
         const labelY = sy + h + 22 + (labelRows.get(surface.id) ?? 0) * 13
-        const obscurationHalfHeight = annulusInnerSemiD && semiD > 0 ? h * annulusInnerSemiD / semiD : 0
+        const isAnnulusStop = surface.kind === 'aperture_stop' && Boolean(annulusInnerSemiD)
         return (
           <g
             key={surface.id}
@@ -988,12 +988,13 @@ function LayoutView({
             data-scale-clamped={Math.abs(h - rawH) > 1.0e-9 ? 'true' : 'false'}
             data-annulus-inner-semi-diameter-mm={annulusInnerSemiD}
           >
-            {profilePoints.length > 2
-              ? profileSegments.map((segment, segmentIndex) => <path key={segmentIndex} d={pointsPath(segment)} className={className} fill="none" />)
-              : <line x1={sx - tiltDx} x2={sx + tiltDx} y1={sy - h} y2={sy + h} className={className} />}
+            {isAnnulusStop
+              ? null
+              : profilePoints.length > 2
+                ? profileSegments.map((segment, segmentIndex) => <path key={segmentIndex} d={pointsPath(segment)} className={className} fill="none" />)
+                : <line x1={sx - tiltDx} x2={sx + tiltDx} y1={sy - h} y2={sy + h} className={className} />}
             {surface.kind === 'sensor' ? <rect x={sx - 3} y={sy - h} width="6" height={h * 2} className="sensor-plane" /> : null}
-            {annulusInnerSemiD ? <rect x={sx - 3} y={sy - obscurationHalfHeight} width="6" height={obscurationHalfHeight * 2} className="stop-obscuration" /> : null}
-            {surface.kind === 'aperture_stop' && annulusInnerSemiD
+            {isAnnulusStop
               ? <circle cx={sx} cy={sy} r={Math.max(4, Math.min(7, h * 0.12))} className="stop-annulus-marker" />
               : surface.kind === 'aperture_stop'
                 ? <circle cx={sx} cy={sy} r={Math.max(3, Math.min(6, h * 0.12))} className="stop-dot" />
@@ -1085,8 +1086,10 @@ function LayoutView({
   )
 }
 
-function LayoutLegend() {
+function LayoutLegend({ system }: { system: OpticalSystem }) {
   const { t } = useTranslation(['layoutView'])
+  const hasCircleStop = system.surfaces.some((surface) => surface.kind === 'aperture_stop' && surface.aperture?.shape !== 'annulus')
+  const hasAnnulusStop = system.surfaces.some((surface) => surface.kind === 'aperture_stop' && surface.aperture?.shape === 'annulus')
   const groups = [
     {
       title: t('layoutView.legend.rays'),
@@ -1111,8 +1114,8 @@ function LayoutLegend() {
         { key: 'air', className: 'legend-swatch legend-air', label: t('layoutView.legend.air_gap') },
         { key: 'cemented', className: 'legend-line legend-cemented', label: t('layoutView.legend.cemented_surface') },
         { key: 'mirror', className: 'legend-line legend-mirror', label: t('layoutView.legend.mirror_surface') },
-        { key: 'stop', className: 'legend-symbol legend-stop', label: t('layoutView.legend.stop_symbol') },
-        { key: 'annulus', className: 'legend-symbol legend-annulus', label: t('layoutView.legend.annulus_obscuration') },
+        ...(hasCircleStop ? [{ key: 'stop', className: 'legend-symbol legend-stop', label: t('layoutView.legend.stop_symbol') }] : []),
+        ...(hasAnnulusStop ? [{ key: 'annulus', className: 'legend-symbol legend-annulus', label: t('layoutView.legend.annulus_obscuration') }] : []),
         { key: 'img', className: 'legend-symbol legend-img', label: t('layoutView.legend.img_symbol') },
       ],
     },
@@ -3060,7 +3063,7 @@ export function App() {
                   </div>
                 </div>
                 <LayoutView system={system} trace={trace} evaluationPlane={evaluationPlane} configuration={runtimeConfiguration} showDensityRays={showDensityRays} />
-                <LayoutLegend />
+                <LayoutLegend system={system} />
               </div>
               <div className="result-band">
                 <div className="panel">
