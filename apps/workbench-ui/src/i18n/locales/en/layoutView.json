@@ -2,6 +2,26 @@
   "layoutView": {
     "optical_layout": "Optical Layout",
     "optical_layout_aria": "Optical layout preview",
+    "legend": {
+      "air_gap": "Air gap",
+      "aria": "Optical layout legend",
+      "c_line": "C line",
+      "cemented_surface": "Cemented surface",
+      "chief_ray": "Chief ray",
+      "de_line": "d/e line",
+      "density_ray": "Density ray",
+      "elements": "Elements",
+      "f_line": "F line",
+      "focus_marker": "F' focus marker",
+      "glass_region": "Glass region",
+      "img_symbol": "IMG",
+      "marginal_ray": "Marginal ray",
+      "markers": "Markers",
+      "principal_plane": "H1/H2 principal plane",
+      "rays": "Rays",
+      "stop_symbol": "STOP",
+      "wavelengths": "Wavelengths"
+    },
     "show_density_rays": "Show sampled rays",
     "spot_diagram": "Spot Diagram",
     "spot_diagram_aria": "Spot diagram"

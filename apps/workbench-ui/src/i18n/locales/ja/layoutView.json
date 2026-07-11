@@ -2,6 +2,26 @@
   "layoutView": {
     "optical_layout": "光学レイアウト",
     "optical_layout_aria": "光学レイアウトプレビュー",
+    "legend": {
+      "air_gap": "空気間隔",
+      "aria": "光学レイアウト凡例",
+      "c_line": "C線",
+      "cemented_surface": "接合面",
+      "chief_ray": "主光線",
+      "de_line": "d/e線",
+      "density_ray": "密度光線",
+      "elements": "要素",
+      "f_line": "F線",
+      "focus_marker": "F'焦点マーカー",
+      "glass_region": "ガラス領域",
+      "img_symbol": "IMG",
+      "marginal_ray": "周辺光線",
+      "markers": "マーカー",
+      "principal_plane": "H1/H2主平面",
+      "rays": "光線",
+      "stop_symbol": "STOP",
+      "wavelengths": "波長"
+    },
     "show_density_rays": "サンプル光線を表示",
     "spot_diagram": "スポットダイアグラム",
     "spot_diagram_aria": "スポットダイアグラム"

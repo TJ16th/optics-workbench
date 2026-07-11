@@ -409,6 +409,27 @@ test('layout view uses trace path polylines when preview returns surface hits', 
   await expect(page.getByTestId('layout-principal-plane-marker')).toHaveCount(1)
 })
 
+test('layout view legend explains ray, wavelength, element, and marker styles', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+
+  const legend = page.getByTestId('layout-legend')
+  await expect(legend).toBeVisible()
+  await expect(legend).toContainText('Chief ray')
+  await expect(legend).toContainText('Marginal ray')
+  await expect(legend).toContainText('Density ray')
+  await expect(legend).toContainText('F line')
+  await expect(legend).toContainText('d/e line')
+  await expect(legend).toContainText('C line')
+  await expect(legend).toContainText('Glass region')
+  await expect(legend).toContainText('Air gap')
+  await expect(legend).toContainText('Cemented surface')
+  await expect(legend).toContainText("F' focus marker")
+  await expect(legend).toContainText('H1/H2 principal plane')
+  await expect(legend).toContainText('STOP')
+  await expect(legend).toContainText('IMG')
+})
+
 test('P003 slider preview keeps layout rays on education preview surface paths', async ({ page }) => {
   const previewRequests: unknown[] = []
   await mockEngine(page, { previewRequests })

@@ -1019,6 +1019,62 @@ function LayoutView({
   )
 }
 
+function LayoutLegend() {
+  const { t } = useTranslation(['layoutView'])
+  const groups = [
+    {
+      title: t('layoutView.legend.rays'),
+      items: [
+        { key: 'chief', className: 'legend-line legend-line-chief', label: t('layoutView.legend.chief_ray') },
+        { key: 'marginal', className: 'legend-line legend-line-marginal', label: t('layoutView.legend.marginal_ray') },
+        { key: 'density', className: 'legend-line legend-line-density', label: t('layoutView.legend.density_ray') },
+      ],
+    },
+    {
+      title: t('layoutView.legend.wavelengths'),
+      items: [
+        { key: 'f', className: 'legend-line ray-f', label: t('layoutView.legend.f_line') },
+        { key: 'de', className: 'legend-line ray-d', label: t('layoutView.legend.de_line') },
+        { key: 'c', className: 'legend-line ray-c', label: t('layoutView.legend.c_line') },
+      ],
+    },
+    {
+      title: t('layoutView.legend.elements'),
+      items: [
+        { key: 'glass', className: 'legend-swatch legend-glass', label: t('layoutView.legend.glass_region') },
+        { key: 'air', className: 'legend-swatch legend-air', label: t('layoutView.legend.air_gap') },
+        { key: 'cemented', className: 'legend-line legend-cemented', label: t('layoutView.legend.cemented_surface') },
+        { key: 'stop', className: 'legend-symbol legend-stop', label: t('layoutView.legend.stop_symbol') },
+        { key: 'img', className: 'legend-symbol legend-img', label: t('layoutView.legend.img_symbol') },
+      ],
+    },
+    {
+      title: t('layoutView.legend.markers'),
+      items: [
+        { key: 'focus', className: 'legend-line legend-focus', label: t('layoutView.legend.focus_marker') },
+        { key: 'principal', className: 'legend-line legend-principal', label: t('layoutView.legend.principal_plane') },
+      ],
+    },
+  ]
+  return (
+    <div className="layout-legend" data-testid="layout-legend" aria-label={t('layoutView.legend.aria')}>
+      {groups.map((group) => (
+        <div className="layout-legend-group" key={group.title}>
+          <strong>{group.title}</strong>
+          <div className="layout-legend-items">
+            {group.items.map((item) => (
+              <span className="layout-legend-item" key={item.key}>
+                <i className={item.className} aria-hidden="true" />
+                <span>{item.label}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function SurfaceTable({ surfaces, onOpenHelp }: { surfaces: Surface[]; onOpenHelp: (termId: string) => void }) {
   const { t } = useTranslation(['surfaceTable'])
   return (
@@ -2888,6 +2944,7 @@ export function App() {
                   </div>
                 </div>
                 <LayoutView system={system} trace={trace} evaluationPlane={evaluationPlane} configuration={runtimeConfiguration} showDensityRays={showDensityRays} />
+                <LayoutLegend />
               </div>
               <div className="result-band">
                 <div className="panel">
