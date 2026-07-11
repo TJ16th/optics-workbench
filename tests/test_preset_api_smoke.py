@@ -189,6 +189,9 @@ def test_p005_annular_stop_blocks_the_secondary_mirror_central_obscuration():
     }
 
     compiled = compile_system(load_system(preset["system"]))
+    assert compiled.surface_positions_mm == pytest.approx((0.0, 80.0, -570.0, 480.0))
+    assert compiled.surface_positions_mm[2] - compiled.surface_positions_mm[1] == pytest.approx(-650.0)
+    assert compiled.surface_positions_mm[3] - compiled.surface_positions_mm[2] == pytest.approx(1050.0)
     trace = trace_forward(
         compiled,
         [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}],

@@ -113,8 +113,9 @@ export const presets: Preset[] = [
           kind: 'aperture_stop',
           surface_type: 'plane',
           // The secondary mirror blocks the central 40 mm radius of M1.
-          // Keep the stop ahead of the curved primary edge sag.
-          thickness_after_mm: 10,
+          // Keep the stop ahead of the curved primary edge sag and visibly
+          // separate from M1 in the layout without changing mirror spacing.
+          thickness_after_mm: 80,
           semi_diameter_mm: 100,
           aperture: { shape: 'annulus', inner_semi_diameter_mm: 40, outer_semi_diameter_mm: 100 },
         },

@@ -289,6 +289,12 @@ async function layoutSurfaceScale(page: import('@playwright/test').Page, surface
   }
 }
 
+async function layoutSurfaceVertexX(page: import('@playwright/test').Page, surfaceId: string) {
+  const surface = page.locator(`#layout-svg [data-surface-id="${surfaceId}"]`)
+  await expect(surface).toHaveCount(1)
+  return Number(await surface.getAttribute('data-vertex-x-mm'))
+}
+
 async function selectPresetOption(page: import('@playwright/test').Page, label: string) {
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByRole('option', { name: new RegExp(label) }).click()
@@ -594,6 +600,11 @@ test('layout view scales stop, sensor, and eye symbols from physical dimensions'
   expect(await layoutSurfaceScale(page, 'STOP')).toMatchObject({ semiDiameterMm: 100, visualHalfHeightPx: 92, rawHalfHeightPx: 400, clamped: true })
   await expect(page.locator('#layout-svg [data-surface-id="STOP"]')).toHaveAttribute('data-annulus-inner-semi-diameter-mm', '40')
   await expect(page.locator('#layout-svg [data-surface-id="STOP"] .stop-obscuration')).toHaveCount(1)
+  expect(await layoutSurfaceVertexX(page, 'STOP')).toBe(0)
+  expect(await layoutSurfaceVertexX(page, 'M1')).toBe(80)
+  expect(await layoutSurfaceVertexX(page, 'M2')).toBe(-570)
+  expect(await layoutSurfaceVertexX(page, 'IMG')).toBe(480)
+  expect(Number(await page.locator('#layout-svg').getAttribute('data-ray-y-scale'))).toBeCloseTo(0.92)
   expect(await layoutSurfaceScale(page, 'M1')).toMatchObject({ semiDiameterMm: 100, visualHalfHeightPx: 92, rawHalfHeightPx: 400, clamped: true })
   expect(await layoutSurfaceScale(page, 'IMG')).toMatchObject({ semiDiameterMm: 15, visualHalfHeightPx: 60, rawHalfHeightPx: 60, clamped: false })
 

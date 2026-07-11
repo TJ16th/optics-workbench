@@ -849,7 +849,8 @@ function LayoutView({
   const span = Math.max(1, maxX - minX)
   const xScale = (x: number) => 36 + ((x - minX) / span) * 648
   const centerY = 170
-  const rayYScale = 4
+  const largestSemiDiameter = Math.max(1, ...system.surfaces.map((surface) => surfaceSemiDiameter(surface, configuration)))
+  const rayYScale = Math.min(4, 92 / largestSemiDiameter)
   const apertureY = (semiD?: number | string) => {
     const value = typeof semiD === 'number' ? semiD : 8
     return Math.max(20, Math.min(92, value * 4))
@@ -917,13 +918,14 @@ function LayoutView({
       data-baseline-rays={baselinePaths.length}
       data-density-rays={tracePaths.length}
       data-paraxial-image-x-mm={Number.isFinite(paraxialImageX) ? paraxialImageX : undefined}
+      data-ray-y-scale={rayYScale}
     >
       <title>{t('layoutView.optical_layout')}</title>
       <line x1="24" x2="696" y1={centerY} y2={centerY} className="axis-line" />
       {glassElements.map((element) => (
         <path key={element.key} d={element.d} className={`glass-element${element.warning ? ' glass-element-warning' : ''}`} />
       ))}
-      {surfaceViews.map(({ surface, sx, sy, semiD, h, rawH, annulusInnerSemiD, tiltDx, transform, profilePoints, cementedBoundary }) => {
+      {surfaceViews.map(({ surface, x, sx, sy, semiD, h, rawH, annulusInnerSemiD, tiltDx, transform, profilePoints, cementedBoundary }) => {
         const className = `surface-line surface-${surface.kind}${transform.active ? ' surface-configured' : ''}${cementedBoundary ? ' surface-cemented' : ''}`
         const profile = pointsPath(profilePoints)
         const labelY = sy + h + 22 + (labelRows.get(surface.id) ?? 0) * 13
@@ -933,6 +935,7 @@ function LayoutView({
             key={surface.id}
             data-surface-id={surface.id}
             data-surface-kind={surface.kind}
+            data-vertex-x-mm={x}
             data-semi-diameter-mm={semiD}
             data-visual-half-height-px={h}
             data-raw-half-height-px={rawH}
