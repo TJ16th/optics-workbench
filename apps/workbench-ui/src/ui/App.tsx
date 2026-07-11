@@ -2123,6 +2123,7 @@ function AnalysisConditionPanel({
             {t('settings:settings.add_field')}
           </Button>
         </div>
+        <p className="muted field-angle-hint">{t('settings:settings.field_angle_infinity_hint')}</p>
         <div className="field-editor" data-testid="field-editor">
           {fields.map((field, index) => (
             <div className="condition-row field-row" key={`${field.id}-${index}`} data-testid="field-row">

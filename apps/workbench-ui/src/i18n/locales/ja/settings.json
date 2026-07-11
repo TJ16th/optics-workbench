@@ -14,6 +14,7 @@
     "field_id": "Field ID",
     "theta_y_deg": "Theta Y (deg)",
     "theta_z_deg": "Theta Z (deg)",
+    "field_angle_infinity_hint": "Theta Y / Theta Zは無限遠物点への方向角です。",
     "add_field": "Field追加",
     "remove_field": "Field削除",
     "wavelengths": "波長",

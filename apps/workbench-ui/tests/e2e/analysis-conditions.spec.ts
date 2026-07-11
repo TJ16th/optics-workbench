@@ -324,6 +324,7 @@ test('analysis condition edits mark dirty and rerun preview with updated results
   await page.goto('/?lng=en')
   await expect(page.getByText('Optics Workbench')).toBeVisible()
   await expect(page.getByTestId('analysis-dirty-status')).toContainText('clean')
+  await expect(page.getByText('Theta Y and Theta Z specify directions to objects at infinity.')).toBeVisible()
 
   await page.getByRole('button', { name: 'Add field' }).click()
   await expect(page.getByTestId('field-row')).toHaveCount(4)
