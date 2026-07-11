@@ -588,4 +588,4 @@ def material_refractive_index(payload: dict):
 def preview(payload: dict):
     ray_sampling = payload.get("ray_sampling", {})
     ray_sampling.setdefault("ray_aiming", {"mode": "paraxial"})
-    return forward({**payload, "ray_sampling": ray_sampling, "options": {**payload.get("options", {}), "store_path": True}})
+    return forward({**payload, "ray_sampling": ray_sampling, "options": {**payload.get("options", {}), "store_path": True, "preview_mode": True}})
