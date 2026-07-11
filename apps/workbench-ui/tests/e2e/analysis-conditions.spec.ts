@@ -295,6 +295,20 @@ async function selectPresetOption(page: import('@playwright/test').Page, label: 
   await expect(page.getByRole('combobox', { name: 'Preset', exact: true })).toContainText(label)
 }
 
+async function layoutSurfaceBoxes(page: import('@playwright/test').Page) {
+  return page.locator('#layout-svg [data-surface-id]').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const box = node.getBoundingClientRect()
+      return {
+        id: node.getAttribute('data-surface-id'),
+        x: Number(box.x.toFixed(3)),
+        width: Number(box.width.toFixed(3)),
+        height: Number(box.height.toFixed(3)),
+      }
+    }),
+  )
+}
+
 test('preset selector lists shipped presets in natural id order', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en')
@@ -559,6 +573,34 @@ test('shipped presets keep layout glass fills free of edge-thickness warnings', 
   ]
   for (const label of labels) {
     await selectPresetOption(page, label)
+    await expect(page.locator('#layout-svg path.glass-element-warning')).toHaveCount(0)
+  }
+})
+
+test('shipped presets keep layout scale stable after preview response', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+
+  const labels = [
+    'P001 Ideal Thin Lens 50mm F4',
+    'P002 N-BK7 Biconvex Singlet 50mm Demo',
+    'P003 Achromat Doublet 100mm Demo',
+    'P005 Coaxial Cassegrain Telescope Demo',
+    'P006 Keplerian Afocal Telescope Demo',
+    'P007 Fast Positive-Negative Meniscus Pair 50mm Demo',
+  ]
+  for (const label of labels) {
+    await selectPresetOption(page, label)
+    const before = await layoutSurfaceBoxes(page)
+    await page.getByRole('button', { name: 'Run Preview' }).click()
+    await expect.poll(async () => Number(await page.locator('#layout-svg').getAttribute('data-total-rays')), { timeout: 3_000 }).toBeGreaterThan(0)
+    const after = await layoutSurfaceBoxes(page)
+    expect(after.map((item) => item.id)).toEqual(before.map((item) => item.id))
+    for (const [index, afterBox] of after.entries()) {
+      expect(Math.abs(afterBox.x - before[index].x)).toBeLessThan(1)
+      expect(Math.abs(afterBox.width - before[index].width)).toBeLessThan(1)
+      expect(Math.abs(afterBox.height - before[index].height)).toBeLessThan(1)
+    }
     await expect(page.locator('#layout-svg path.glass-element-warning')).toHaveCount(0)
   }
 })

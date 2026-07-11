@@ -839,10 +839,6 @@ function LayoutView({
     ...baseXs,
     baseMinX - objectExtensionMm,
     ...(!hasSensor ? [baseMaxX + objectExtensionMm] : []),
-    ...(Number.isFinite(evalX) ? [evalX as number] : []),
-    ...(Number.isFinite(solvedX) ? [solvedX as number] : []),
-    ...(Number.isFinite(paraxialImageX) ? [paraxialImageX as number] : []),
-    ...principalPlaneXs.filter((x): x is number => Number.isFinite(x)),
   ]
   const minX = Math.min(...xs, 0)
   const maxX = Math.max(...xs, 1)

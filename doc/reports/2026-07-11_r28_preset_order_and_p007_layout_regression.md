@@ -53,3 +53,14 @@ Q1のglass fill / clear aperture boundaryロジック自体は、P007の破綻�
 - P007はデモプリセットであり、今回の修正はLayout View上の物理的な形状破綻を解消するための値修正。
 - 光学性能値の参照式やベンチマーク目標を更新する変更ではない。
 - 完了報告前のプロセス再起動と `/v1/meta build_info.git_commit` 照合は、R28コミット作成後に最終応答で結果を示す。
+
+## R28b追記: preview Layout View回帰確認
+
+- R28後にP007で`Run Preview`を実行するとLayout Viewが圧縮される回帰をR28bで追加調査した。
+- 原因は`/v1/education/preview`の古いレスポンスやR28のS1修正漏れではなく、preview後に返る遠方の`paraxial_image_position_mm`などの解析マーカー座標がLayout ViewのXスケール計算へ混ざっていたことだった。
+- R28bで解析マーカーをLayout Viewのスケール決定から除外し、P001-P007のpreview前後でsurface位置・幅・高さが安定するE2Eを追加した。
+- R28bでの確認:
+  - `npm.cmd run ui:build`: 成功
+  - `npm.cmd run ui:e2e -- --grep "layout scale stable after preview|P007 fast meniscus|shipped presets keep layout glass"`: `3 passed`
+  - `npm.cmd run ci`: `ui:e2e`まで成功、`24 passed`
+  - 修正版スクリーンショット: `doc/images/r28b-p007-preview-layout-fixed.png`
