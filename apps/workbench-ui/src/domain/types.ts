@@ -188,20 +188,34 @@ export type ValidationResult = {
   issues: EngineIssue[]
 }
 
+export type TracePath = Array<{
+  surface_id: string
+  point_mm: [number, number, number] | number[]
+  local_point_mm?: [number, number, number] | number[]
+  direction?: [number, number, number] | number[]
+  status?: string
+}>
+
+export type LayoutBaselineRay = {
+  role: 'chief' | 'marginal_lower' | 'marginal_upper'
+  field_id: string
+  field_index: number
+  wavelength_nm: number
+  wavelength_index: number
+  status: string
+  path: TracePath
+  stop_y_mm?: number | null
+  aiming_ok?: boolean
+  aiming_iterations?: number
+}
+
 export type TraceResponse = {
   status: string[]
   sensor_y_mm: number[]
   sensor_z_mm: number[]
-  paths?: Array<
-    Array<{
-      surface_id: string
-      point_mm: [number, number, number] | number[]
-      local_point_mm?: [number, number, number] | number[]
-      direction?: [number, number, number] | number[]
-      status?: string
-    }>
-  >
+  paths?: TracePath[]
   metadata: {
+    layout_baseline_rays?: LayoutBaselineRay[]
     evaluated_fields?: AnalysisField[]
     wavelengths_nm?: number[]
     pupil_distribution?: string

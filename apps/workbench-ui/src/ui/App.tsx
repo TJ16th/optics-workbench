@@ -3,6 +3,7 @@ import {
   Accordion,
   AccordionItem,
   Button,
+  Checkbox,
   CodeSnippet,
   ContentSwitcher,
   Dropdown,
@@ -36,6 +37,7 @@ import type {
   ImagePlanePolicy,
   ImagePlanePolicyApplyTo,
   ImagePlanePolicyMode,
+  LayoutBaselineRay,
   LongitudinalAberrationPoint,
   MtfPoint,
   OpticalGroup,
@@ -787,23 +789,38 @@ function layoutRayItems(trace?: TraceResponse, apertureStopId?: string) {
   return (selected.length ? selected : items).slice(0, 36)
 }
 
+function layoutBaselineRayItems(trace?: TraceResponse) {
+  const rays = trace?.metadata.layout_baseline_rays
+  if (!rays?.length) return []
+  return rays
+    .map((ray: LayoutBaselineRay, index) => ({
+      ...ray,
+      index,
+      className: `ray-line ray-baseline ray-baseline-${ray.role} ${wavelengthClass(ray.wavelength_nm)}`,
+    }))
+    .filter((ray) => ray.status === 'alive' && ray.path.length >= 2)
+}
+
 function LayoutView({
   system,
   trace,
   evaluationPlane,
   configuration,
+  showDensityRays,
 }: {
   system: OpticalSystem
   trace?: TraceResponse
   evaluationPlane?: EvaluationPlaneMetadata
   configuration?: RuntimeConfiguration
+  showDensityRays: boolean
 }) {
   const { t } = useTranslation(['layoutView'])
   const positions = systemPositions(system)
   const evalX = evaluationPlane?.evaluation_plane_x_mm
   const solvedX = evaluationPlane?.solved_evaluation_plane_x_mm
   const apertureStopId = system.surfaces.find((surface) => surface.kind === 'aperture_stop')?.id
-  const tracePaths = layoutRayItems(trace, apertureStopId)
+  const tracePaths = showDensityRays ? layoutRayItems(trace, apertureStopId) : []
+  const baselinePaths = layoutBaselineRayItems(trace)
   const baseXs = positions.map((row) => row.x)
   const baseMinX = Math.min(...baseXs, 0)
   const baseMaxX = Math.max(...baseXs, 1)
@@ -887,7 +904,9 @@ function LayoutView({
       role="img"
       aria-label={t('layoutView.optical_layout_aria')}
       data-total-rays={trace?.status.length ?? 0}
-      data-displayed-rays={tracePaths.length || tracePoints?.length || 0}
+      data-displayed-rays={tracePaths.length + baselinePaths.length || tracePoints?.length || 0}
+      data-baseline-rays={baselinePaths.length}
+      data-density-rays={tracePaths.length}
       data-paraxial-image-x-mm={Number.isFinite(paraxialImageX) ? paraxialImageX : undefined}
     >
       <title>{t('layoutView.optical_layout')}</title>
@@ -953,15 +972,16 @@ function LayoutView({
           </g>
         ) : null,
       )}
-      {tracePaths?.length
+      {showDensityRays && tracePaths?.length
         ? tracePaths.map(({ path, className, index, fieldIndex, wavelengthIndex, sampleIndex, sampleRole, stopY }) => {
             const d = rayPathD(path, xScale, centerY, rayYScale, objectExtensionMm, hasSensor ? 0 : objectExtensionMm)
             return d ? (
               <path
                 key={index}
                 d={d}
-                className={className}
+                className={`${className} ray-density`}
                 fill="none"
+                data-ray-layer="density"
                 data-field-index={fieldIndex}
                 data-wavelength-index={wavelengthIndex}
                 data-sample-index={sampleIndex}
@@ -970,10 +990,28 @@ function LayoutView({
               />
             ) : null
           })
-        : tracePoints?.map((point, index) => {
+        : showDensityRays && !baselinePaths.length
+          ? tracePoints?.map((point, index) => {
             const sensorX = xScale(positions[positions.length - 1]?.x ?? maxX)
             const py = centerY - Math.max(-80, Math.min(80, point.y * 8))
-            return <line key={index} x1={xScale(positions[0]?.x ?? minX)} y1={centerY + (index % 7 - 3) * 7} x2={sensorX} y2={py} className="ray-line ray-d" />
+            return <line key={index} x1={xScale(positions[0]?.x ?? minX)} y1={centerY + (index % 7 - 3) * 7} x2={sensorX} y2={py} className="ray-line ray-d ray-density" data-ray-layer="density" />
+          })
+          : null}
+      {baselinePaths.map(({ path, className, index, field_index, wavelength_index, role, stop_y_mm }) => {
+        const d = rayPathD(path, xScale, centerY, rayYScale, objectExtensionMm, hasSensor ? 0 : objectExtensionMm)
+        return d ? (
+          <path
+            key={`baseline-${index}`}
+            d={d}
+            className={className}
+            fill="none"
+            data-ray-layer="baseline"
+            data-baseline-role={role}
+            data-field-index={field_index}
+            data-wavelength-index={wavelength_index}
+            data-stop-y-mm={stop_y_mm ?? undefined}
+          />
+        ) : null
           })}
     </svg>
   )
@@ -2261,6 +2299,7 @@ export function App() {
   const [wavelengths, setWavelengths] = useState<WavelengthSample[]>(() => initialWavelengths(presets[0].system))
   const [pupilDistribution, setPupilDistribution] = useState('grid')
   const [aimingMode, setAimingMode] = useState('paraxial')
+  const [showDensityRays, setShowDensityRays] = useState(true)
   const [imagePlanePolicy, setImagePlanePolicy] = useState<ImagePlanePolicyDraft>(() => ({ ...defaultImagePlanePolicy }))
   const imagePlanePolicyRef = useRef<ImagePlanePolicyDraft>(imagePlanePolicy)
   const [zoomPositionId, setZoomPositionId] = useState('')
@@ -2445,7 +2484,7 @@ export function App() {
     configuration: overrides.configuration ?? runtimeConfiguration,
     frequencies_lp_per_mm: [0, 10, 20, 40, 80],
     ...(policyDisabled ? {} : { image_plane_policy: makePolicy(readImagePlanePolicyForm(), analysisFields, wavelengths) }),
-    options: { store_path: true, profiling: true },
+    options: { store_path: true, profiling: true, include_layout_baseline_rays: true },
   })
 
   const applyPreviewResult = (result: TraceResponse, clean: boolean) => {
@@ -2832,6 +2871,12 @@ export function App() {
                 <div className="panel-heading">
                   <h2>{t('layoutView:layoutView.optical_layout')}</h2>
                   <div className="panel-actions">
+                    <Checkbox
+                      id="show-density-rays"
+                      labelText={t('layoutView:layoutView.show_density_rays')}
+                      checked={showDensityRays}
+                      onChange={(_, data) => setShowDensityRays(Boolean(data.checked))}
+                    />
                     <Button size="sm" kind="secondary" renderIcon={Save} disabled={!trace} onClick={() => void saveSnapshot()}>
                       {t('common.buttons.save_snapshot')}
                     </Button>
@@ -2840,7 +2885,7 @@ export function App() {
                     </Button>
                   </div>
                 </div>
-                <LayoutView system={system} trace={trace} evaluationPlane={evaluationPlane} configuration={runtimeConfiguration} />
+                <LayoutView system={system} trace={trace} evaluationPlane={evaluationPlane} configuration={runtimeConfiguration} showDensityRays={showDensityRays} />
               </div>
               <div className="result-band">
                 <div className="panel">

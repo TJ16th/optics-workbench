@@ -88,6 +88,34 @@ async function mockEngine(
     const wavelengths = request.wavelengths_nm ?? []
     const samples = request.ray_sampling?.samples_per_field ?? 1
     const total = Math.max(1, evaluatedFields.length * wavelengths.length * samples)
+    const baselineRays = evaluatedFields.flatMap((field: { id?: string }, fieldIndex: number) =>
+      wavelengths.flatMap((wavelength: number, wavelengthIndex: number) =>
+        [
+          { role: 'chief', y: 0 },
+          { role: 'marginal_lower', y: -1.5 },
+          { role: 'marginal_upper', y: 1.5 },
+        ].map(({ role, y }) => {
+          const last = Math.max(1, registeredSurfaceIds.length - 1)
+          return {
+            role,
+            field_id: field.id ?? `field-${fieldIndex}`,
+            field_index: fieldIndex,
+            wavelength_nm: wavelength,
+            wavelength_index: wavelengthIndex,
+            status: 'alive',
+            stop_y_mm: y,
+            aiming_ok: true,
+            aiming_iterations: 2,
+            path: registeredSurfaceIds.map((surfaceId, surfaceIndex) => {
+              const isImage = surfaceIndex === registeredSurfaceIds.length - 1
+              const bend = y * (1 - surfaceIndex / (last + 1))
+              const point = [isImage ? 103.5 : surfaceIndex * 3, isImage ? y / 3 : bend, 0]
+              return { surface_id: surfaceId, point_mm: point, local_point_mm: [0, surfaceIndex === 0 ? y : point[1], 0], direction: [1, 0, 0] }
+            }),
+          }
+        }),
+      ),
+    )
     await route.fulfill({
       json: {
         status: Array.from({ length: total }, () => 'alive'),
@@ -111,6 +139,7 @@ async function mockEngine(
           samples_per_field: samples,
           pupil_distribution: request.ray_sampling?.pupil_distribution,
           ray_aiming_mode: request.ray_sampling?.ray_aiming?.mode,
+          layout_baseline_rays: request.options?.include_layout_baseline_rays ? baselineRays : [],
           paraxial: { paraxial_image_position_mm: 100, principal_plane_positions_mm: [null, 50] },
           profiling: { trace_ms: 1.25, total_rays: total },
         },
@@ -376,10 +405,10 @@ test('P003 slider preview keeps layout rays on education preview surface paths',
   expect(dragPreview.ray_sampling?.ray_aiming?.mode).toBe('paraxial')
   await expectLayoutRayPath(page, 6)
   const totalRays = Number(await page.locator('#layout-svg').getAttribute('data-total-rays'))
-  const displayedRays = Number(await page.locator('#layout-svg').getAttribute('data-displayed-rays'))
-  expect(totalRays).toBeGreaterThan(displayedRays)
-  expect(displayedRays).toBeLessThanOrEqual(36)
-  const displayed = await page.locator('#layout-svg path.ray-line').evaluateAll((nodes) =>
+  const densityRays = Number(await page.locator('#layout-svg').getAttribute('data-density-rays'))
+  expect(totalRays).toBeGreaterThan(densityRays)
+  expect(densityRays).toBeLessThanOrEqual(36)
+  const displayed = await page.locator('#layout-svg path[data-ray-layer="density"]').evaluateAll((nodes) =>
     nodes.map((node) => ({
       field: Number(node.getAttribute('data-field-index')),
       stopY: Number(node.getAttribute('data-stop-y-mm')),
@@ -570,6 +599,41 @@ test('ray count edits only change samples per field in preview requests', async 
   await expect(summary).toContainText('hexapolar')
   await expect(summary).toContainText('full')
   await expect(summary).toContainText('center, edge-y, edge-z')
+})
+
+test('layout baseline chief and marginal rays are stable across ray counts', async ({ page }) => {
+  const previewRequests: unknown[] = []
+  await mockEngine(page, { previewRequests })
+  await page.goto('/?lng=en')
+  await selectPresetOption(page, 'P002 N-BK7 Biconvex Singlet 50mm Demo')
+
+  const signatures: string[] = []
+  for (const [index, samples] of [5, 9, 15, 25].entries()) {
+    await page.locator('#samples').fill(String(samples))
+    await page.getByRole('button', { name: 'Run Preview' }).click()
+    await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBe(index + 1)
+
+    const request = previewRequests[index] as { options?: { include_layout_baseline_rays?: boolean } }
+    expect(request.options?.include_layout_baseline_rays).toBe(true)
+    await expect.poll(async () => Number(await page.locator('#layout-svg').getAttribute('data-baseline-rays')), { timeout: 3_000 }).toBeGreaterThan(0)
+
+    const baseline = await page.locator('#layout-svg path[data-ray-layer="baseline"]').evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        role: node.getAttribute('data-baseline-role'),
+        field: Number(node.getAttribute('data-field-index')),
+        wavelength: Number(node.getAttribute('data-wavelength-index')),
+        stopY: Number(node.getAttribute('data-stop-y-mm')),
+      })),
+    )
+    expect(new Set(baseline.map((item) => item.role))).toEqual(new Set(['chief', 'marginal_lower', 'marginal_upper']))
+    signatures.push(JSON.stringify(baseline))
+  }
+
+  expect(new Set(signatures).size).toBe(1)
+  await expect.poll(async () => Number(await page.locator('#layout-svg').getAttribute('data-density-rays')), { timeout: 3_000 }).toBeGreaterThan(0)
+  await page.locator('#show-density-rays').setChecked(false, { force: true })
+  await expect(page.locator('#layout-svg path[data-ray-layer="density"]')).toHaveCount(0)
+  await expect.poll(async () => Number(await page.locator('#layout-svg').getAttribute('data-baseline-rays')), { timeout: 3_000 }).toBeGreaterThan(0)
 })
 
 test('group motion sliders send runtime configuration through debounced preview', async ({ page }) => {

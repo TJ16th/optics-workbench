@@ -2,6 +2,7 @@
   "layoutView": {
     "optical_layout": "Optical Layout",
     "optical_layout_aria": "Optical layout preview",
+    "show_density_rays": "Show sampled rays",
     "spot_diagram": "Spot Diagram",
     "spot_diagram_aria": "Spot diagram"
   }

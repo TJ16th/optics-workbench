@@ -218,6 +218,50 @@ def test_trace_paths_include_singlet_surface_hits_and_refraction_slopes():
     assert abs(slopes[2]) > abs(slopes[1])
 
 
+def _layout_baseline_signature(trace):
+    rows = trace.metadata["layout_baseline_rays"]
+    return [
+        (
+            row["field_id"],
+            row["wavelength_index"],
+            row["role"],
+            round(row["stop_y_mm"], 12),
+            row["status"],
+        )
+        for row in rows
+    ]
+
+
+def test_layout_baseline_chief_and_marginal_rays_are_sample_count_independent():
+    fields = [
+        {"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0},
+        {"id": "edge-y", "type": "angular", "theta_y_deg": 10.0, "theta_z_deg": 0.0},
+        {"id": "edge-z", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 10.0},
+    ]
+    cases = [
+        (p002_singlet_system(), [587.56]),
+        (p003_achromat_system(), [486.13, 587.56, 656.27]),
+    ]
+    for system, wavelengths in cases:
+        compiled = compile_system(system)
+        signatures = []
+        for samples in [5, 9, 15, 25]:
+            trace = trace_forward(
+                compiled,
+                fields,
+                {"samples_per_field": samples, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}},
+                wavelengths,
+                {"store_path": True, "include_layout_baseline_rays": True},
+            )
+            rows = trace.metadata["layout_baseline_rays"]
+            assert len(rows) == len(fields) * len(wavelengths) * 3
+            assert {row["role"] for row in rows} == {"chief", "marginal_lower", "marginal_upper"}
+            assert all(row["aiming_ok"] for row in rows)
+            assert all(row["status"] == "alive" for row in rows)
+            signatures.append(_layout_baseline_signature(trace))
+        assert signatures[1:] == [signatures[0]] * (len(signatures) - 1)
+
+
 def _runtime_iris_system():
     return load_system(
         {

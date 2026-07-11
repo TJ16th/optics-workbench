@@ -2,6 +2,7 @@
   "layoutView": {
     "optical_layout": "光学レイアウト",
     "optical_layout_aria": "光学レイアウトプレビュー",
+    "show_density_rays": "サンプル光線を表示",
     "spot_diagram": "スポットダイアグラム",
     "spot_diagram_aria": "スポットダイアグラム"
   }

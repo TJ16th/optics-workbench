@@ -106,7 +106,7 @@ export type PreviewRequest = {
   wavelengths_nm: number[]
   wavelength_weights?: WavelengthSample[]
   configuration?: RuntimeConfiguration
-  options: { store_path: boolean; profiling: boolean }
+  options: { store_path: boolean; profiling: boolean; include_layout_baseline_rays?: boolean }
 }
 
 export async function runPreview(apiBase: string, request: PreviewRequest): Promise<TraceResponse> {

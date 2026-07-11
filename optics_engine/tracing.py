@@ -715,6 +715,83 @@ def _exact_aim_origins(
     return origins, ok, iterations
 
 
+def _path_stop_y(path: list[dict[str, Any]], stop_id: str | None) -> float | None:
+    entry = (next((item for item in path if stop_id is not None and item.get("surface_id") == stop_id), None)) or (path[0] if path else None)
+    if entry is None:
+        return None
+    local = entry.get("local_point_mm")
+    point = entry.get("point_mm")
+    value = local[1] if isinstance(local, list) and len(local) > 1 else None
+    if value is None and isinstance(point, list) and len(point) > 1:
+        value = point[1]
+    return float(value) if value is not None and np.isfinite(float(value)) else None
+
+
+def _layout_baseline_rays(
+    compiled: CompiledSystem,
+    fields: list[dict[str, Any]],
+    wavelengths: list[float],
+    launch_x: float,
+    centers_mm: np.ndarray,
+    rotations: np.ndarray,
+    *,
+    tolerance_mm: float,
+    max_iterations: int,
+    configuration: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    stop_idx = compiled.aperture_stop_index
+    if stop_idx is None:
+        return []
+    samples = np.array([[0.0, 0.0], [-1.0, 0.0], [1.0, 0.0]], dtype=float)
+    roles = ["chief", "marginal_lower", "marginal_upper"]
+    targets = _target_points_for_stop_with_layout(compiled, samples, centers_mm, rotations, configuration)
+    stop_id = compiled.surfaces[stop_idx].id
+    rows: list[dict[str, Any]] = []
+    for field_index, field in enumerate(fields):
+        direction = field_direction(float(field.get("theta_y_deg", 0.0)), float(field.get("theta_z_deg", 0.0)))
+        field_id = str(field.get("id", f"field_{field_index + 1}"))
+        for wavelength_index, wavelength in enumerate(wavelengths):
+            origins, aiming_ok, aiming_iterations = _exact_aim_origins(
+                compiled,
+                launch_x,
+                direction,
+                float(wavelength),
+                targets,
+                centers_mm,
+                rotations,
+                tolerance_mm=tolerance_mm,
+                max_iterations=max_iterations,
+                configuration=configuration,
+            )
+            trace = _trace_raw(
+                compiled,
+                np.array(origins, dtype=float),
+                np.tile(direction, (len(origins), 1)),
+                np.full(len(origins), float(wavelength), dtype=float),
+                field_ids=[field_id] * len(origins),
+                store_path=True,
+                centers_mm=centers_mm,
+                rotations=rotations,
+                configuration=configuration,
+            )
+            for ray_index, role in enumerate(roles):
+                rows.append(
+                    {
+                        "role": role,
+                        "field_id": field_id,
+                        "field_index": int(field_index),
+                        "wavelength_nm": float(wavelength),
+                        "wavelength_index": int(wavelength_index),
+                        "status": STATUS_AIMING_FAILED if not aiming_ok[ray_index] else str(trace.status[ray_index]),
+                        "path": trace.paths[ray_index],
+                        "stop_y_mm": _path_stop_y(trace.paths[ray_index], stop_id),
+                        "aiming_ok": bool(aiming_ok[ray_index]),
+                        "aiming_iterations": int(aiming_iterations[ray_index]),
+                    }
+                )
+    return rows
+
+
 def _aim_origins_for_field_wavelength(
     compiled: CompiledSystem,
     field: dict[str, Any],
@@ -876,6 +953,7 @@ def trace_forward(
     profiling = bool(options.get("profiling", False))
     configuration = options.get("configuration") or options.get("config") or {}
     include_analysis_metadata = bool(options.get("include_analysis_metadata", True))
+    include_layout_baseline_rays = bool(options.get("include_layout_baseline_rays", False))
     config_validation = validate_configuration(compiled, configuration)
     if not config_validation.ok:
         messages = "; ".join(issue.message for issue in config_validation.issues if issue.severity == "error")
@@ -1011,6 +1089,20 @@ def trace_forward(
                 ],
             }
         )
+    t_baseline = t_trace
+    if store_path and include_layout_baseline_rays:
+        result.metadata["layout_baseline_rays"] = _layout_baseline_rays(
+            compiled,
+            fields,
+            [float(wavelength) for wavelength in wavelengths],
+            launch_x,
+            centers_mm,
+            rotations,
+            tolerance_mm=tolerance_mm,
+            max_iterations=max(max_iterations, 20),
+            configuration=configuration,
+        )
+        t_baseline = time.perf_counter()
     if profiling:
         aiming_ms = (t_generation - t_layout) * 1000.0
         trace_ms = (t_trace - t_generation) * 1000.0
@@ -1022,8 +1114,9 @@ def trace_forward(
             "aiming_ms": aiming_ms,
             "ray_generation_and_aiming_ms": aiming_ms,
             "trace_ms": trace_ms,
+            "layout_baseline_rays_ms": (t_baseline - t_trace) * 1000.0,
             "analysis_postprocessing_ms": 0.0,
-            "total_ms": (t_trace - t0) * 1000.0,
+            "total_ms": (t_baseline - t0) * 1000.0,
             "total_rays": int(result.status.size),
             "cache_hit": None,
             "cache_hits": int(aiming_cache_hits),

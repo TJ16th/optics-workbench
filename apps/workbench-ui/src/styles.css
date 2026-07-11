@@ -594,6 +594,26 @@ body {
   pointer-events: none;
 }
 
+.ray-density {
+  stroke-width: 0.58;
+  stroke-opacity: 0.46;
+}
+
+.ray-baseline {
+  stroke-opacity: 0.92;
+  pointer-events: none;
+}
+
+.ray-baseline-chief {
+  stroke-width: 2.1;
+}
+
+.ray-baseline-marginal_lower,
+.ray-baseline-marginal_upper {
+  stroke-width: 1.55;
+  stroke-dasharray: 6 3;
+}
+
 .ray-f {
   stroke: #0f62fe;
 }
