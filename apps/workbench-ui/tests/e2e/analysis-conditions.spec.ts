@@ -481,9 +481,19 @@ test('P005 preview renders baseline paths through both mirrors and the image pla
   expect(paths.every((path) => path.startsWith('M 36 '))).toBe(true)
   await expect(page.locator('#layout-svg')).toHaveAttribute('data-object-plane-x-mm', '-780')
   const mirrors = page.locator('#layout-svg path.surface-mirror')
-  await expect(mirrors).toHaveCount(2)
+  await expect(mirrors).toHaveCount(3)
   const mirrorWidths = await mirrors.evaluateAll((nodes) => nodes.map((node) => node.getBBox().width))
   expect(mirrorWidths.every((width) => width > 2)).toBe(true)
+  const m1Segments = page.locator('#layout-svg [data-surface-id="M1"] path.surface-mirror')
+  await expect(m1Segments).toHaveCount(2)
+  const m1SegmentBoxes = await m1Segments.evaluateAll((nodes) => nodes
+    .map((node) => {
+      const box = node.getBBox()
+      return { y: box.y, height: box.height }
+    })
+    .sort((a, b) => a.y - b.y))
+  expect(m1SegmentBoxes[1].y - (m1SegmentBoxes[0].y + m1SegmentBoxes[0].height)).toBeGreaterThan(70)
+  await expect(page.locator('#layout-svg [data-surface-id="M2"] path.surface-mirror')).toHaveCount(1)
   await expect(page.locator('#layout-svg [data-surface-id="M1"]')).toHaveAttribute('data-radius-mm', '-2000')
   await expect(page.locator('#layout-svg [data-surface-id="M1"]')).toHaveAttribute('data-mirror-incident-sign', '1')
   await expect(page.locator('#layout-svg [data-surface-id="M2"]')).toHaveAttribute('data-radius-mm', '-1050')
@@ -620,7 +630,11 @@ test('layout view scales stop, sensor, and eye symbols from physical dimensions'
   expect(await layoutSurfaceVertexX(page, 'IMG')).toBe(480)
   expect(Number(await page.locator('#layout-svg').getAttribute('data-ray-y-scale'))).toBeCloseTo(0.92)
   expect(await layoutSurfaceScale(page, 'M1')).toMatchObject({ semiDiameterMm: 100, visualHalfHeightPx: 92, rawHalfHeightPx: 400, clamped: true })
-  expect(await layoutSurfaceScale(page, 'IMG')).toMatchObject({ semiDiameterMm: 15, visualHalfHeightPx: 60, rawHalfHeightPx: 60, clamped: false })
+  await expect(page.locator('#layout-svg [data-surface-id="M1"]')).toHaveAttribute('data-central-hole-semi-diameter-mm', '40')
+  const p005M2Scale = await layoutSurfaceScale(page, 'M2')
+  expect(p005M2Scale).toMatchObject({ semiDiameterMm: 40, rawHalfHeightPx: 160, clamped: true })
+  expect(p005M2Scale.visualHalfHeightPx).toBeCloseTo(36.8)
+  expect(await layoutSurfaceScale(page, 'IMG')).toMatchObject({ semiDiameterMm: 15, visualHalfHeightPx: 20, rawHalfHeightPx: 60, clamped: true })
 
   await selectPresetOption(page, 'P006 Keplerian Afocal Telescope Demo')
   expect(await layoutSurfaceScale(page, 'STOP')).toMatchObject({ semiDiameterMm: 25, visualHalfHeightPx: 92, rawHalfHeightPx: 100, clamped: true })

@@ -657,23 +657,35 @@ function surfaceSagMm(surface: Surface, rayHeightMm: number) {
 
 type LayoutPoint = { x: number; y: number }
 
-function surfaceProfilePoints(surface: Surface, vertexX: number, sy: number, h: number, semiDiameterMm: number, xScale: (x: number) => number, tiltDx: number): LayoutPoint[] {
+function surfaceProfilePoints(
+  surface: Surface,
+  vertexX: number,
+  sy: number,
+  h: number,
+  semiDiameterMm: number,
+  xScale: (x: number) => number,
+  tiltDx: number,
+  fromHeightMm = -semiDiameterMm,
+  toHeightMm = semiDiameterMm,
+  sampleCount = 25,
+): LayoutPoint[] {
   const radius = surface.radius_mm ?? 0
   const surfaceType = surface.surface_type ?? 'plane'
   if ((surfaceType !== 'spherical' && surfaceType !== 'aspherical_even') || !Number.isFinite(radius) || Math.abs(radius) < 1.0e-12 || semiDiameterMm <= 0 || h <= 0) {
-    return [
-      { x: xScale(vertexX) - tiltDx, y: sy - h },
-      { x: xScale(vertexX) + tiltDx, y: sy + h },
-    ]
+    return [fromHeightMm, toHeightMm].map((rayHeightMm) => {
+      const normalizedHeight = rayHeightMm / semiDiameterMm
+      return { x: xScale(vertexX) + normalizedHeight * tiltDx, y: sy + normalizedHeight * h }
+    })
   }
-  return Array.from({ length: 25 }, (_, index) => {
-    const t = index / 24
-    const pixelOffset = -h + t * h * 2
-    const rayHeightMm = (pixelOffset / h) * semiDiameterMm
+  return Array.from({ length: sampleCount }, (_, index) => {
+    const t = sampleCount <= 1 ? 0 : index / (sampleCount - 1)
+    const rayHeightMm = fromHeightMm + t * (toHeightMm - fromHeightMm)
+    const normalizedHeight = rayHeightMm / semiDiameterMm
+    const pixelOffset = normalizedHeight * h
     // Long-radius mirrors are nearly flat at layout scale; amplify only their
     // displayed sag so the reflecting curvature and sign remain legible.
     const sag = surfaceSagMm(surface, rayHeightMm) * (surface.kind === 'mirror' ? 8 : 1)
-    const tiltedX = (pixelOffset / h) * tiltDx
+    const tiltedX = normalizedHeight * tiltDx
     return { x: xScale(vertexX + sag) + tiltedX, y: sy + pixelOffset }
   })
 }
@@ -864,10 +876,15 @@ function LayoutView({
   const centerY = 170
   const largestSemiDiameter = Math.max(1, ...system.surfaces.map((surface) => surfaceSemiDiameter(surface, configuration)))
   const rayYScale = Math.min(4, 92 / largestSemiDiameter)
+  const surfaceYScale = rayYScale
   const apertureY = (semiD?: number | string) => {
     const value = typeof semiD === 'number' ? semiD : 8
-    return Math.max(20, Math.min(92, value * 4))
+    return Math.max(20, Math.min(92, value * surfaceYScale))
   }
+  const annulusStopIndex = system.surfaces.findIndex((surface) => surface.kind === 'aperture_stop' && surface.aperture?.shape === 'annulus')
+  const annulusStop = annulusStopIndex >= 0 ? system.surfaces[annulusStopIndex] : undefined
+  const primaryHoleSemiDiameter = scalarNumber(annulusStop?.aperture?.inner_semi_diameter_mm)
+  const primaryMirrorId = annulusStopIndex >= 0 ? system.surfaces.slice(annulusStopIndex + 1).find((surface) => surface.kind === 'mirror')?.id : undefined
   const tracePoints = trace?.sensor_y_mm
     ?.map((y, index) => ({ y, z: trace.sensor_z_mm[index], status: trace.status[index] }))
     .filter((point): point is { y: number; z: number | null; status: string } => Number.isFinite(point.y) && point.status === 'alive')
@@ -883,6 +900,16 @@ function LayoutView({
     const sy = centerY - Math.max(-52, Math.min(52, transform.shiftY * 10))
     const tiltDx = Math.max(-20, Math.min(20, transform.tiltZ * 3))
     const previous = index > 0 ? positions[index - 1].surface : undefined
+    const profilePoints = surfaceProfilePoints(surface, x, sy, h, semiD, xScale, tiltDx)
+    const centralHoleSemiDiameter = surface.id === primaryMirrorId && primaryHoleSemiDiameter && primaryHoleSemiDiameter < semiD
+      ? primaryHoleSemiDiameter
+      : undefined
+    const profileSegments = centralHoleSemiDiameter
+      ? [
+          surfaceProfilePoints(surface, x, sy, h, semiD, xScale, tiltDx, -semiD, -centralHoleSemiDiameter, 13),
+          surfaceProfilePoints(surface, x, sy, h, semiD, xScale, tiltDx, centralHoleSemiDiameter, semiD, 13),
+        ]
+      : [profilePoints]
     return {
       surface,
       x,
@@ -891,11 +918,13 @@ function LayoutView({
       h,
       annulusInnerSemiD,
       mirrorIncidentSign: mirrorIncidentSigns.get(surface.id),
+      centralHoleSemiDiameter,
       rawH,
       sy,
       tiltDx,
       transform,
-      profilePoints: surfaceProfilePoints(surface, x, sy, h, semiD, xScale, tiltDx),
+      profilePoints,
+      profileSegments,
       cementedBoundary: surface.kind === 'refractive' && isGlassMaterial(previous?.material_after) && isGlassMaterial(surface.material_after),
     }
   })
@@ -940,9 +969,8 @@ function LayoutView({
       {glassElements.map((element) => (
         <path key={element.key} d={element.d} className={`glass-element${element.warning ? ' glass-element-warning' : ''}`} />
       ))}
-      {surfaceViews.map(({ surface, x, sx, sy, semiD, h, rawH, annulusInnerSemiD, mirrorIncidentSign, tiltDx, transform, profilePoints, cementedBoundary }) => {
+      {surfaceViews.map(({ surface, x, sx, sy, semiD, h, rawH, annulusInnerSemiD, mirrorIncidentSign, centralHoleSemiDiameter, tiltDx, transform, profilePoints, profileSegments, cementedBoundary }) => {
         const className = `surface-line surface-${surface.kind}${transform.active ? ' surface-configured' : ''}${cementedBoundary ? ' surface-cemented' : ''}`
-        const profile = pointsPath(profilePoints)
         const labelY = sy + h + 22 + (labelRows.get(surface.id) ?? 0) * 13
         const obscurationHalfHeight = annulusInnerSemiD && semiD > 0 ? h * annulusInnerSemiD / semiD : 0
         return (
@@ -953,13 +981,16 @@ function LayoutView({
             data-vertex-x-mm={x}
             data-radius-mm={surface.radius_mm}
             data-mirror-incident-sign={mirrorIncidentSign}
+            data-central-hole-semi-diameter-mm={centralHoleSemiDiameter}
             data-semi-diameter-mm={semiD}
             data-visual-half-height-px={h}
             data-raw-half-height-px={rawH}
             data-scale-clamped={Math.abs(h - rawH) > 1.0e-9 ? 'true' : 'false'}
             data-annulus-inner-semi-diameter-mm={annulusInnerSemiD}
           >
-            {profilePoints.length > 2 ? <path d={profile} className={className} fill="none" /> : <line x1={sx - tiltDx} x2={sx + tiltDx} y1={sy - h} y2={sy + h} className={className} />}
+            {profilePoints.length > 2
+              ? profileSegments.map((segment, segmentIndex) => <path key={segmentIndex} d={pointsPath(segment)} className={className} fill="none" />)
+              : <line x1={sx - tiltDx} x2={sx + tiltDx} y1={sy - h} y2={sy + h} className={className} />}
             {surface.kind === 'sensor' ? <rect x={sx - 3} y={sy - h} width="6" height={h * 2} className="sensor-plane" /> : null}
             {annulusInnerSemiD ? <rect x={sx - 3} y={sy - obscurationHalfHeight} width="6" height={obscurationHalfHeight * 2} className="stop-obscuration" /> : null}
             {surface.kind === 'aperture_stop' && annulusInnerSemiD
