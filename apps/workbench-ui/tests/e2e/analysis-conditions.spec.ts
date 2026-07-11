@@ -102,9 +102,9 @@ async function mockEngine(
             field_index: fieldIndex,
             wavelength_nm: wavelength,
             wavelength_index: wavelengthIndex,
-            status: 'alive',
+            status: role === 'chief' ? 'alive' : 'aiming_failed',
             stop_y_mm: y,
-            aiming_ok: true,
+            aiming_ok: role === 'chief',
             aiming_iterations: 2,
             path: registeredSurfaceIds.map((surfaceId, surfaceIndex) => {
               const isImage = surfaceIndex === registeredSurfaceIds.length - 1
@@ -691,12 +691,15 @@ test('layout baseline chief and marginal rays are stable across ray counts', asy
     const baseline = await page.locator('#layout-svg path[data-ray-layer="baseline"]').evaluateAll((nodes) =>
       nodes.map((node) => ({
         role: node.getAttribute('data-baseline-role'),
+        status: node.getAttribute('data-baseline-status'),
         field: Number(node.getAttribute('data-field-index')),
         wavelength: Number(node.getAttribute('data-wavelength-index')),
         stopY: Number(node.getAttribute('data-stop-y-mm')),
       })),
     )
     expect(new Set(baseline.map((item) => item.role))).toEqual(new Set(['chief', 'marginal_lower', 'marginal_upper']))
+    expect(new Set(baseline.map((item) => item.status))).toEqual(new Set(['alive', 'aiming_failed']))
+    expect(baseline.filter((item) => item.role?.startsWith('marginal_')).length).toBeGreaterThan(0)
     signatures.push(JSON.stringify(baseline))
   }
 

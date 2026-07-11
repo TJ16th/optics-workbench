@@ -803,7 +803,7 @@ function layoutBaselineRayItems(trace?: TraceResponse) {
       index,
       className: `ray-line ray-baseline ray-baseline-${ray.role} ${wavelengthClass(ray.wavelength_nm)}`,
     }))
-    .filter((ray) => ray.status === 'alive' && ray.path.length >= 2)
+    .filter((ray) => (ray.status === 'alive' || ray.status === 'aiming_failed') && ray.path.length >= 2)
 }
 
 function LayoutView({
@@ -998,7 +998,7 @@ function LayoutView({
             return <line key={index} x1={xScale(positions[0]?.x ?? minX)} y1={centerY + (index % 7 - 3) * 7} x2={sensorX} y2={py} className="ray-line ray-d ray-density" data-ray-layer="density" />
           })
           : null}
-      {baselinePaths.map(({ path, className, index, field_index, wavelength_index, role, stop_y_mm }) => {
+      {baselinePaths.map(({ path, className, index, field_index, wavelength_index, role, status, stop_y_mm }) => {
         const d = rayPathD(path, xScale, centerY, rayYScale, objectExtensionMm, hasSensor ? 0 : objectExtensionMm)
         return d ? (
           <path
@@ -1008,6 +1008,7 @@ function LayoutView({
             fill="none"
             data-ray-layer="baseline"
             data-baseline-role={role}
+            data-baseline-status={status}
             data-field-index={field_index}
             data-wavelength-index={wavelength_index}
             data-stop-y-mm={stop_y_mm ?? undefined}
