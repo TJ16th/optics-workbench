@@ -108,6 +108,16 @@ export const presets: Preset[] = [
       wavelengths_nm: { primary: 587.56, samples: [587.56] },
       materials: [{ id: 'AIR', type: 'constant', n: 1.0 }],
       surfaces: [
+        {
+          id: 'STOP',
+          kind: 'aperture_stop',
+          surface_type: 'plane',
+          // The secondary mirror blocks the central 40 mm radius of M1.
+          // Keep the stop ahead of the curved primary edge sag.
+          thickness_after_mm: 10,
+          semi_diameter_mm: 100,
+          aperture: { shape: 'annulus', inner_semi_diameter_mm: 40, outer_semi_diameter_mm: 100 },
+        },
         { id: 'M1', kind: 'mirror', surface_type: 'spherical', radius_mm: -2000, thickness_after_mm: -650, semi_diameter_mm: 100 },
         { id: 'M2', kind: 'mirror', surface_type: 'spherical', radius_mm: -1050, thickness_after_mm: 1050, semi_diameter_mm: 40 },
         { id: 'IMG', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 30, height_mm: 30 } },

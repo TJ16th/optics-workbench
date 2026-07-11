@@ -591,6 +591,9 @@ test('layout view scales stop, sensor, and eye symbols from physical dimensions'
   await expect(page.locator('#layout-svg [data-surface-id="IMG"] rect.sensor-plane')).toHaveAttribute('height', '144')
 
   await selectPresetOption(page, 'P005 Coaxial Cassegrain Telescope Demo')
+  expect(await layoutSurfaceScale(page, 'STOP')).toMatchObject({ semiDiameterMm: 100, visualHalfHeightPx: 92, rawHalfHeightPx: 400, clamped: true })
+  await expect(page.locator('#layout-svg [data-surface-id="STOP"]')).toHaveAttribute('data-annulus-inner-semi-diameter-mm', '40')
+  await expect(page.locator('#layout-svg [data-surface-id="STOP"] .stop-obscuration')).toHaveCount(1)
   expect(await layoutSurfaceScale(page, 'M1')).toMatchObject({ semiDiameterMm: 100, visualHalfHeightPx: 92, rawHalfHeightPx: 400, clamped: true })
   expect(await layoutSurfaceScale(page, 'IMG')).toMatchObject({ semiDiameterMm: 15, visualHalfHeightPx: 60, rawHalfHeightPx: 60, clamped: false })
 

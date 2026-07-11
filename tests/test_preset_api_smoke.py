@@ -106,7 +106,7 @@ def test_p005_p006_trace_and_preview_support_all_aiming_modes_without_nan(preset
 @pytest.mark.parametrize(
     ("preset_id", "center_path"),
     [
-        ("P005", ["M1", "M2", "IMG"]),
+        ("P005", ["STOP", "M1", "M2", "IMG"]),
         ("P006", ["STOP", "OBJ", "EYEPIECE", "EYE"]),
     ],
 )
@@ -149,7 +149,7 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
         "P001": (50.0, 50.0, 4.0),
         "P002": (49.21298867869991, 47.53621678328241, 3.0758117924187443),
         "P003": (93.14346592275818, 90.43162704589228, 4.657173296137909),
-        "P005": (3000.0, 1050.0, None),
+        "P005": (3000.0, 1050.0, 15.0),
         "P006": (None, None, None),
         "P007": (519.6281203750518, 452.04242770474303, 19.682883347539843),
     }
@@ -175,6 +175,40 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
                 assert value is None
             else:
                 assert value == pytest.approx(expected)
+
+
+def test_p005_annular_stop_blocks_the_secondary_mirror_central_obscuration():
+    preset = next(item for item in _shipped_presets() if item["id"] == "P005")
+    stop = preset["system"]["surfaces"][0]
+    assert stop["id"] == "STOP"
+    assert stop["kind"] == "aperture_stop"
+    assert stop["aperture"] == {
+        "shape": "annulus",
+        "inner_semi_diameter_mm": 40,
+        "outer_semi_diameter_mm": 100,
+    }
+
+    compiled = compile_system(load_system(preset["system"]))
+    trace = trace_forward(
+        compiled,
+        [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}],
+        {"samples_per_field": 9, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+        [587.56],
+        {"store_path": True, "include_layout_baseline_rays": True},
+    )
+    stop_points = [
+        entry["local_point_mm"]
+        for path in trace.paths
+        for entry in path
+        if entry["surface_id"] == "STOP"
+    ]
+    stop_radii = [math.hypot(point[1], point[2]) for point in stop_points]
+    assert len(stop_radii) == 9
+    assert all(40.0 - 1.0e-6 <= radius <= 100.0 + 1.0e-6 for radius in stop_radii)
+
+    baseline = trace.metadata["layout_baseline_rays"]
+    assert all(abs(float(ray["stop_y_mm"])) >= 40.0 - 1.0e-6 for ray in baseline)
+    assert all([hit["surface_id"] for hit in ray["path"]][:2] == ["STOP", "M1"] for ray in baseline)
 
 
 def test_shipped_focal_preset_mid_fields_use_seventy_percent_image_height():

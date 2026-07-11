@@ -861,6 +861,9 @@ function LayoutView({
   const surfaceViews = positions.map(({ surface, x }, index) => {
     const semiD = surfaceSemiDiameter(surface, configuration)
     const h = apertureY(semiD)
+    const annulusInnerSemiD = surface.kind === 'aperture_stop' && surface.aperture?.shape === 'annulus'
+      ? scalarNumber(surface.aperture.inner_semi_diameter_mm)
+      : undefined
     const rawH = semiD * 4
     const transform = groupVisualTransform(system, surface.id, configuration)
     const sy = centerY - Math.max(-52, Math.min(52, transform.shiftY * 10))
@@ -872,6 +875,7 @@ function LayoutView({
       sx: xScale(x),
       semiD,
       h,
+      annulusInnerSemiD,
       rawH,
       sy,
       tiltDx,
@@ -919,10 +923,11 @@ function LayoutView({
       {glassElements.map((element) => (
         <path key={element.key} d={element.d} className={`glass-element${element.warning ? ' glass-element-warning' : ''}`} />
       ))}
-      {surfaceViews.map(({ surface, sx, sy, semiD, h, rawH, tiltDx, transform, profilePoints, cementedBoundary }) => {
+      {surfaceViews.map(({ surface, sx, sy, semiD, h, rawH, annulusInnerSemiD, tiltDx, transform, profilePoints, cementedBoundary }) => {
         const className = `surface-line surface-${surface.kind}${transform.active ? ' surface-configured' : ''}${cementedBoundary ? ' surface-cemented' : ''}`
         const profile = pointsPath(profilePoints)
         const labelY = sy + h + 22 + (labelRows.get(surface.id) ?? 0) * 13
+        const obscurationHalfHeight = annulusInnerSemiD && semiD > 0 ? h * annulusInnerSemiD / semiD : 0
         return (
           <g
             key={surface.id}
@@ -932,9 +937,11 @@ function LayoutView({
             data-visual-half-height-px={h}
             data-raw-half-height-px={rawH}
             data-scale-clamped={Math.abs(h - rawH) > 1.0e-9 ? 'true' : 'false'}
+            data-annulus-inner-semi-diameter-mm={annulusInnerSemiD}
           >
             {profilePoints.length > 2 ? <path d={profile} className={className} fill="none" /> : <line x1={sx - tiltDx} x2={sx + tiltDx} y1={sy - h} y2={sy + h} className={className} />}
             {surface.kind === 'sensor' ? <rect x={sx - 3} y={sy - h} width="6" height={h * 2} className="sensor-plane" /> : null}
+            {annulusInnerSemiD ? <rect x={sx - 3} y={sy - obscurationHalfHeight} width="6" height={obscurationHalfHeight * 2} className="stop-obscuration" /> : null}
             {surface.kind === 'aperture_stop' ? <circle cx={sx} cy={sy} r={Math.max(3, Math.min(6, h * 0.12))} className="stop-dot" /> : null}
             {transform.active ? <circle cx={sx} cy={sy - h - 10} r="3.5" className="configured-dot" /> : null}
             <text x={sx} y={labelY} textAnchor="middle" className="surface-label">

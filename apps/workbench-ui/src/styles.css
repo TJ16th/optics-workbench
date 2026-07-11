@@ -680,6 +680,11 @@ body {
   fill: var(--ow-amber);
 }
 
+.stop-obscuration {
+  fill: var(--ow-amber);
+  opacity: 0.6;
+}
+
 .configured-dot {
   fill: #da1e28;
 }
