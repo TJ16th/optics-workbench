@@ -319,6 +319,29 @@ test('preset selector lists shipped presets in natural id order', async ({ page 
   expect(presetIds).toEqual(['P001', 'P002', 'P003', 'P005', 'P006', 'P007'])
 })
 
+test('shipped preset selection resets fields to recommended values', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+
+  await page.locator('#field-2-theta-y').fill('20')
+  const expected = [
+    ['P002 N-BK7 Biconvex Singlet 50mm Demo', '7', '14'],
+    ['P001 Ideal Thin Lens 50mm F4', '10', '18'],
+    ['P003 Achromat Doublet 100mm Demo', '5', '10'],
+    ['P005 Coaxial Cassegrain Telescope Demo', '0.15', '0.28'],
+    ['P006 Keplerian Afocal Telescope Demo', '0.5', '1'],
+    ['P007 Fast Positive-Negative Meniscus Pair 50mm Demo', '0.75', '1.5'],
+  ]
+  for (const [presetName, middle, edge] of expected) {
+    await selectPresetOption(page, presetName)
+    await expect(page.locator('#field-0-id')).toHaveValue('center')
+    await expect(page.locator('#field-1-id')).toHaveValue('mid-y')
+    await expect(page.locator('#field-2-id')).toHaveValue('edge-y')
+    await expect(page.locator('#field-1-theta-y')).toHaveValue(middle)
+    await expect(page.locator('#field-2-theta-y')).toHaveValue(edge)
+  }
+})
+
 test('analysis condition edits mark dirty and rerun preview with updated results', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en')
@@ -562,8 +585,8 @@ test('layout view scales stop, sensor, and eye symbols from physical dimensions'
 
   await selectPresetOption(page, 'P002 N-BK7 Biconvex Singlet 50mm Demo')
   expect(await layoutSurfaceScale(page, 'STOP')).toMatchObject({ semiDiameterMm: 8, visualHalfHeightPx: 32, rawHalfHeightPx: 32, clamped: false })
-  expect(await layoutSurfaceScale(page, 'IMG')).toMatchObject({ semiDiameterMm: 12, visualHalfHeightPx: 48, rawHalfHeightPx: 48, clamped: false })
-  await expect(page.locator('#layout-svg [data-surface-id="IMG"] rect.sensor-plane')).toHaveAttribute('height', '96')
+  expect(await layoutSurfaceScale(page, 'IMG')).toMatchObject({ semiDiameterMm: 18, visualHalfHeightPx: 72, rawHalfHeightPx: 72, clamped: false })
+  await expect(page.locator('#layout-svg [data-surface-id="IMG"] rect.sensor-plane')).toHaveAttribute('height', '144')
 
   await selectPresetOption(page, 'P005 Coaxial Cassegrain Telescope Demo')
   expect(await layoutSurfaceScale(page, 'M1')).toMatchObject({ semiDiameterMm: 100, visualHalfHeightPx: 92, rawHalfHeightPx: 400, clamped: true })
@@ -709,7 +732,7 @@ test('ray count edits only change samples per field in preview requests', async 
   await expect(summary).toContainText('25')
   await expect(summary).toContainText('hexapolar')
   await expect(summary).toContainText('full')
-  await expect(summary).toContainText('center, edge-y, edge-z')
+  await expect(summary).toContainText('center, mid-y, edge-y')
 })
 
 test('layout baseline chief and marginal rays are stable across ray counts', async ({ page }) => {

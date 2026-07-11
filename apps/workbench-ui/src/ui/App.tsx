@@ -182,6 +182,10 @@ function cloneFields(fields: AnalysisField[]): AnalysisField[] {
   return fields.map((field) => ({ ...field }))
 }
 
+function presetFields(preset: { recommendedFields?: AnalysisField[] }) {
+  return cloneFields(preset.recommendedFields ?? defaultFieldSet)
+}
+
 function initialWavelengths(system: OpticalSystem): WavelengthSample[] {
   const samples = system.wavelengths_nm?.samples?.length ? system.wavelengths_nm.samples : [system.wavelengths_nm?.primary ?? 587.56]
   return samples.map((wavelength) => ({ wavelength_nm: wavelength, weight: wavelength === system.wavelengths_nm?.primary ? 1 : 0.5 }))
@@ -489,8 +493,8 @@ function apertureStopRadiusForLayout(system: OpticalSystem, configuration?: Runt
 
 function surfaceSemiDiameter(surface: Surface, configuration?: RuntimeConfiguration) {
   if (surface.kind === 'sensor') {
-    const sensorHeight = scalarNumber(surface.sensor?.height_mm)
-    return sensorHeight && sensorHeight > 0 ? sensorHeight / 2 : 8
+    const sensorWidth = scalarNumber(surface.sensor?.width_mm)
+    return sensorWidth && sensorWidth > 0 ? sensorWidth / 2 : 8
   }
   if (surface.kind === 'eye_reference') {
     const eyePupilDiameter = scalarNumber(surface.eye?.pupil_diameter_mm)
@@ -2354,7 +2358,7 @@ export function App() {
   const [selectedPresetId, setSelectedPresetId] = useState('P001')
   const [activeTab, setActiveTab] = useState<TabKey>('preview')
   const [samplesPerField, setSamplesPerField] = useState(9)
-  const [analysisFields, setAnalysisFields] = useState<AnalysisField[]>(() => cloneFields(defaultFieldSet))
+  const [analysisFields, setAnalysisFields] = useState<AnalysisField[]>(() => presetFields(presets[0]))
   const [wavelengths, setWavelengths] = useState<WavelengthSample[]>(() => initialWavelengths(presets[0].system))
   const [pupilDistribution, setPupilDistribution] = useState('grid')
   const [aimingMode, setAimingMode] = useState('paraxial')
@@ -2865,7 +2869,7 @@ export function App() {
                   setFocusCurve([])
                   setFocusResult(undefined)
                   setValidation(null)
-                  setAnalysisFields(cloneFields(defaultFieldSet))
+                  setAnalysisFields(presetFields(selectedItem))
                   setWavelengths(initialWavelengths(selectedItem.system))
                   setSamplesPerField(9)
                   setPupilDistribution('grid')

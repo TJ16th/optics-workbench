@@ -22,6 +22,11 @@ export const presets: Preset[] = [
     name: 'Ideal Thin Lens 50mm F4',
     summary: 'Thin lens baseline for paraxial, preview, spot, and focus policy checks.',
     recommendedAnalysis: ['preview', 'spot', 'paraxial'],
+    recommendedFields: [
+      { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
+      { id: 'mid-y', type: 'angular', theta_y_deg: 10, theta_z_deg: 0 },
+      { id: 'edge-y', type: 'angular', theta_y_deg: 18, theta_z_deg: 0 },
+    ],
     system: {
       name: 'P001 Ideal Thin Lens 50mm F4',
       units: 'mm',
@@ -55,6 +60,11 @@ export const presets: Preset[] = [
     name: 'N-BK7 Biconvex Singlet 50mm Demo',
     summary: 'Simple spherical singlet for basic aberration and chromatic behavior.',
     recommendedAnalysis: ['preview', 'spot', 'chromatic'],
+    recommendedFields: [
+      { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
+      { id: 'mid-y', type: 'angular', theta_y_deg: 7, theta_z_deg: 0 },
+      { id: 'edge-y', type: 'angular', theta_y_deg: 14, theta_z_deg: 0 },
+    ],
     system: {
       name: 'P002 N-BK7 Biconvex Singlet',
       units: 'mm',
@@ -82,6 +92,11 @@ export const presets: Preset[] = [
     name: 'Coaxial Cassegrain Telescope Demo',
     summary: 'v2.1 corrected coaxial two-mirror telescope: EFL about 3000mm and F/15.',
     recommendedAnalysis: ['paraxial', 'preview'],
+    recommendedFields: [
+      { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
+      { id: 'mid-y', type: 'angular', theta_y_deg: 0.15, theta_z_deg: 0 },
+      { id: 'edge-y', type: 'angular', theta_y_deg: 0.28, theta_z_deg: 0 },
+    ],
     system: {
       name: 'P005 Coaxial Cassegrain v2.1',
       units: 'mm',
@@ -101,6 +116,11 @@ export const presets: Preset[] = [
     name: 'Achromat Doublet 100mm Demo',
     summary: 'BK7/F2 achromat for chromatic, ray fan, MTF, distortion, and field curvature views.',
     recommendedAnalysis: ['preview', 'ray_fan', 'mtf', 'distortion', 'field_curvature'],
+    recommendedFields: [
+      { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
+      { id: 'mid-y', type: 'angular', theta_y_deg: 5, theta_z_deg: 0 },
+      { id: 'edge-y', type: 'angular', theta_y_deg: 10, theta_z_deg: 0 },
+    ],
     system: {
       name: 'P003 Achromat Doublet 100mm',
       units: 'mm',
@@ -137,6 +157,11 @@ export const presets: Preset[] = [
     name: 'Keplerian Afocal Telescope Demo',
     summary: 'Afocal telescope with an eye_reference terminal plane; image-plane policy controls are intentionally disabled.',
     recommendedAnalysis: ['afocal', 'exit_pupil', 'telescope'],
+    recommendedFields: [
+      { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
+      { id: 'mid-y', type: 'angular', theta_y_deg: 0.5, theta_z_deg: 0 },
+      { id: 'edge-y', type: 'angular', theta_y_deg: 1, theta_z_deg: 0 },
+    ],
     system: {
       name: 'P006 Keplerian Afocal Telescope',
       units: 'mm',
@@ -168,6 +193,11 @@ export const presets: Preset[] = [
     name: 'Fast Positive-Negative Meniscus Pair 50mm Demo',
     summary: 'Fast F/1.8 two-group meniscus pair for checking strong positive and negative curvature in the layout view.',
     recommendedAnalysis: ['preview', 'spot', 'ray_fan', 'paraxial'],
+    recommendedFields: [
+      { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
+      { id: 'mid-y', type: 'angular', theta_y_deg: 0.75, theta_z_deg: 0 },
+      { id: 'edge-y', type: 'angular', theta_y_deg: 1.5, theta_z_deg: 0 },
+    ],
     system: {
       name: 'P007 Fast Positive-Negative Meniscus Pair 50mm',
       units: 'mm',

@@ -862,6 +862,8 @@ Validated
 | eye_reference | eye.pupil_diameter_mm, position_mode |
 | dummy | id, thickness_after_mm |
 
+sensor編集では、`width_mm` をY軸方向（面内水平）、`height_mm` をZ軸方向（面内垂直）の全長として扱う。
+
 ## 12.3 R=0の扱い
 
 `radius_mm = 0` は平面として扱う。  
