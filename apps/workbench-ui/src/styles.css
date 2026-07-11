@@ -561,6 +561,11 @@ body {
   border-top-width: 1.4px;
 }
 
+.legend-mirror {
+  border-color: #8a3ffc;
+  border-top-width: 3px;
+}
+
 .legend-focus {
   border-color: #24a148;
   border-top-style: dashed;
@@ -602,6 +607,15 @@ body {
   height: 9px;
   border-radius: 50%;
   background: var(--ow-amber);
+}
+
+.legend-annulus::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 3px solid var(--ow-amber);
+  border-radius: 50%;
+  box-sizing: border-box;
 }
 
 .legend-img::before {

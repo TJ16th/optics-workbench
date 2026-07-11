@@ -8,8 +8,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import numpy as np
 
 from optics_engine import analyze_paraxial, compile_system, load_system, trace_forward
+from optics_engine.core import reflect, surface_normals_for_surface
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -212,6 +214,28 @@ def test_p005_annular_stop_blocks_the_secondary_mirror_central_obscuration():
     baseline = trace.metadata["layout_baseline_rays"]
     assert all(abs(float(ray["stop_y_mm"])) >= 40.0 - 1.0e-6 for ray in baseline)
     assert all([hit["surface_id"] for hit in ray["path"]][:2] == ["STOP", "M1"] for ray in baseline)
+
+
+def test_p005_mirror_reflections_match_the_vector_reflection_law():
+    preset = next(item for item in _shipped_presets() if item["id"] == "P005")
+    compiled = compile_system(load_system(preset["system"]))
+    trace = trace_forward(
+        compiled,
+        [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}],
+        {"samples_per_field": 3, "pupil_distribution": "fan_y", "ray_aiming": {"mode": "full"}},
+        [587.56],
+        {"store_path": True},
+    )
+    for path in trace.paths:
+        for path_index, surface_id in ((1, "M1"), (2, "M2")):
+            surface_index = compiled.surface_index(surface_id)
+            surface = compiled.surfaces[surface_index]
+            point = np.asarray([path[path_index]["point_mm"]], dtype=float)
+            incoming = np.asarray(path[path_index]["direction"], dtype=float)
+            outgoing = np.asarray(path[path_index + 1]["direction"], dtype=float)
+            normal = surface_normals_for_surface(point, compiled.surface_positions_mm[surface_index], surface)
+            expected = reflect(incoming[None, :], normal)[0]
+            assert outgoing == pytest.approx(expected, abs=1.0e-12)
 
 
 def test_shipped_focal_preset_mid_fields_use_seventy_percent_image_height():

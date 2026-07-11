@@ -4,6 +4,7 @@
     "optical_layout_aria": "光学レイアウトプレビュー",
     "legend": {
       "air_gap": "空気間隔",
+      "annulus_obscuration": "Annulus STOP（副鏡による中央遮蔽）",
       "aria": "光学レイアウト凡例",
       "c_line": "C線",
       "cemented_surface": "接合面",
@@ -16,6 +17,7 @@
       "glass_region": "ガラス領域",
       "img_symbol": "IMG",
       "marginal_ray": "周辺光線",
+      "mirror_surface": "反射面",
       "markers": "マーカー",
       "principal_plane": "H1/H2主平面",
       "rays": "光線",

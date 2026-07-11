@@ -4,6 +4,7 @@
     "optical_layout_aria": "Optical layout preview",
     "legend": {
       "air_gap": "Air gap",
+      "annulus_obscuration": "Annulus STOP (secondary-mirror central obstruction)",
       "aria": "Optical layout legend",
       "c_line": "C line",
       "cemented_surface": "Cemented surface",
@@ -16,6 +17,7 @@
       "glass_region": "Glass region",
       "img_symbol": "IMG",
       "marginal_ray": "Marginal ray",
+      "mirror_surface": "Reflecting surface",
       "markers": "Markers",
       "principal_plane": "H1/H2 principal plane",
       "rays": "Rays",

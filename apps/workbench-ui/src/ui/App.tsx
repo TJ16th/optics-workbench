@@ -670,7 +670,9 @@ function surfaceProfilePoints(surface: Surface, vertexX: number, sy: number, h: 
     const t = index / 24
     const pixelOffset = -h + t * h * 2
     const rayHeightMm = (pixelOffset / h) * semiDiameterMm
-    const sag = surfaceSagMm(surface, rayHeightMm)
+    // Long-radius mirrors are nearly flat at layout scale; amplify only their
+    // displayed sag so the reflecting curvature and sign remain legible.
+    const sag = surfaceSagMm(surface, rayHeightMm) * (surface.kind === 'mirror' ? 8 : 1)
     const tiltedX = (pixelOffset / h) * tiltDx
     return { x: xScale(vertexX + sag) + tiltedX, y: sy + pixelOffset }
   })
@@ -710,7 +712,7 @@ function rayPathD(
   xScale: (x: number) => number,
   centerY: number,
   yScale: number,
-  objectExtensionMm: number,
+  objectPlaneX: number,
   imageExtensionMm: number,
 ) {
   const points = path
@@ -720,7 +722,10 @@ function rayPathD(
   const firstDirection = path.find((entry) => entry.direction)?.direction
   const lastDirection = [...path].reverse().find((entry) => entry.direction)?.direction
   const extendedPoints = [...points]
-  const objectPoint = offsetRayPoint(points[0], firstDirection, objectExtensionMm, -1)
+  const objectDistance = firstDirection && Math.abs(firstDirection[0]) > 1.0e-12
+    ? Math.max(0, (points[0][0] - objectPlaneX) / firstDirection[0])
+    : 0
+  const objectPoint = offsetRayPoint(points[0], firstDirection, objectDistance, -1)
   if (objectPoint) extendedPoints.unshift(objectPoint)
   const imagePoint = imageExtensionMm > 0 ? offsetRayPoint(points[points.length - 1], lastDirection, imageExtensionMm, 1) : null
   if (imagePoint) extendedPoints.push(imagePoint)
@@ -835,13 +840,14 @@ function LayoutView({
   const baseMaxX = Math.max(...baseXs, 1)
   const baseSpan = Math.max(1, baseMaxX - baseMinX)
   const objectExtensionMm = Math.max(8, baseSpan * 0.2)
+  const objectPlaneX = baseMinX - objectExtensionMm
   const hasSensor = system.surfaces.some((surface) => surface.kind === 'sensor')
   const paraxial = trace?.metadata.paraxial
   const paraxialImageX = paraxial?.paraxial_image_position_mm
   const principalPlaneXs = paraxial?.principal_plane_positions_mm ?? []
   const xs = [
     ...baseXs,
-    baseMinX - objectExtensionMm,
+    objectPlaneX,
     ...(!hasSensor ? [baseMaxX + objectExtensionMm] : []),
   ]
   const minX = Math.min(...xs, 0)
@@ -919,6 +925,7 @@ function LayoutView({
       data-density-rays={tracePaths.length}
       data-paraxial-image-x-mm={Number.isFinite(paraxialImageX) ? paraxialImageX : undefined}
       data-ray-y-scale={rayYScale}
+      data-object-plane-x-mm={objectPlaneX}
     >
       <title>{t('layoutView.optical_layout')}</title>
       <line x1="24" x2="696" y1={centerY} y2={centerY} className="axis-line" />
@@ -989,7 +996,7 @@ function LayoutView({
       )}
       {showDensityRays && tracePaths?.length
         ? tracePaths.map(({ path, className, index, fieldIndex, wavelengthIndex, sampleIndex, sampleRole, stopY }) => {
-            const d = rayPathD(path, xScale, centerY, rayYScale, objectExtensionMm, hasSensor ? 0 : objectExtensionMm)
+            const d = rayPathD(path, xScale, centerY, rayYScale, objectPlaneX, hasSensor ? 0 : objectExtensionMm)
             return d ? (
               <path
                 key={index}
@@ -1013,7 +1020,7 @@ function LayoutView({
           })
           : null}
       {baselinePaths.map(({ path, className, index, field_index, wavelength_index, role, status, stop_y_mm }) => {
-        const d = rayPathD(path, xScale, centerY, rayYScale, objectExtensionMm, hasSensor ? 0 : objectExtensionMm)
+        const d = rayPathD(path, xScale, centerY, rayYScale, objectPlaneX, hasSensor ? 0 : objectExtensionMm)
         return d ? (
           <path
             key={`baseline-${index}`}
@@ -1058,7 +1065,9 @@ function LayoutLegend() {
         { key: 'glass', className: 'legend-swatch legend-glass', label: t('layoutView.legend.glass_region') },
         { key: 'air', className: 'legend-swatch legend-air', label: t('layoutView.legend.air_gap') },
         { key: 'cemented', className: 'legend-line legend-cemented', label: t('layoutView.legend.cemented_surface') },
+        { key: 'mirror', className: 'legend-line legend-mirror', label: t('layoutView.legend.mirror_surface') },
         { key: 'stop', className: 'legend-symbol legend-stop', label: t('layoutView.legend.stop_symbol') },
+        { key: 'annulus', className: 'legend-symbol legend-annulus', label: t('layoutView.legend.annulus_obscuration') },
         { key: 'img', className: 'legend-symbol legend-img', label: t('layoutView.legend.img_symbol') },
       ],
     },
