@@ -189,6 +189,29 @@ def summarize_trace(trace) -> dict[str, Any]:
     }
 
 
+def summarize_http_trace(response_json: dict[str, Any]) -> dict[str, Any]:
+    status = response_json.get("status", [])
+    metadata = response_json.get("metadata", {})
+    profiling = metadata.get("profiling", {})
+    return {
+        "rays": len(status),
+        "arrived": sum(1 for item in status if item == "alive"),
+        "blocked": sum(1 for item in status if item == "blocked"),
+        "aiming_failed": int(metadata.get("aiming_failed_count", 0)),
+        "aiming_iterations_max": int(metadata.get("aiming_iterations_max", 0)),
+        "profiling_ms": {
+            "compile_ms": profiling.get("compile_ms"),
+            "validation_ms": profiling.get("validation_ms"),
+            "aiming_ms": profiling.get("aiming_ms"),
+            "trace_ms": profiling.get("trace_ms"),
+            "analysis_postprocessing_ms": profiling.get("analysis_postprocessing_ms"),
+            "total_ms": profiling.get("total_ms"),
+            "http_total_ms": profiling.get("http_total_ms"),
+        },
+        "compile_cache_hit": profiling.get("compile_cache_hit"),
+    }
+
+
 def summarize_relative_illumination(result) -> dict[str, Any]:
     rows = []
     for row in result.rows:
@@ -280,6 +303,55 @@ def run_benchmark(profile: str) -> dict[str, Any]:
                 ),
                 context,
                 summarize_trace,
+            )
+        )
+
+    try:
+        from fastapi.testclient import TestClient
+        from optics_engine.api.main import app
+
+        client = TestClient(app)
+        system_id = client.post("/v1/systems/register", json=system.model_dump(mode="json")).json()["system_id"]
+
+        def http_trace_forward() -> dict[str, Any]:
+            response = client.post(
+                "/v1/trace/forward",
+                json={
+                    "system_id": system_id,
+                    "fields": FIELDS_3,
+                    "ray_sampling": {"samples_per_field": int(settings["preview_samples"]), "pupil_distribution": "grid", "ray_aiming": {"mode": "full"}},
+                    "wavelengths_nm": WAVELENGTHS_3,
+                    "options": {"profiling": True},
+                },
+            )
+            response.raise_for_status()
+            return response.json()
+
+        cases.append(
+            (
+                f"http trace preview full aiming: 3 fields x 3 wavelengths x {int(settings['preview_samples'])} rays",
+                http_trace_forward,
+                {
+                    **case_context(
+                        fields=FIELDS_3,
+                        wavelengths=WAVELENGTHS_3,
+                        samples_per_field=int(settings["preview_samples"]),
+                        surface_count=surface_count,
+                        ray_aiming_mode="full",
+                    ),
+                    "transport": "fastapi_testclient",
+                    "endpoint": "/v1/trace/forward",
+                },
+                summarize_http_trace,
+            )
+        )
+    except Exception as exc:
+        cases.append(
+            (
+                "http trace preview full aiming: unavailable",
+                lambda exc=exc: {"status": [], "metadata": {"error": repr(exc)}},
+                {"transport": "fastapi_testclient", "endpoint": "/v1/trace/forward", "total_rays": 1, "surface_ray_count": 1},
+                lambda result: {"error": result.get("metadata", {}).get("error")},
             )
         )
 

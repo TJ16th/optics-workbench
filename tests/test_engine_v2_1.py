@@ -539,7 +539,14 @@ def test_ray_fan_longitudinal_distortion_and_profiling_are_available():
 
     trace = trace_forward(compiled, fields, sampling, [587.56], {"profiling": True})
     assert trace.metadata["profiling"]["total_rays"] == 7
+    assert trace.metadata["profiling"]["compile_ms"] == 0.0
+    assert trace.metadata["profiling"]["compile_cache_hit"] is None
+    assert trace.metadata["profiling"]["aiming_ms"] >= 0.0
     assert trace.metadata["profiling"]["trace_ms"] >= 0.0
+    assert trace.metadata["profiling"]["analysis_postprocessing_ms"] == 0.0
+    assert trace.metadata["profiling"]["cache_hits"] >= 0
+    assert trace.metadata["profiling"]["cache_misses"] >= 0
+    assert "aiming_iterations_mean" in trace.metadata["profiling"]
     assert trace.metadata["evaluated_fields"][0]["id"] == "edge"
     assert trace.metadata["wavelengths_nm"] == [587.56]
     assert trace.metadata["pupil_distribution"] == "fan_y"
@@ -637,11 +644,17 @@ def test_http_api_v2_1_smoke_with_artifact_fetch():
             "fields": [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}],
             "ray_sampling": {"samples_per_field": 9, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}},
             "image_plane_policy": {"mode": "paraxial_image"},
+            "options": {"profiling": True},
         },
     )
     assert spot.status_code == 200
     spot_json = spot.json()
     assert spot_json["metadata"]["evaluation_plane"]["evaluation_plane_x_mm"] == pytest.approx(100.0)
+    spot_profile = spot_json["metadata"]["profiling"]
+    assert spot_profile["compile_cache_hit"] is True
+    assert spot_profile["compile_ms"] >= 0.0
+    assert spot_profile["analysis_postprocessing_ms"] >= 0.0
+    assert spot_profile["http_total_ms"] >= spot_profile["total_ms"]
     assert spot_json["metadata"]["artifact_expires_at"]["spot_points"] > time.time()
     artifact_uri = spot_json["artifacts"]["spot_points"]
     category, artifact_id = artifact_uri.removeprefix("artifact://").split("/")
@@ -658,12 +671,20 @@ def test_http_api_v2_1_smoke_with_artifact_fetch():
             "fields": [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}],
             "ray_sampling": {"samples_per_field": 3, "pupil_distribution": "fan_y", "ray_aiming": {"mode": "paraxial"}},
             "wavelengths_nm": [587.56],
-            "options": {"store_path": True},
+            "options": {"store_path": True, "profiling": True},
         },
     )
     assert trace.status_code == 200
     trace_json = trace.json()
     assert [entry["surface_id"] for entry in trace_json["paths"][2]] == ["STOP", "S1", "S2", "IMG"]
+    trace_profile = trace_json["metadata"]["profiling"]
+    assert trace_profile["compile_cache_hit"] is True
+    assert trace_profile["compile_ms"] >= 0.0
+    assert trace_profile["aiming_ms"] >= 0.0
+    assert trace_profile["trace_ms"] >= 0.0
+    assert trace_profile["analysis_postprocessing_ms"] == 0.0
+    assert trace_profile["total_rays"] == 3
+    assert trace_profile["http_total_ms"] >= trace_profile["total_ms"]
 
     for system, expected_surfaces in [
         (p002_singlet_system(), ["STOP", "S1", "S2", "IMG"]),

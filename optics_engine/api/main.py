@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import asdict, is_dataclass
 
 from .. import (
@@ -118,6 +119,51 @@ def _compiled_from_payload(payload: dict):
     return compile_system(system)
 
 
+def _compiled_from_payload_profiled(payload: dict):
+    from ..system import get_cached_system, normalized_system_hash
+
+    start = time.perf_counter()
+    system_id = payload.get("system_id") or payload.get("system_hash")
+    if system_id:
+        compiled = get_cached_system(str(system_id))
+        elapsed_ms = (time.perf_counter() - start) * 1000.0
+        if compiled is None:
+            raise HTTPException(
+                status_code=404,
+                detail=_error_detail(
+                    "system_not_found",
+                    "Unknown or expired system_id.",
+                    params={"system_id": str(system_id)},
+                ),
+            )
+        return compiled, {"compile_ms": elapsed_ms, "compile_cache_hit": True}
+
+    system = load_system(payload)
+    system_hash = normalized_system_hash(system)
+    cache_hit = get_cached_system(system_hash) is not None
+    compiled = compile_system(system)
+    elapsed_ms = (time.perf_counter() - start) * 1000.0
+    return compiled, {"compile_ms": elapsed_ms, "compile_cache_hit": cache_hit}
+
+
+def _merge_api_profiling(trace, api_profile: dict, api_started_at: float, *, analysis_postprocessing_ms: float = 0.0) -> None:
+    profiling = dict(trace.metadata.get("profiling", {}))
+    profiling["engine_total_ms"] = float(profiling.get("total_ms", 0.0))
+    profiling["compile_ms"] = float(api_profile.get("compile_ms", 0.0))
+    profiling["compile_cache_hit"] = api_profile.get("compile_cache_hit")
+    profiling["analysis_postprocessing_ms"] = float(analysis_postprocessing_ms)
+    profiling["total_ms"] = (
+        float(profiling.get("validation_ms", 0.0))
+        + profiling["compile_ms"]
+        + float(profiling.get("layout_ms", 0.0))
+        + float(profiling.get("aiming_ms", profiling.get("ray_generation_and_aiming_ms", 0.0)))
+        + float(profiling.get("trace_ms", 0.0))
+        + profiling["analysis_postprocessing_ms"]
+    )
+    profiling["http_total_ms"] = (time.perf_counter() - api_started_at) * 1000.0
+    trace.metadata["profiling"] = profiling
+
+
 def _analysis_response(result, evaluation_plane: dict | None = None):
     data = _jsonable(result)
     if evaluation_plane is None:
@@ -202,14 +248,23 @@ def paraxial(payload: dict):
 
 @app.post("/v1/trace/forward")
 def forward(payload: dict):
-    compiled = _compiled_from_payload(payload)
+    options = payload.get("options", {})
+    profiling = bool(options.get("profiling", False))
+    api_started_at = time.perf_counter()
+    if profiling:
+        compiled, api_profile = _compiled_from_payload_profiled(payload)
+    else:
+        compiled = _compiled_from_payload(payload)
+        api_profile = {"compile_ms": 0.0, "compile_cache_hit": None}
     trace = trace_forward(
         compiled,
         payload.get("fields", [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}]),
         payload.get("ray_sampling", {}),
         payload.get("wavelengths_nm"),
-        {**payload.get("options", {}), "configuration": payload.get("configuration", {})},
+        {**options, "configuration": payload.get("configuration", {})},
     )
+    if profiling:
+        _merge_api_profiling(trace, api_profile, api_started_at)
     return {
         "status": trace.status.tolist(),
         "sensor_y_mm": trace.sensor_y_mm.tolist(),
@@ -240,8 +295,18 @@ def reverse(payload: dict):
 
 @app.post("/v1/analysis/spot")
 def spot(payload: dict):
-    _, trace, evaluation_plane = _trace_for_analysis(payload)
-    data = _analysis_response(analyze_spot(trace), evaluation_plane)
+    _, trace, evaluation_plane, api_profile, api_started_at = _trace_for_analysis(payload)
+    analysis_started_at = time.perf_counter()
+    spot_result = analyze_spot(trace)
+    analysis_ms = (time.perf_counter() - analysis_started_at) * 1000.0
+    if payload.get("options", {}).get("profiling"):
+        _merge_api_profiling(trace, api_profile, api_started_at, analysis_postprocessing_ms=analysis_ms)
+    data = _analysis_response(spot_result, evaluation_plane)
+    if trace.metadata.get("profiling"):
+        data = dict(data)
+        metadata = dict(data.get("metadata", {}))
+        metadata["profiling"] = trace.metadata["profiling"]
+        data["metadata"] = metadata
     points = [
         {
             "field_id": trace.field_ids[idx],
@@ -257,7 +322,7 @@ def spot(payload: dict):
 
 @app.post("/v1/analysis/ray-fan")
 def ray_fan(payload: dict):
-    compiled, fields, sampling, wavelengths, options, evaluation_plane = _analysis_context(payload)
+    compiled, fields, sampling, wavelengths, options, evaluation_plane, _ = _analysis_context(payload)
     result = analyze_ray_fan(
         compiled,
         fields,
@@ -271,7 +336,7 @@ def ray_fan(payload: dict):
 
 @app.post("/v1/analysis/longitudinal-aberration")
 def longitudinal_aberration(payload: dict):
-    compiled, fields, sampling, wavelengths, options, evaluation_plane = _analysis_context(payload)
+    compiled, fields, sampling, wavelengths, options, evaluation_plane, _ = _analysis_context(payload)
     result = analyze_longitudinal_aberration(
         compiled,
         fields,
@@ -308,7 +373,7 @@ def chromatic(payload: dict):
 
 @app.post("/v1/analysis/distortion")
 def distortion(payload: dict):
-    compiled, fields, _, wavelengths, options, evaluation_plane = _analysis_context(payload)
+    compiled, fields, _, wavelengths, options, evaluation_plane, _ = _analysis_context(payload)
     result = analyze_distortion(
         compiled,
         fields,
@@ -331,22 +396,28 @@ def ms_image_surface(payload: dict):
 
 
 def _analysis_context(payload: dict):
-    compiled = _compiled_from_payload(payload)
+    options_payload = payload.get("options", {})
+    if options_payload.get("profiling"):
+        compiled, api_profile = _compiled_from_payload_profiled(payload)
+    else:
+        compiled = _compiled_from_payload(payload)
+        api_profile = {"compile_ms": 0.0, "compile_cache_hit": None}
     fields = payload.get("fields", [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}])
     sampling = payload.get("ray_sampling", {})
     wavelengths = payload.get("wavelengths_nm")
-    options = {**payload.get("options", {}), "configuration": payload.get("configuration", {})}
+    options = {**options_payload, "configuration": payload.get("configuration", {})}
     evaluation_plane = None
     if "image_plane_policy" in payload:
         resolution = resolve_image_plane_policy(compiled, fields, sampling, wavelengths, options, payload.get("image_plane_policy"))
         compiled = resolution.compiled
         options = {**options, "configuration": resolution.configuration}
         evaluation_plane = resolution.metadata
-    return compiled, fields, sampling, wavelengths, options, evaluation_plane
+    return compiled, fields, sampling, wavelengths, options, evaluation_plane, api_profile
 
 
 def _trace_for_analysis(payload: dict):
-    compiled, fields, sampling, wavelengths, options, evaluation_plane = _analysis_context(payload)
+    api_started_at = time.perf_counter()
+    compiled, fields, sampling, wavelengths, options, evaluation_plane, api_profile = _analysis_context(payload)
     trace = trace_forward(
         compiled,
         fields,
@@ -354,12 +425,12 @@ def _trace_for_analysis(payload: dict):
         wavelengths,
         options,
     )
-    return compiled, trace, evaluation_plane
+    return compiled, trace, evaluation_plane, api_profile, api_started_at
 
 
 @app.post("/v1/analysis/psf")
 def psf(payload: dict):
-    _, trace, evaluation_plane = _trace_for_analysis(payload)
+    _, trace, evaluation_plane, _, _ = _trace_for_analysis(payload)
     data = _analysis_response(
         analyze_geometric_psf(
             trace,
@@ -374,7 +445,7 @@ def psf(payload: dict):
 
 @app.post("/v1/analysis/mtf")
 def mtf(payload: dict):
-    _, trace, evaluation_plane = _trace_for_analysis(payload)
+    _, trace, evaluation_plane, _, _ = _trace_for_analysis(payload)
     return _analysis_response(analyze_geometric_mtf(trace, payload.get("frequencies_lp_per_mm", [0.0, 10.0, 20.0])), evaluation_plane)
 
 

@@ -1012,14 +1012,22 @@ def trace_forward(
             }
         )
     if profiling:
+        aiming_ms = (t_generation - t_layout) * 1000.0
+        trace_ms = (t_trace - t_generation) * 1000.0
         result.metadata["profiling"] = {
             "validation_ms": (t_validation - t0) * 1000.0,
+            "compile_ms": 0.0,
+            "compile_cache_hit": None,
             "layout_ms": (t_layout - t_validation) * 1000.0,
-            "ray_generation_and_aiming_ms": (t_generation - t_layout) * 1000.0,
-            "trace_ms": (t_trace - t_generation) * 1000.0,
+            "aiming_ms": aiming_ms,
+            "ray_generation_and_aiming_ms": aiming_ms,
+            "trace_ms": trace_ms,
+            "analysis_postprocessing_ms": 0.0,
             "total_ms": (t_trace - t0) * 1000.0,
             "total_rays": int(result.status.size),
             "cache_hit": None,
+            "cache_hits": int(aiming_cache_hits),
+            "cache_misses": int(aiming_cache_misses),
             "aiming_failed_count": int(np.sum(~aiming_ok_array)),
             "aiming_iterations_max": int(max(aiming_iterations) if aiming_iterations else 0),
             "aiming_iterations_mean": float(np.mean(aiming_iterations)) if aiming_iterations else 0.0,
