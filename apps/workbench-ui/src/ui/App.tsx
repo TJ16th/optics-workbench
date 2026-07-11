@@ -144,6 +144,7 @@ const wavelengthPresets: Array<{ id: string; label: string; wavelength_nm: numbe
 const sliderPreviewDebounceMs = 70
 const sliderPreviewSamplesPerField = 5
 const decenterShiftLimitMm = 5
+const presetIdCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
 const surfaceColumns: Array<{
   id: string
@@ -528,6 +529,10 @@ function presetLabel(id: string, fallback: string, t: (key: string, options?: Re
 
 function presetSummary(id: string, fallback: string, t: (key: string, options?: Record<string, unknown>) => string) {
   return t(`common.preset.items.${id}.summary`, { defaultValue: fallback })
+}
+
+function sortPresetsById(items: typeof presets) {
+  return [...items].sort((left, right) => presetIdCollator.compare(left.id, right.id))
 }
 
 function getApiIssue(error: unknown): EngineIssue | undefined {
@@ -2290,7 +2295,7 @@ function ImagePlanePolicyPanel({
 export function App() {
   const { t, i18n } = useTranslation(['common', 'settings', 'analysis', 'layoutView'])
   const fixtureMode = new URLSearchParams(window.location.search).get('fixture')
-  const availablePresets = fixtureMode === 'asphere-layout' ? [...presets, ...visualFixturePresets] : presets
+  const availablePresets = sortPresetsById(fixtureMode === 'asphere-layout' ? [...presets, ...visualFixturePresets] : presets)
   const [apiBase, setApiBase] = useState(defaultApiBase)
   const [selectedPresetId, setSelectedPresetId] = useState('P001')
   const [activeTab, setActiveTab] = useState<TabKey>('preview')

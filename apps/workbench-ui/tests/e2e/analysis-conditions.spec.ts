@@ -295,6 +295,16 @@ async function selectPresetOption(page: import('@playwright/test').Page, label: 
   await expect(page.getByRole('combobox', { name: 'Preset', exact: true })).toContainText(label)
 }
 
+test('preset selector lists shipped presets in natural id order', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+
+  await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
+  const optionTexts = await page.getByRole('option').allTextContents()
+  const presetIds = optionTexts.map((text) => /P\d{3}/.exec(text)?.[0]).filter((id): id is string => Boolean(id))
+  expect(presetIds).toEqual(['P001', 'P002', 'P003', 'P005', 'P006', 'P007'])
+})
+
 test('analysis condition edits mark dirty and rerun preview with updated results', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en')
@@ -518,6 +528,7 @@ test('P007 fast meniscus pair preset renders strong positive and negative curvat
   const profiles = page.locator('#layout-svg path.surface-refractive')
   await expect(profiles).toHaveCount(4)
   await expect(page.locator('#layout-svg path.glass-element')).toHaveCount(2)
+  await expect(page.locator('#layout-svg path.glass-element-warning')).toHaveCount(0)
   await expect(page.locator('#layout-svg')).toContainText('S1')
   await expect(page.locator('#layout-svg')).toContainText('S4')
   expect(await layoutSurfaceScale(page, 'STOP')).toMatchObject({ semiDiameterMm: 13.2, visualHalfHeightPx: 52.8, rawHalfHeightPx: 52.8, clamped: false })
@@ -532,6 +543,24 @@ test('P007 fast meniscus pair preset renders strong positive and negative curvat
   await page.getByRole('button', { name: 'Run Preview' }).click()
   await expectLayoutRayPath(page, 7)
   expect(Number(await page.locator('#layout-svg').getAttribute('data-total-rays'))).toBe(81)
+})
+
+test('shipped presets keep layout glass fills free of edge-thickness warnings', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+
+  const labels = [
+    'P001 Ideal Thin Lens 50mm F4',
+    'P002 N-BK7 Biconvex Singlet 50mm Demo',
+    'P003 Achromat Doublet 100mm Demo',
+    'P005 Coaxial Cassegrain Telescope Demo',
+    'P006 Keplerian Afocal Telescope Demo',
+    'P007 Fast Positive-Negative Meniscus Pair 50mm Demo',
+  ]
+  for (const label of labels) {
+    await selectPresetOption(page, label)
+    await expect(page.locator('#layout-svg path.glass-element-warning')).toHaveCount(0)
+  }
 })
 
 test('right pane scrolls independently and keeps center pane stable', async ({ page }) => {

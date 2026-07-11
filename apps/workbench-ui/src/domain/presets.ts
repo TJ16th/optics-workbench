@@ -176,7 +176,7 @@ export const presets: Preset[] = [
       wavelengths_nm: { primary: 587.56, samples: [486.13, 587.56, 656.27] },
       materials: commonMaterials,
       surfaces: [
-        { id: 'S1', kind: 'refractive', surface_type: 'spherical', radius_mm: 14.0, thickness_after_mm: 5.0, material_after: 'N-BK7', semi_diameter_mm: 18 },
+        { id: 'S1', kind: 'refractive', surface_type: 'spherical', radius_mm: 26.0, thickness_after_mm: 5.0, material_after: 'N-BK7', semi_diameter_mm: 18 },
         { id: 'S2', kind: 'refractive', surface_type: 'spherical', radius_mm: 60.0, thickness_after_mm: 3.0, material_after: 'AIR', semi_diameter_mm: 17 },
         {
           id: 'STOP',
