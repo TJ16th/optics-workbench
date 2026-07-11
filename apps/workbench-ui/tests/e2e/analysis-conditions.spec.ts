@@ -325,12 +325,12 @@ test('shipped preset selection resets fields to recommended values', async ({ pa
 
   await page.locator('#field-2-theta-y').fill('20')
   const expected = [
-    ['P002 N-BK7 Biconvex Singlet 50mm Demo', '7', '14'],
-    ['P001 Ideal Thin Lens 50mm F4', '10', '18'],
-    ['P003 Achromat Doublet 100mm Demo', '5', '10'],
-    ['P005 Coaxial Cassegrain Telescope Demo', '0.15', '0.28'],
+    ['P002 N-BK7 Biconvex Singlet 50mm Demo', '9.900092', '14'],
+    ['P001 Ideal Thin Lens 50mm F4', '12.813585', '18'],
+    ['P003 Achromat Doublet 100mm Demo', '7.036366', '10'],
+    ['P005 Coaxial Cassegrain Telescope Demo', '0.196001', '0.28'],
     ['P006 Keplerian Afocal Telescope Demo', '0.5', '1'],
-    ['P007 Fast Positive-Negative Meniscus Pair 50mm Demo', '0.75', '1.5'],
+    ['P007 Fast Positive-Negative Meniscus Pair 50mm Demo', '1.050122', '1.5'],
   ]
   for (const [presetName, middle, edge] of expected) {
     await selectPresetOption(page, presetName)

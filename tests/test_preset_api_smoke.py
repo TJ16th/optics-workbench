@@ -21,7 +21,7 @@ const source = fs.readFileSync(process.argv[1], 'utf8');
 const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const module = { exports: {} };
 new Function('exports', 'module', 'require', js)(module.exports, module, require);
-console.log(JSON.stringify(module.exports.presets.map(({ id, system }) => ({ id, system }))));
+console.log(JSON.stringify(module.exports.presets.map(({ id, system, recommendedFields }) => ({ id, system, recommendedFields }))));
 """
 
 
@@ -175,3 +175,16 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
                 assert value is None
             else:
                 assert value == pytest.approx(expected)
+
+
+def test_shipped_focal_preset_mid_fields_use_seventy_percent_image_height():
+    for preset in _shipped_presets():
+        fields = preset["recommendedFields"]
+        assert all(field["theta_z_deg"] == pytest.approx(0.0) for field in fields)
+        if preset["id"] == "P006":
+            assert fields[1]["theta_y_deg"] == pytest.approx(0.5)
+            continue
+        center, midpoint, edge = fields
+        assert center["theta_y_deg"] == pytest.approx(0.0)
+        expected_midpoint = math.degrees(math.atan(0.7 * math.tan(math.radians(edge["theta_y_deg"]))))
+        assert midpoint["theta_y_deg"] == pytest.approx(expected_midpoint, abs=1.0e-6)
