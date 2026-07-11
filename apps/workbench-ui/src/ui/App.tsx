@@ -852,7 +852,7 @@ function LayoutView({
   }
   const tracePoints = trace?.sensor_y_mm
     ?.map((y, index) => ({ y, z: trace.sensor_z_mm[index], status: trace.status[index] }))
-    .filter((point) => Number.isFinite(point.y) && point.status === 'alive')
+    .filter((point): point is { y: number; z: number | null; status: string } => Number.isFinite(point.y) && point.status === 'alive')
     .slice(0, 24)
   const surfaceViews = positions.map(({ surface, x }, index) => {
     const semiD = surfaceSemiDiameter(surface, configuration)
@@ -1497,7 +1497,7 @@ function SpotStrip({ trace }: { trace?: TraceResponse }) {
       const wavelength = wavelengths[wavelengthIndex]
       return { y, z: trace.sensor_z_mm[index], status: trace.status[index], wavelength, wavelengthIndex }
     })
-    .filter((point) => Number.isFinite(point.y) && Number.isFinite(point.z))
+    .filter((point): point is { y: number; z: number; status: string; wavelength: number | undefined; wavelengthIndex: number } => Number.isFinite(point.y) && Number.isFinite(point.z))
     .slice(0, 120)
 
   return (

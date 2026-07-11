@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import math
 import time
 from dataclasses import asdict, is_dataclass
+
+import numpy as np
 
 from .. import (
     analyze_distortion,
@@ -92,10 +95,26 @@ async def optics_error_handler(_: Request, exc: OpticsError):
 
 
 def _jsonable(value):
+    """Convert engine results to JSON-compatible values at the HTTP boundary.
+
+    The tracing kernel uses NaN for measurements that do not exist, such as a
+    blocked sensor ray or an afocal ray with no sensor plane. JSON has no NaN
+    literal, so the public API represents those values as null.
+    """
+    if isinstance(value, np.ndarray):
+        return _jsonable(value.tolist())
+    if isinstance(value, np.generic):
+        return _jsonable(value.item())
     if is_dataclass(value):
-        return asdict(value)
+        return _jsonable(asdict(value))
     if hasattr(value, "model_dump"):
-        return value.model_dump(mode="json")
+        return _jsonable(value.model_dump(mode="json"))
+    if isinstance(value, dict):
+        return {key: _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
     return value
 
 
@@ -265,13 +284,13 @@ def forward(payload: dict):
     )
     if profiling:
         _merge_api_profiling(trace, api_profile, api_started_at)
-    return {
+    return _jsonable({
         "status": trace.status.tolist(),
         "sensor_y_mm": trace.sensor_y_mm.tolist(),
         "sensor_z_mm": trace.sensor_z_mm.tolist(),
         "paths": trace.paths,
         "metadata": trace.metadata,
-    }
+    })
 
 
 @app.post("/v1/trace/reverse")

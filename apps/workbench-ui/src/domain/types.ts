@@ -211,8 +211,8 @@ export type LayoutBaselineRay = {
 
 export type TraceResponse = {
   status: string[]
-  sensor_y_mm: number[]
-  sensor_z_mm: number[]
+  sensor_y_mm: Array<number | null>
+  sensor_z_mm: Array<number | null>
   paths?: TracePath[]
   metadata: {
     layout_baseline_rays?: LayoutBaselineRay[]
