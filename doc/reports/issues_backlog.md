@@ -518,3 +518,22 @@ R9-13では、Workbench UIに±5 mmのシフト上限明示と、対象群の最
 
 - 複数の解析条件プリセットを選択できる。
 - 選択によりfield、波長、sampling、表示設定がまとめて更新される。
+
+## Issue: Layout Viewの代表光線がsampling方式に依存して見えることを説明する
+
+ラベル案: `ui`, `docs`
+
+### 背景
+
+R26の確認で、P002のLayout View代表光線（lower / center / upper）はsample indexではなく、実際のSTOP面到達Y座標に基づいて選ばれていることを確認した。一方で、`grid` / 現行`hexapolar`相当の瞳サンプリングは`samples_per_field`ごとに候補点集合を作り直すため、光線数を変えると表示代表光線のSTOP到達高さそのものが変わる。これはLOD選択バグではなくsampling方式の性質だが、人間には「表示がずれた」ように見えやすい。
+
+### 対応案
+
+- Ray sampling設定またはLayout View付近に、代表光線は実際に生成された瞳サンプルから選ばれ、`samples_per_field`変更時には代表高さが変わる場合がある旨を短く表示する。
+- 必要なら、比較用に`fan_y`など固定高さを含むsampling方式を使うと分かりやすいことをヘルプに追記する。
+- 将来、Layout View専用の固定代表光線モードを追加するか検討する。
+
+### 受け入れ条件
+
+- `samples_per_field`変更時の代表光線の見え方がsampling由来であることをUI上で理解できる。
+- 表示文言はi18n ja/en両方に追加され、`npm run i18n:coverage`が通る。
