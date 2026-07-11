@@ -14,6 +14,10 @@
       "kind": "エンジンの面種別。モデル識別子なので翻訳しない。",
       "surface_type": "plane、spherical、aspherical_evenなどの面形状識別子。"
     },
+    "annulus": {
+      "outer": "外半径 (mm)",
+      "inner": "内半径 (mm)"
+    },
     "groups": {
       "title": "群",
       "description": "ズーム、フォーカス、decenter操作で使う連続した面範囲を定義します。",

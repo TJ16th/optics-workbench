@@ -14,6 +14,10 @@
       "kind": "Engine surface kind. It is not translated because it is a model identifier.",
       "surface_type": "Surface shape identifier such as plane, spherical, or aspherical_even."
     },
+    "annulus": {
+      "outer": "Outer radius (mm)",
+      "inner": "Inner radius (mm)"
+    },
     "groups": {
       "title": "Groups",
       "description": "Define contiguous surface ranges used by zoom, focus, and decenter operations.",

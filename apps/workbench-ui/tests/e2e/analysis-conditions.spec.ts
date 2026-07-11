@@ -350,6 +350,24 @@ test('shipped preset selection resets fields to recommended values', async ({ pa
   }
 })
 
+test('P005 System table displays and edits annulus outer and inner radii', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await selectPresetOption(page, 'P005 Coaxial Cassegrain Telescope Demo')
+  await page.getByRole('tab', { name: 'System' }).click()
+
+  const editor = page.getByTestId('annulus-radius-editor')
+  await expect(editor).toHaveCount(1)
+  await expect(page.locator('#surface-STOP-annulus-outer')).toHaveValue('100')
+  await expect(page.locator('#surface-STOP-annulus-inner')).toHaveValue('40')
+  await page.locator('#surface-STOP-annulus-inner').fill('42')
+  await expect(page.getByTestId('system-dirty-status')).toContainText('dirty')
+  await expect(page.locator('#surface-STOP-annulus-inner')).toHaveValue('42')
+
+  await selectPresetOption(page, 'P002 N-BK7 Biconvex Singlet 50mm Demo')
+  await expect(page.getByTestId('annulus-radius-editor')).toHaveCount(0)
+})
+
 test('analysis condition edits mark dirty and rerun preview with updated results', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en')

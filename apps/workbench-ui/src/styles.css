@@ -908,6 +908,17 @@ body {
   font-weight: 600;
 }
 
+.annulus-radius-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(7rem, 1fr));
+  gap: 0.5rem;
+  min-width: 15rem;
+}
+
+.annulus-radius-editor .cds--number {
+  min-width: 0;
+}
+
 .raw-panel .cds--snippet--multi {
   max-height: 530px;
   overflow: auto;

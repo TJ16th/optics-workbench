@@ -157,7 +157,7 @@ const surfaceColumns: Array<{
   { id: 'radius_mm', termId: 'radius_mm', value: (row) => row.radius_mm ?? 0 },
   { id: 'thickness_after_mm', termId: 'thickness_after_mm', value: (row) => row.thickness_after_mm ?? 0 },
   { id: 'material', termId: 'material', value: (row) => row.material_after ?? '-' },
-  { id: 'semi_diameter_mm', termId: 'semi_diameter_mm', value: (row) => formatScalarNumber(row.semi_diameter_mm ?? row.aperture?.semi_diameter_mm) },
+  { id: 'semi_diameter_mm', termId: 'semi_diameter_mm', value: (row) => formatScalarNumber(row.aperture?.outer_semi_diameter_mm ?? row.semi_diameter_mm ?? row.aperture?.semi_diameter_mm) },
 ]
 
 function cloneSystem(system: OpticalSystem): OpticalSystem {
@@ -1143,7 +1143,15 @@ function LayoutLegend() {
   )
 }
 
-function SurfaceTable({ surfaces, onOpenHelp }: { surfaces: Surface[]; onOpenHelp: (termId: string) => void }) {
+function SurfaceTable({
+  surfaces,
+  onUpdateAnnulusRadius,
+  onOpenHelp,
+}: {
+  surfaces: Surface[]
+  onUpdateAnnulusRadius: (index: number, radius: 'inner' | 'outer', value: number) => void
+  onOpenHelp: (termId: string) => void
+}) {
   const { t } = useTranslation(['surfaceTable'])
   return (
     <div className="table-shell">
@@ -1163,11 +1171,38 @@ function SurfaceTable({ surfaces, onOpenHelp }: { surfaces: Surface[]; onOpenHel
           </tr>
         </thead>
         <tbody>
-          {surfaces.map((surface) => (
+          {surfaces.map((surface, surfaceIndex) => (
             <tr key={surface.id}>
-              {surfaceColumns.map((column) => (
-                <td key={column.id}>{String(column.value(surface))}</td>
-              ))}
+              {surfaceColumns.map((column) => {
+                const isAnnulusDiameter = column.id === 'semi_diameter_mm' && surface.aperture?.shape === 'annulus'
+                if (!isAnnulusDiameter) return <td key={column.id}>{String(column.value(surface))}</td>
+                const inner = scalarNumber(surface.aperture?.inner_semi_diameter_mm) ?? 0
+                const outer = scalarNumber(surface.aperture?.outer_semi_diameter_mm) ?? scalarNumber(surface.semi_diameter_mm) ?? 0
+                return (
+                  <td key={column.id}>
+                    <div className="annulus-radius-editor" data-testid="annulus-radius-editor">
+                      <NumberInput
+                        id={`surface-${surface.id}-annulus-outer`}
+                        label={t('surfaceTable.annulus.outer')}
+                        min={0}
+                        step={0.1}
+                        size="sm"
+                        value={outer}
+                        onChange={(_, data) => onUpdateAnnulusRadius(surfaceIndex, 'outer', numericInputValue(data.value, outer))}
+                      />
+                      <NumberInput
+                        id={`surface-${surface.id}-annulus-inner`}
+                        label={t('surfaceTable.annulus.inner')}
+                        min={0}
+                        step={0.1}
+                        size="sm"
+                        value={inner}
+                        onChange={(_, data) => onUpdateAnnulusRadius(surfaceIndex, 'inner', numericInputValue(data.value, inner))}
+                      />
+                    </div>
+                  </td>
+                )
+              })}
             </tr>
           ))}
         </tbody>
@@ -2568,6 +2603,18 @@ export function App() {
     markSystemChanged(nextSystem)
   }
 
+  const updateAnnulusRadius = (index: number, radius: 'inner' | 'outer', value: number) => {
+    const nextSystem = cloneSystem(system)
+    const surface = nextSystem.surfaces[index]
+    if (!surface || surface.aperture?.shape !== 'annulus') return
+    if (radius === 'inner') surface.aperture.inner_semi_diameter_mm = value
+    else {
+      surface.aperture.outer_semi_diameter_mm = value
+      surface.semi_diameter_mm = value
+    }
+    markSystemChanged(nextSystem)
+  }
+
   const removeGroup = (index: number) => {
     const nextSystem = cloneSystem(system)
     nextSystem.groups = (nextSystem.groups ?? []).filter((_, groupIndex) => groupIndex !== index)
@@ -2987,7 +3034,7 @@ export function App() {
 
           {activeTab === 'system' ? (
             <div className="panel large-panel">
-              <SurfaceTable surfaces={system.surfaces} onOpenHelp={setHelpTermId} />
+              <SurfaceTable surfaces={system.surfaces} onUpdateAnnulusRadius={updateAnnulusRadius} onOpenHelp={setHelpTermId} />
               <GroupPanel system={system} onAddGroup={addGroup} onUpdateGroup={updateGroup} onRemoveGroup={removeGroup} onOpenHelp={setHelpTermId} />
             </div>
           ) : null}
