@@ -324,7 +324,7 @@ test('preset selector lists shipped presets in natural id order', async ({ page 
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   const optionTexts = await page.getByRole('option').allTextContents()
   const presetIds = optionTexts.map((text) => /P\d{3}/.exec(text)?.[0]).filter((id): id is string => Boolean(id))
-  expect(presetIds).toEqual(['P001', 'P002', 'P003', 'P006', 'P007', 'P008', 'P009', 'P010'])
+  expect(presetIds).toEqual(['P001', 'P002', 'P003', 'P004', 'P006', 'P007', 'P008', 'P009', 'P010'])
   expect(optionTexts.join(' ')).not.toContain('P005')
 })
 
@@ -337,6 +337,7 @@ test('shipped preset selection resets fields to recommended values', async ({ pa
     ['P002 N-BK7 Biconvex Singlet 50mm Demo', '9.900092', '14'],
     ['P001 Ideal Thin Lens 50mm F4', '12.813585', '18'],
     ['P003 Achromat Doublet 100mm Demo', '7.036366', '10'],
+    ['P004 Double Gauss 50mm F1.4 Demo', '7.036366', '10'],
     ['P005 Coaxial Cassegrain Telescope Demo', '0.196001', '0.28'],
     ['P006 Keplerian Afocal Telescope Demo', '0.5', '1'],
     ['P007 Fast Positive-Negative Meniscus Pair 50mm Demo', '1.050122', '1.5'],
@@ -767,6 +768,19 @@ test('P007 fast meniscus pair preset renders strong positive and negative curvat
 
   await page.getByRole('button', { name: 'Run Preview' }).click()
   await expectLayoutRayPath(page, 7)
+  expect(Number(await page.locator('#layout-svg').getAttribute('data-total-rays'))).toBe(81)
+})
+
+test('P004 Double Gauss renders eight powered surfaces and traces to the image plane', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await selectPresetOption(page, 'P004 Double Gauss 50mm F1.4 Demo')
+
+  await expect(page.locator('#layout-svg path.surface-refractive')).toHaveCount(8)
+  await expect(page.locator('#layout-svg path.glass-element')).toHaveCount(4)
+  await expect(page.locator('#layout-svg path.glass-element-warning')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Run Preview' }).click()
+  await expectLayoutRayPath(page, 11)
   expect(Number(await page.locator('#layout-svg').getAttribute('data-total-rays'))).toBe(81)
 })
 

@@ -521,7 +521,7 @@ UI側でrequest/response型を手書きしない。
 
 ## 9.1 プリセットの目的
 
-初期版では、代表的な光学系を9つ内蔵する。このうち通常のUIプリセット一覧には8つを表示し、反射系検証用のP005は定義・テストカバレッジを維持したまま非表示とする。
+初期版では、代表的な光学系を10個内蔵する。このうち通常のUIプリセット一覧には9個を表示し、反射系検証用のP005は定義・テストカバレッジを維持したまま非表示とする。
 
 目的は以下。
 
@@ -641,25 +641,32 @@ B1 λ^2 / (λ^2 - C1)
 - EFLは約100 mm級
 - longitudinal aberration graphが表示可能
 
-### P004: Simplified Double Gauss 50mm Demo
+### P004: Double Gauss 50mm F1.4 Demo
 
-目的：写真レンズらしい複数枚構成で、spot、MTF、歪曲、像面湾曲、非点収差を確認する。
+目的：対称8面の高速写真レンズ構成で、spot、MTF、歪曲、像面湾曲、非点収差を確認する。
 
 | No | id | kind | surface_type | R | D | N | semiD | aperture |
 |---:|---|---|---|---:|---:|---|---:|---|
-| 1 | S1 | refractive | spherical | 35.0 | 5.0 | N-BK7 | 20.0 | - |
-| 2 | S2 | refractive | spherical | 160.0 | 2.0 | AIR | 20.0 | - |
-| 3 | S3 | refractive | spherical | -120.0 | 2.5 | N-F2 | 16.0 | - |
-| 4 | S4 | refractive | spherical | 35.0 | 5.0 | AIR | 16.0 | - |
-| 5 | STOP | aperture_stop | plane | 0 | 5.0 | AIR | 9.0 | circle 9.0 |
-| 6 | S5 | refractive | spherical | -35.0 | 2.5 | N-F2 | 16.0 | - |
-| 7 | S6 | refractive | spherical | 120.0 | 2.0 | AIR | 16.0 | - |
-| 8 | S7 | refractive | spherical | -160.0 | 5.0 | N-BK7 | 20.0 | - |
-| 9 | S8 | refractive | spherical | -35.0 | 42.0 | AIR | 20.0 | - |
+| 1 | S1 | refractive | spherical | 58.0 | 5.0 | N-BK7 | 22.5 | - |
+| 2 | S2 | refractive | spherical | 200.0 | 2.0 | AIR | 22.0 | - |
+| 3 | S3 | refractive | spherical | -190.0 | 2.5 | N-F2 | 21.75 | - |
+| 4 | S4 | refractive | spherical | -75.0 | 5.0 | AIR | 21.75 | - |
+| 5 | STOP | aperture_stop | plane | 0 | 5.0 | AIR | 17.75 | circle 17.75 |
+| 6 | S5 | refractive | spherical | 75.0 | 2.5 | N-F2 | 19.0 | - |
+| 7 | S6 | refractive | spherical | 190.0 | 2.0 | AIR | 18.75 | - |
+| 8 | S7 | refractive | spherical | -200.0 | 5.0 | N-BK7 | 18.75 | - |
+| 9 | S8 | refractive | spherical | -58.0 | 32.15 | AIR | 18.5 | - |
 | 10 | IMG | sensor | plane | 0 | 0.0 | - | - | 36×24 |
 
-期待値：
+推奨fieldはcenter `0 deg`、70%像高 `7.036366 deg`、edge-y `10 deg`とする。
 
+期待値（主波長587.56nm）：
+
+- EFL ≒ 49.978 mm、BFL ≒ 36.889 mm、F number ≒ 1.408
+- 軸上best-focus相当の最終空気間隔は32.15 mm、center 81-ray spot RMS ≒ 0.483460 mm
+- 4レンズのedge thicknessは約1.879 / 0.526 / 1.046 / 2.828 mmで、すべて正
+- 3 field × 3 wavelength × 9 samplesの実光線81本がIMGへ到達する
+- 25 samplesではalive 219 / aiming_failed 6 / blocked 0
 - center / mid / edgeでspot形状が変化する
 - MTF、distortion、field curvature、relative illuminationが表示可能
 - 周辺fieldで像面湾曲・非点収差が見える

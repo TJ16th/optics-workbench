@@ -53,6 +53,10 @@
           "name": "Achromat Doublet 100mm Demo",
           "summary": "BK7/F2 achromat for chromatic, ray fan, MTF, distortion, and field curvature views."
         },
+        "P004": {
+          "name": "Double Gauss 50mm F1.4 Demo",
+          "summary": "Symmetric eight-surface Double Gauss near 50mm F1.4 for fast photographic-lens analyses."
+        },
         "P006": {
           "name": "Keplerian Afocal Telescope Demo",
           "summary": "Afocal telescope with an eye_reference terminal plane; image-plane policy controls are intentionally disabled."
