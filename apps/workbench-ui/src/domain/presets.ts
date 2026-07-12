@@ -392,6 +392,39 @@ export const presets: Preset[] = [
         ],
       },
     },
+    {
+      id: 'P011',
+      name: 'Planar-Type 6-Element Double Gauss 50mm F1.4 Demo',
+      summary: 'Symmetric six-element Planar/Xenon topology with two cemented BK7/F2 doublets.',
+      recommendedAnalysis: ['preview', 'spot', 'ray_fan', 'mtf', 'distortion', 'field_curvature', 'paraxial'],
+      recommendedFields: [
+        { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
+        { id: 'mid-y', type: 'angular', theta_y_deg: 7.036366, theta_z_deg: 0, preset_label: 'image_height_70pct' },
+        { id: 'edge-y', type: 'angular', theta_y_deg: 10, theta_z_deg: 0 },
+      ],
+      system: {
+        name: 'P011 Planar-Type 6-Element Double Gauss 50mm F1.4',
+        units: 'mm',
+        optical_axis: '+X',
+        system_type: 'focal',
+        wavelengths_nm: { primary: 587.56, samples: [486.13, 587.56, 656.27] },
+        materials: commonMaterials,
+        surfaces: [
+          { id: 'S1', kind: 'refractive', surface_type: 'spherical', radius_mm: 58, thickness_after_mm: 5, material_after: 'N-BK7', semi_diameter_mm: 22.5 },
+          { id: 'S2', kind: 'refractive', surface_type: 'spherical', radius_mm: 200, thickness_after_mm: 2, material_after: 'AIR', semi_diameter_mm: 21.75 },
+          { id: 'S3', kind: 'refractive', surface_type: 'spherical', radius_mm: -190, thickness_after_mm: 2, material_after: 'N-BK7', semi_diameter_mm: 21.75 },
+          { id: 'C1', kind: 'refractive', surface_type: 'spherical', radius_mm: -240, thickness_after_mm: 2.5, material_after: 'N-F2', semi_diameter_mm: 21.5 },
+          { id: 'S4', kind: 'refractive', surface_type: 'spherical', radius_mm: -75, thickness_after_mm: 5, material_after: 'AIR', semi_diameter_mm: 21.5 },
+          { id: 'STOP', kind: 'aperture_stop', surface_type: 'plane', thickness_after_mm: 5, semi_diameter_mm: 17.75, aperture: { shape: 'circle', semi_diameter_mm: 17.75 } },
+          { id: 'S5', kind: 'refractive', surface_type: 'spherical', radius_mm: 75, thickness_after_mm: 2.5, material_after: 'N-F2', semi_diameter_mm: 19 },
+          { id: 'C2', kind: 'refractive', surface_type: 'spherical', radius_mm: 240, thickness_after_mm: 2, material_after: 'N-BK7', semi_diameter_mm: 18.75 },
+          { id: 'S6', kind: 'refractive', surface_type: 'spherical', radius_mm: 190, thickness_after_mm: 2, material_after: 'AIR', semi_diameter_mm: 18.5 },
+          { id: 'S7', kind: 'refractive', surface_type: 'spherical', radius_mm: -200, thickness_after_mm: 5, material_after: 'N-BK7', semi_diameter_mm: 18.5 },
+          { id: 'S8', kind: 'refractive', surface_type: 'spherical', radius_mm: -58, thickness_after_mm: 30.8, material_after: 'AIR', semi_diameter_mm: 18.25 },
+          { id: 'IMG', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 36, height_mm: 24 } },
+        ],
+      },
+    },
   ]
 
 export const visualFixturePresets: Preset[] = [

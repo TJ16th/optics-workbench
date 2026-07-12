@@ -324,7 +324,7 @@ test('preset selector lists shipped presets in natural id order', async ({ page 
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   const optionTexts = await page.getByRole('option').allTextContents()
   const presetIds = optionTexts.map((text) => /P\d{3}/.exec(text)?.[0]).filter((id): id is string => Boolean(id))
-  expect(presetIds).toEqual(['P001', 'P002', 'P003', 'P004', 'P006', 'P007', 'P008', 'P009', 'P010'])
+  expect(presetIds).toEqual(['P001', 'P002', 'P003', 'P004', 'P006', 'P007', 'P008', 'P009', 'P010', 'P011'])
   expect(optionTexts.join(' ')).not.toContain('P005')
 })
 
@@ -781,6 +781,20 @@ test('P004 Double Gauss renders eight powered surfaces and traces to the image p
   await expect(page.locator('#layout-svg path.glass-element-warning')).toHaveCount(0)
   await page.getByRole('button', { name: 'Run Preview' }).click()
   await expectLayoutRayPath(page, 11)
+  expect(Number(await page.locator('#layout-svg').getAttribute('data-total-rays'))).toBe(81)
+})
+
+test('P011 Planar Double Gauss renders six elements with two cemented interfaces', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await selectPresetOption(page, 'P011 Planar-Type 6-Element Double Gauss 50mm F1.4 Demo')
+
+  await expect(page.locator('#layout-svg path.surface-refractive')).toHaveCount(10)
+  await expect(page.locator('#layout-svg path.surface-cemented')).toHaveCount(2)
+  await expect(page.locator('#layout-svg path.glass-element')).toHaveCount(6)
+  await expect(page.locator('#layout-svg path.glass-element-warning')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Run Preview' }).click()
+  await expectLayoutRayPath(page, 13)
   expect(Number(await page.locator('#layout-svg').getAttribute('data-total-rays'))).toBe(81)
 })
 

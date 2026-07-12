@@ -64,6 +64,10 @@
         "P007": {
           "name": "Fast Positive-Negative Meniscus Pair 50mm Demo",
           "summary": "Fast F/1.8 two-group meniscus pair for checking strong positive and negative curvature in the layout view."
+        },
+        "P011": {
+          "name": "Planar-Type 6-Element Double Gauss 50mm F1.4 Demo",
+          "summary": "Symmetric six-element Planar/Xenon topology with two cemented BK7/F2 doublets."
         }
       }
     },

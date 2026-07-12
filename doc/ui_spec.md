@@ -521,7 +521,7 @@ UI側でrequest/response型を手書きしない。
 
 ## 9.1 プリセットの目的
 
-初期版では、代表的な光学系を10個内蔵する。このうち通常のUIプリセット一覧には9個を表示し、反射系検証用のP005は定義・テストカバレッジを維持したまま非表示とする。
+初期版では、代表的な光学系を11個内蔵する。このうち通常のUIプリセット一覧には10個を表示し、反射系検証用のP005は定義・テストカバレッジを維持したまま非表示とする。
 
 目的は以下。
 
@@ -819,6 +819,36 @@ EFL = 3000 mm, F/15
 - 軸上best-focus相当の最終空気間隔は63.175 mm、center 81-ray spot RMS ≒ 0.464633 mm
 - 3 field × 3 wavelength × 25 samplesの実光線225本がIMGへ到達する
 - Layout ViewでASP1の曲率反転を含む高次非球面形状を確認できる
+
+### P011: Planar-Type 6-Element Double Gauss 50mm F1.4 Demo
+
+目的：外側メニスカス単玉2枚と、内側BK7/F2接合ダブレット2組からなる対称6枚Planar/Xenon型で、高速写真レンズのspot、MTF、歪曲、像面湾曲を確認する。
+
+| No | id | kind | surface_type | R | D | N | semiD | aperture |
+|---:|---|---|---|---:|---:|---|---:|---|
+| 1 | S1 | refractive | spherical | 58.0 | 5.0 | N-BK7 | 22.5 | - |
+| 2 | S2 | refractive | spherical | 200.0 | 2.0 | AIR | 21.75 | - |
+| 3 | S3 | refractive | spherical | -190.0 | 2.0 | N-BK7 | 21.75 | - |
+| 4 | C1 | refractive | spherical | -240.0 | 2.5 | N-F2 | 21.5 | cemented |
+| 5 | S4 | refractive | spherical | -75.0 | 5.0 | AIR | 21.5 | - |
+| 6 | STOP | aperture_stop | plane | 0 | 5.0 | AIR | 17.75 | circle 17.75 |
+| 7 | S5 | refractive | spherical | 75.0 | 2.5 | N-F2 | 19.0 | - |
+| 8 | C2 | refractive | spherical | 240.0 | 2.0 | N-BK7 | 18.75 | cemented |
+| 9 | S6 | refractive | spherical | 190.0 | 2.0 | AIR | 18.5 | - |
+| 10 | S7 | refractive | spherical | -200.0 | 5.0 | N-BK7 | 18.5 | - |
+| 11 | S8 | refractive | spherical | -58.0 | 30.8 | AIR | 18.25 | - |
+| 12 | IMG | sensor | plane | 0 | 0.0 | - | - | 36×24 |
+
+推奨fieldはcenter `0 deg`、70%像高 `7.036366 deg`、edge-y `10 deg`とする。
+
+期待値（主波長587.56nm）：
+
+- EFL ≒ 49.983 mm、BFL ≒ 35.363 mm、F number ≒ 1.408
+- 軸上best-focus相当の最終空気間隔は30.8 mm、center 81-ray spot RMS ≒ 0.465423 mm
+- 6枚のedge thicknessは約1.954 / 2.255 / 0.317 / 0.852 / 2.189 / 2.888 mmで、すべて正
+- 3 field × 3 wavelength × 9 samplesはalive 81
+- 25 samplesではalive 213 / aiming_failed 12 / blocked 0
+- Layout Viewで6枚、2接合面、4群の構成を確認できる
 
 ---
 

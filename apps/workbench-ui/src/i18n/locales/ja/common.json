@@ -64,6 +64,10 @@
         "P007": {
           "name": "Fast Positive-Negative Meniscus Pair 50mm Demo",
           "summary": "F/1.8 positive-negative meniscus pair for Layout View curvature checks."
+        },
+        "P011": {
+          "name": "Planar型6枚ダブルガウス 50mm F1.4 デモ",
+          "summary": "BK7/F2接合ダブレット2組を持つ対称6枚Planar/Xenon型レンズ。"
         }
       }
     },
