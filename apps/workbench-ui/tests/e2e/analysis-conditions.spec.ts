@@ -370,6 +370,20 @@ test('P005 System table displays and edits annulus outer and inner radii', async
   await expect(page.getByTestId('annulus-radius-editor')).toHaveCount(0)
 })
 
+test('P009 System table displays configured conic and asphere coefficients', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await selectPresetOption(page, 'P009 N-BK7 Aspheric Singlet 50mm Demo')
+  await page.getByRole('tab', { name: 'System' }).click()
+
+  const table = page.locator('table.surface-table')
+  await expect(table.locator('thead')).toContainText('Asphere')
+  const asp1 = table.locator('tbody tr').filter({ hasText: 'ASP1' })
+  await expect(asp1.locator('[data-column-id="asphere"]')).toHaveText('k=-1.1792, A4=-0.0000024992')
+  const spherical = table.locator('tbody tr').filter({ hasText: 'S2' })
+  await expect(spherical.locator('[data-column-id="asphere"]')).toHaveText('-')
+})
+
 test('analysis condition edits mark dirty and rerun preview with updated results', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en')

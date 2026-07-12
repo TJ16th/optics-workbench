@@ -146,6 +146,16 @@ const sliderPreviewSamplesPerField = 5
 const decenterShiftLimitMm = 5
 const presetIdCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
+function formatAsphereParameters(surface: Surface) {
+  const values: string[] = []
+  if (typeof surface.conic === 'number' && Number.isFinite(surface.conic)) values.push(`k=${surface.conic}`)
+  Object.entries(surface.asphere_coefficients ?? {})
+    .filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1]))
+    .sort(([left], [right]) => left.localeCompare(right, undefined, { numeric: true }))
+    .forEach(([key, value]) => values.push(`${key}=${value}`))
+  return values.length ? values.join(', ') : '-'
+}
+
 const surfaceColumns: Array<{
   id: string
   termId?: string
@@ -155,6 +165,7 @@ const surfaceColumns: Array<{
   { id: 'kind', value: (row) => row.kind },
   { id: 'surface_type', value: (row) => row.surface_type ?? 'plane' },
   { id: 'radius_mm', termId: 'radius_mm', value: (row) => row.radius_mm ?? 0 },
+  { id: 'asphere', value: formatAsphereParameters },
   { id: 'thickness_after_mm', termId: 'thickness_after_mm', value: (row) => row.thickness_after_mm ?? 0 },
   { id: 'material', termId: 'material', value: (row) => row.material_after ?? '-' },
   { id: 'semi_diameter_mm', termId: 'semi_diameter_mm', value: (row) => formatScalarNumber(row.aperture?.outer_semi_diameter_mm ?? row.semi_diameter_mm ?? row.aperture?.semi_diameter_mm) },
@@ -1219,11 +1230,11 @@ function SurfaceTable({
             <tr key={surface.id}>
               {surfaceColumns.map((column) => {
                 const isAnnulusDiameter = column.id === 'semi_diameter_mm' && surface.aperture?.shape === 'annulus'
-                if (!isAnnulusDiameter) return <td key={column.id}>{String(column.value(surface))}</td>
+                if (!isAnnulusDiameter) return <td key={column.id} data-column-id={column.id}>{String(column.value(surface))}</td>
                 const inner = scalarNumber(surface.aperture?.inner_semi_diameter_mm) ?? 0
                 const outer = scalarNumber(surface.aperture?.outer_semi_diameter_mm) ?? scalarNumber(surface.semi_diameter_mm) ?? 0
                 return (
-                  <td key={column.id}>
+                  <td key={column.id} data-column-id={column.id}>
                     <div className="annulus-radius-editor" data-testid="annulus-radius-editor">
                       <NumberInput
                         id={`surface-${surface.id}-annulus-outer`}

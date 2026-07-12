@@ -5,6 +5,7 @@
       "kind": "Kind",
       "surface_type": "Surface",
       "radius_mm": "Radius",
+      "asphere": "Asphere",
       "thickness_after_mm": "Thickness",
       "material": "Material",
       "semi_diameter_mm": "Semi-Diameter"
@@ -12,7 +13,8 @@
     "help": {
       "id": "Engine surface identifier. It is not translated and is sent to the API as-is.",
       "kind": "Engine surface kind. It is not translated because it is a model identifier.",
-      "surface_type": "Surface shape identifier such as plane, spherical, or aspherical_even."
+      "surface_type": "Surface shape identifier such as plane, spherical, or aspherical_even.",
+      "asphere": "Configured conic constant and even-asphere coefficients. Unset values are omitted."
     },
     "annulus": {
       "outer": "Outer radius (mm)",

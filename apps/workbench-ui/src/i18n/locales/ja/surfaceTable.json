@@ -5,6 +5,7 @@
       "kind": "Kind",
       "surface_type": "Surface",
       "radius_mm": "曲率半径",
+      "asphere": "非球面",
       "thickness_after_mm": "面後間隔",
       "material": "硝材",
       "semi_diameter_mm": "有効半径"
@@ -12,7 +13,8 @@
     "help": {
       "id": "エンジンの面識別子。翻訳せず、そのままAPIへ送信する。",
       "kind": "エンジンの面種別。モデル識別子なので翻訳しない。",
-      "surface_type": "plane、spherical、aspherical_evenなどの面形状識別子。"
+      "surface_type": "plane、spherical、aspherical_evenなどの面形状識別子。",
+      "asphere": "設定済みのconic定数とeven asphere係数。未設定値は表示しない。"
     },
     "annulus": {
       "outer": "外半径 (mm)",

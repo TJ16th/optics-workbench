@@ -914,6 +914,7 @@ Validated
 | kind | refractive / mirror / aperture_stop等 | 可 |
 | surface_type | spherical / aspherical_even / plane等 | 可 |
 | radius_mm | 曲率半径 | 可 |
+| asphere | 設定済みのconic定数とA4 / A6 / A8...（未設定値は省略） | 表示 |
 | thickness_after_mm | 次面までの距離 | 可 |
 | material_after | 後側媒質 | 可 |
 | semi_diameter_mm | 有効半径 | 可 |
