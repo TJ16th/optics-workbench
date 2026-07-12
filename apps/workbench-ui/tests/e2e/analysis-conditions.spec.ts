@@ -324,7 +324,7 @@ test('preset selector lists shipped presets in natural id order', async ({ page 
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   const optionTexts = await page.getByRole('option').allTextContents()
   const presetIds = optionTexts.map((text) => /P\d{3}/.exec(text)?.[0]).filter((id): id is string => Boolean(id))
-  expect(presetIds).toEqual(['P001', 'P002', 'P003', 'P005', 'P006', 'P007'])
+  expect(presetIds).toEqual(['P001', 'P002', 'P003', 'P005', 'P006', 'P007', 'P008'])
 })
 
 test('shipped preset selection resets fields to recommended values', async ({ page }) => {

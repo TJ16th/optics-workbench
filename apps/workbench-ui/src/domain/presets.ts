@@ -202,8 +202,8 @@ export const presets: Preset[] = [
       ],
     },
   },
-  {
-    id: 'P007',
+    {
+      id: 'P007',
     name: 'Fast Positive-Negative Meniscus Pair 50mm Demo',
     summary: 'Fast F/1.8 two-group meniscus pair for checking strong positive and negative curvature in the layout view.',
     recommendedAnalysis: ['preview', 'spot', 'ray_fan', 'paraxial'],
@@ -234,9 +234,49 @@ export const presets: Preset[] = [
         { id: 'S4', kind: 'refractive', surface_type: 'spherical', radius_mm: -100.0, thickness_after_mm: 31.8, material_after: 'AIR', semi_diameter_mm: 15 },
         { id: 'IMG', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 36, height_mm: 24 } },
       ],
+      },
     },
-  },
-]
+    {
+      id: 'P008',
+      name: 'Real Achromatic Keplerian Telescope Demo',
+      summary: 'Afocal telescope built from BK7/F2 achromatic doublets with real spherical refracting surfaces.',
+      recommendedAnalysis: ['afocal', 'exit_pupil', 'telescope', 'preview'],
+      recommendedFields: [
+        { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
+        { id: 'mid-y', type: 'angular', theta_y_deg: 0.25, theta_z_deg: 0 },
+        { id: 'edge-y', type: 'angular', theta_y_deg: 0.5, theta_z_deg: 0 },
+      ],
+      system: {
+        name: 'P008 Real Achromatic Keplerian Telescope',
+        units: 'mm',
+        optical_axis: '+X',
+        system_type: 'afocal',
+        wavelengths_nm: { primary: 587.56, samples: [486.13, 587.56, 656.27] },
+        materials: commonMaterials,
+        surfaces: [
+          {
+            id: 'STOP',
+            kind: 'aperture_stop',
+            surface_type: 'plane',
+            thickness_after_mm: 1.5,
+            semi_diameter_mm: 6,
+            aperture: { shape: 'circle', semi_diameter_mm: 6 },
+          },
+          { id: 'O1', kind: 'refractive', surface_type: 'spherical', radius_mm: 62.5, thickness_after_mm: 4.0, material_after: 'N-BK7', semi_diameter_mm: 12 },
+          { id: 'O2', kind: 'refractive', surface_type: 'spherical', radius_mm: -43.0, thickness_after_mm: 2.0, material_after: 'N-F2', semi_diameter_mm: 12 },
+          { id: 'O3', kind: 'refractive', surface_type: 'spherical', radius_mm: -125.0, thickness_after_mm: 108.51795245333561, material_after: 'AIR', semi_diameter_mm: 12 },
+          { id: 'E1', kind: 'refractive', surface_type: 'spherical', radius_mm: 25.0, thickness_after_mm: 0.4, material_after: 'N-F2', semi_diameter_mm: 6 },
+          { id: 'E2', kind: 'refractive', surface_type: 'spherical', radius_mm: 8.6, thickness_after_mm: 0.8, material_after: 'N-BK7', semi_diameter_mm: 6 },
+          { id: 'E3', kind: 'refractive', surface_type: 'spherical', radius_mm: -12.5, thickness_after_mm: 20.0, material_after: 'AIR', semi_diameter_mm: 6 },
+          { id: 'EYE', kind: 'eye_reference', surface_type: 'plane', eye: { pupil_diameter_mm: 5, position_mode: 'fixed_offset' } },
+        ],
+        groups: [
+          { id: 'EYE_G', from_surface: 'EYE', to_surface: 'EYE' },
+          { id: 'FOCUS', from_surface: 'E1', to_surface: 'E3' },
+        ],
+      },
+    },
+  ]
 
 export const visualFixturePresets: Preset[] = [
   {

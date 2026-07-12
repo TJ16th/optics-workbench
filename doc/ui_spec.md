@@ -521,7 +521,7 @@ UI側でrequest/response型を手書きしない。
 
 ## 9.1 プリセットの目的
 
-初期版では、代表的な光学系を7つ内蔵する。
+初期版では、代表的な光学系を8つ内蔵する。
 
 目的は以下。
 
@@ -740,6 +740,32 @@ EFL = 3000 mm, F/15
 - 3 field × 3 wavelength × 9 samplesの実光線81本がIMGへ到達する
 - S1/S2の正曲率とS3/S4の負曲率がLayout Viewで明確に区別できる
 - spot、ray fan、paraxial解析を実行できる
+
+### P008: Real Achromatic Keplerian Telescope Demo
+
+目的：理想薄レンズではなく、N-BK7/N-F2の実曲率アクロマート対物・接眼によるafocal評価、角倍率、射出瞳、アイレリーフ、残存収差を確認する。
+
+| No | id | kind | surface_type | R | D | N | semiD | aperture |
+|---:|---|---|---|---:|---:|---|---:|---|
+| 1 | STOP | aperture_stop | plane | 0 | 1.5 | AIR | 6.0 | circle 6.0 |
+| 2 | O1 | refractive | spherical | 62.5 | 4.0 | N-BK7 | 12.0 | - |
+| 3 | O2 | refractive | spherical | -43.0 | 2.0 | N-F2 | 12.0 | - |
+| 4 | O3 | refractive | spherical | -125.0 | 108.51795245333561 | AIR | 12.0 | - |
+| 5 | E1 | refractive | spherical | 25.0 | 0.4 | N-F2 | 6.0 | - |
+| 6 | E2 | refractive | spherical | 8.6 | 0.8 | N-BK7 | 6.0 | - |
+| 7 | E3 | refractive | spherical | -12.5 | 20.0 | AIR | 6.0 | - |
+| 8 | EYE | eye_reference | plane | 0 | 0.0 | - | - | pupil 5.0 |
+
+推奨field：center `0 deg`、mid-y `0.25 deg`、edge-y `0.5 deg`。
+
+期待値（主波長587.56nm）：
+
+- angular magnification ≒ -5.0x
+- exit pupil diameter ≒ 2.4 mm
+- eye relief ≒ 20 mm
+- 軸上25 samplesの残存divergence ≒ 0.368 D
+- 3 field × 3 wavelength × 25 samplesの実光線225本がEYEへ到達し、各面でケラれない
+- P006の理想薄レンズ系と比較して、実ガラス・実曲率による残存角度収差を確認できる
 
 ---
 

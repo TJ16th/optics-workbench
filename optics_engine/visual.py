@@ -71,9 +71,29 @@ def _thin_lenses(compiled: CompiledSystem):
 
 def angular_magnification(compiled: CompiledSystem) -> float | None:
     lenses = _thin_lenses(compiled)
-    if len(lenses) < 2:
+    if len(lenses) >= 2:
+        return -float(lenses[0].focal_length_mm) / float(lenses[-1].focal_length_mm)
+
+    powered = {"thin_lens", "refractive"}
+    last_power = next((idx for idx in range(len(compiled.surfaces) - 1, -1, -1) if compiled.surfaces[idx].kind in powered), None)
+    if last_power is None:
         return None
-    return -float(lenses[0].focal_length_mm) / float(lenses[-1].focal_length_mm)
+    wavelength = compiled.system.wavelengths_nm.primary
+    y = 0.0
+    u = 1.0
+    n_current = compiled.material_index("AIR", wavelength)
+    for idx, surface in enumerate(compiled.surfaces[: last_power + 1]):
+        if surface.kind == "refractive":
+            n_after = compiled.material_index(surface.material_after, wavelength)
+            curvature = 0.0 if surface.radius_mm == 0 else 1.0 / surface.radius_mm
+            u = (n_current * u - y * curvature * (n_after - n_current)) / n_after
+            n_current = n_after
+        elif surface.kind == "thin_lens":
+            u -= y / float(surface.focal_length_mm)
+        if idx < last_power:
+            distance = compiled.surface_positions_mm[idx + 1] - compiled.surface_positions_mm[idx]
+            y += distance * u
+    return float(u)
 
 
 def _aperture_diameter(compiled: CompiledSystem) -> float | None:

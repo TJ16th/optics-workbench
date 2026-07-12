@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 import numpy as np
 
-from optics_engine import analyze_paraxial, compile_system, load_system, trace_forward
+from optics_engine import analyze_afocal, analyze_exit_pupil, analyze_paraxial, compile_system, load_system, trace_forward
 from optics_engine.core import asphere_sag_and_slope, reflect, surface_normals_for_surface
 
 
@@ -155,6 +155,7 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
         "P005": {"alive": 9, "blocked": 18},
         "P006": {"alive": 1, "blocked": 26},
         "P007": {"alive": 81},
+        "P008": {"alive": 27, "blocked": 54},
     }
     expected_paraxial = {
         "P001": (50.0, 50.0, 4.0),
@@ -163,6 +164,7 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
         "P005": (3000.0, 1050.0, 15.0),
         "P006": (None, None, None),
         "P007": (519.6281203750518, 452.04242770474303, 19.682883347539843),
+        "P008": (None, None, None),
     }
     fields = [
         {"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0},
@@ -186,6 +188,39 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
                 assert value is None
             else:
                 assert value == pytest.approx(expected)
+
+
+def test_p008_real_achromatic_afocal_preset_metrics_and_throughput():
+    preset = next(item for item in _shipped_presets() if item["id"] == "P008")
+    system = preset["system"]
+    powered = [surface for surface in system["surfaces"] if surface["kind"] in {"refractive", "thin_lens"}]
+    assert len(powered) == 6
+    assert all(surface["kind"] == "refractive" for surface in powered)
+    assert {surface.get("material_after") for surface in powered} == {"AIR", "N-BK7", "N-F2"}
+
+    compiled = compile_system(load_system(system))
+    exit_pupil = analyze_exit_pupil(compiled)
+    assert exit_pupil.angular_magnification == pytest.approx(-5.0, abs=1.0e-8)
+    assert exit_pupil.exit_pupil_diameter_mm == pytest.approx(2.4, abs=1.0e-8)
+    assert exit_pupil.eye_relief_mm == pytest.approx(20.0, abs=1.0e-9)
+
+    afocal = analyze_afocal(
+        compiled,
+        preset["recommendedFields"][0],
+        {"samples_per_field": 25, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+    )
+    assert afocal.arrived_count == 25
+    assert afocal.residual_divergence_diopter == pytest.approx(0.36818659544890275)
+
+    trace = trace_forward(
+        compiled,
+        preset["recommendedFields"],
+        {"samples_per_field": 25, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+        system["wavelengths_nm"]["samples"],
+        {"store_path": True},
+    )
+    assert trace.status.tolist() == ["alive"] * 225
+    assert all([hit["surface_id"] for hit in path] == ["STOP", "O1", "O2", "O3", "E1", "E2", "E3", "EYE"] for path in trace.paths)
 
 
 def test_p005_annular_stop_blocks_the_secondary_mirror_central_obscuration():
@@ -262,8 +297,9 @@ def test_shipped_focal_preset_mid_fields_use_seventy_percent_image_height():
     for preset in _shipped_presets():
         fields = preset["recommendedFields"]
         assert all(field["theta_z_deg"] == pytest.approx(0.0) for field in fields)
-        if preset["id"] == "P006":
-            assert fields[1]["theta_y_deg"] == pytest.approx(0.5)
+        if preset["system"]["system_type"] == "afocal":
+            assert fields[0]["theta_y_deg"] == pytest.approx(0.0)
+            assert 0.0 < fields[1]["theta_y_deg"] < fields[2]["theta_y_deg"]
             continue
         center, midpoint, edge = fields
         assert center["theta_y_deg"] == pytest.approx(0.0)
