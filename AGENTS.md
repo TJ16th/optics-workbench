@@ -18,6 +18,7 @@
 - Windowsタスク`OpticsCrossWorkspaceDocSync-R55`で`scripts/sync_cross_workspace_docs.ps1`をログオン時から継続実行する。
 - `F:\vscode\claude\opt\doc\work_orders\active`で新規作成・更新・renameされたファイルは、同名で`F:\vscode\opt\doc\work_orders\active`へコピーする。削除は同期しない。
 - Codexが`F:\vscode\opt\doc\reports`直下へ追加・更新したMarkdown、および`doc\reports\screenshots`配下のファイルは、同じ相対パスで`F:\vscode\claude\opt\doc\reports`へコピーする。削除は同期しない。
+- 正本`F:\vscode\opt\AGENTS.md`は、参照用コピー`F:\vscode\claude\opt\doc\AGENTS.md`へ一方向同期する。Claude側から正本への書き戻しは行わない。
 - Git管理・完了報告の正本は`F:\vscode\opt`側とする。Claude側へのコピーは参照用であり、Claude側のGit操作や既存ファイル削除は行わない。
 - 同期ログは`%LOCALAPPDATA%\OpticsDocSync\sync.log`へ保存する。同期停止・障害調査時はWindowsタスクの状態とこのログを確認する。
 
