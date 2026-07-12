@@ -728,8 +728,8 @@ EFL = 3000 mm, F/15
 | 1 | S1 | refractive | spherical | 15.0 | 10.5 | N-BK7 | 14.5 | - |
 | 2 | S2 | refractive | spherical | 60.0 | 3.0 | AIR | 14.5 | - |
 | 3 | STOP | aperture_stop | plane | 0 | 3.0 | AIR | 13.2 | circle 13.2 |
-| 4 | S3 | refractive | spherical | -35.0 | 3.0 | N-F2 | 14.25 | - |
-| 5 | S4 | refractive | spherical | -100.0 | 26.948477258301352 | AIR | 15.0 | - |
+| 4 | S3 | refractive | spherical | -35.0 | 3.0 | N-F2 | 11.5 | - |
+| 5 | S4 | refractive | spherical | -100.0 | 26.948477258301352 | AIR | 10.25 | - |
 | 6 | IMG | sensor | plane | 0 | 0.0 | - | - | 36×24 |
 
 推奨field：center `0 deg`、70%像高 `1.050122 deg`、edge-y `1.5 deg`。
@@ -750,12 +750,12 @@ EFL = 3000 mm, F/15
 | No | id | kind | surface_type | R | D | N | semiD | aperture |
 |---:|---|---|---|---:|---:|---|---:|---|
 | 1 | STOP | aperture_stop | plane | 0 | 1.5 | AIR | 6.0 | circle 6.0 |
-| 2 | O1 | refractive | spherical | 62.5 | 4.0 | N-BK7 | 12.0 | - |
-| 3 | O2 | refractive | spherical | -43.0 | 2.0 | N-F2 | 12.0 | - |
-| 4 | O3 | refractive | spherical | -125.0 | 108.51795245333561 | AIR | 12.0 | - |
-| 5 | E1 | refractive | spherical | 25.0 | 0.4 | N-F2 | 6.0 | - |
-| 6 | E2 | refractive | spherical | 8.6 | 0.8 | N-BK7 | 6.0 | - |
-| 7 | E3 | refractive | spherical | -12.5 | 20.0 | AIR | 6.0 | - |
+| 2 | O1 | refractive | spherical | 62.5 | 4.0 | N-BK7 | 6.75 | - |
+| 3 | O2 | refractive | spherical | -43.0 | 2.0 | N-F2 | 6.5 | - |
+| 4 | O3 | refractive | spherical | -125.0 | 108.51795245333561 | AIR | 6.5 | - |
+| 5 | E1 | refractive | spherical | 25.0 | 0.4 | N-F2 | 2.5 | - |
+| 6 | E2 | refractive | spherical | 8.6 | 0.8 | N-BK7 | 2.5 | - |
+| 7 | E3 | refractive | spherical | -12.5 | 20.0 | AIR | 2.5 | - |
 | 8 | EYE | eye_reference | plane | 0 | 0.0 | - | - | pupil 5.0 |
 
 推奨field：center `0 deg`、mid-y `0.25 deg`、edge-y `0.5 deg`。

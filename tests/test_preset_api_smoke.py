@@ -253,6 +253,30 @@ def test_p007_fast_meniscus_preserves_bright_paraxial_target_and_positive_edge_t
     assert trace.status.tolist() == ["alive"] * 81
 
 
+def test_p007_p008_clear_apertures_match_marginal_ray_review():
+    presets = _shipped_presets()
+    p007 = next(item for item in presets if item["id"] == "P007")
+    p008 = next(item for item in presets if item["id"] == "P008")
+    assert {surface["id"]: surface.get("semi_diameter_mm") for surface in p007["system"]["surfaces"]} == {
+        "S1": 14.5,
+        "S2": 14.5,
+        "STOP": 13.2,
+        "S3": 11.5,
+        "S4": 10.25,
+        "IMG": None,
+    }
+    assert {surface["id"]: surface.get("semi_diameter_mm") for surface in p008["system"]["surfaces"]} == {
+        "STOP": 6.0,
+        "O1": 6.75,
+        "O2": 6.5,
+        "O3": 6.5,
+        "E1": 2.5,
+        "E2": 2.5,
+        "E3": 2.5,
+        "EYE": None,
+    }
+
+
 def test_p009_aspheric_singlet_reduces_primary_wavelength_spherical_spot():
     presets = _shipped_presets()
     spherical = next(item for item in presets if item["id"] == "P002")
