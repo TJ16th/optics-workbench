@@ -556,6 +556,12 @@ body {
   opacity: 0.5;
 }
 
+.legend-line-vignetted {
+  border-color: #6f6f6f;
+  border-top-style: dashed;
+  border-top-width: 2px;
+}
+
 .legend-cemented {
   border-color: #4589ff;
   border-top-width: 1.4px;
@@ -767,6 +773,19 @@ body {
 
 .ray-c {
   stroke: #da1e28;
+}
+
+.ray-baseline-blocked {
+  stroke: #6f6f6f;
+  stroke-width: 1.35;
+  stroke-dasharray: 3 2;
+  stroke-opacity: 0.9;
+}
+
+.ray-blocked-marker {
+  stroke: #6f6f6f;
+  stroke-width: 1.5;
+  pointer-events: none;
 }
 
 .legend-line.ray-f {

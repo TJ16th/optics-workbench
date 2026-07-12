@@ -820,7 +820,7 @@ function layoutBaselineRayItems(trace?: TraceResponse) {
     .map((ray: LayoutBaselineRay, index) => ({
       ...ray,
       index,
-      className: `ray-line ray-baseline ray-baseline-${ray.role} ${wavelengthClass(ray.wavelength_nm)}`,
+      className: `ray-line ray-baseline ray-baseline-${ray.role} ${wavelengthClass(ray.wavelength_nm)}${ray.status === 'blocked' ? ' ray-baseline-blocked' : ''}`,
     }))
     .filter((ray) => (ray.status === 'alive' || ray.status === 'aiming_failed' || ray.status === 'blocked') && ray.path.length >= 2)
 }
@@ -1096,19 +1096,30 @@ function LayoutView({
           : null}
       {baselinePaths.map(({ path, className, index, field_index, wavelength_index, role, status, stop_y_mm }) => {
         const d = rayPathD(path, xScale, centerY, rayYScale, objectPlaneX, hasSensor ? 0 : objectExtensionMm)
+        const endPoint = status === 'blocked' ? path[path.length - 1]?.point_mm : undefined
+        const hasFiniteEnd = Boolean(endPoint?.length && endPoint.length >= 2 && endPoint.every((value) => Number.isFinite(value)))
+        const endX = hasFiniteEnd && endPoint ? xScale(endPoint[0]) : undefined
+        const endY = hasFiniteEnd && endPoint ? centerY - endPoint[1] * rayYScale : undefined
         return d ? (
-          <path
-            key={`baseline-${index}`}
-            d={d}
-            className={className}
-            fill="none"
-            data-ray-layer="baseline"
-            data-baseline-role={role}
-            data-baseline-status={status}
-            data-field-index={field_index}
-            data-wavelength-index={wavelength_index}
-            data-stop-y-mm={stop_y_mm ?? undefined}
-          />
+          <g key={`baseline-${index}`}>
+            <path
+              d={d}
+              className={className}
+              fill="none"
+              data-ray-layer="baseline"
+              data-baseline-role={role}
+              data-baseline-status={status}
+              data-field-index={field_index}
+              data-wavelength-index={wavelength_index}
+              data-stop-y-mm={stop_y_mm ?? undefined}
+            />
+            {endX !== undefined && endY !== undefined ? (
+              <g className="ray-blocked-marker" data-ray-end-marker="blocked" data-field-index={field_index} data-baseline-role={role}>
+                <line x1={endX - 3.5} y1={endY - 3.5} x2={endX + 3.5} y2={endY + 3.5} />
+                <line x1={endX - 3.5} y1={endY + 3.5} x2={endX + 3.5} y2={endY - 3.5} />
+              </g>
+            ) : null}
+          </g>
         ) : null
           })}
     </svg>
@@ -1126,6 +1137,7 @@ function LayoutLegend({ system }: { system: OpticalSystem }) {
         { key: 'chief', className: 'legend-line legend-line-chief', label: t('layoutView.legend.chief_ray') },
         { key: 'marginal', className: 'legend-line legend-line-marginal', label: t('layoutView.legend.marginal_ray') },
         { key: 'density', className: 'legend-line legend-line-density', label: t('layoutView.legend.density_ray') },
+        { key: 'vignetted', className: 'legend-line legend-line-vignetted', label: t('layoutView.legend.vignetted_ray') },
       ],
     },
     {

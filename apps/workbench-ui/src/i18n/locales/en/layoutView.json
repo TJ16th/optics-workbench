@@ -22,6 +22,7 @@
       "principal_plane": "H1/H2 principal plane",
       "rays": "Rays",
       "stop_symbol": "STOP",
+      "vignetted_ray": "Vignetted ray",
       "wavelengths": "Wavelengths"
     },
     "show_density_rays": "Show sampled rays",

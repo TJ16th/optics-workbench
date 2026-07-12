@@ -22,6 +22,7 @@
       "principal_plane": "H1/H2主平面",
       "rays": "光線",
       "stop_symbol": "STOP",
+      "vignetted_ray": "遮蔽光線",
       "wavelengths": "波長"
     },
     "show_density_rays": "サンプル光線を表示",

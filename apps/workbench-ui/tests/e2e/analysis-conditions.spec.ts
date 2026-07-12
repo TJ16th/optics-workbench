@@ -96,18 +96,20 @@ async function mockEngine(
           { role: 'marginal_upper', y: 1.5 },
         ].map(({ role, y }) => {
           const last = Math.max(1, registeredSurfaceIds.length - 1)
+          const blocked = registeredSurfaceIds.includes('M1') && role === 'marginal_upper'
+          const pathSurfaceIds = blocked ? registeredSurfaceIds.slice(0, 2) : registeredSurfaceIds
           return {
             role,
             field_id: field.id ?? `field-${fieldIndex}`,
             field_index: fieldIndex,
             wavelength_nm: wavelength,
             wavelength_index: wavelengthIndex,
-            status: role === 'chief' ? 'alive' : 'aiming_failed',
+            status: blocked ? 'blocked' : role === 'chief' ? 'alive' : 'aiming_failed',
             stop_y_mm: y,
             aiming_ok: role === 'chief',
             aiming_iterations: 2,
-            path: registeredSurfaceIds.map((surfaceId, surfaceIndex) => {
-              const isImage = surfaceIndex === registeredSurfaceIds.length - 1
+            path: pathSurfaceIds.map((surfaceId, surfaceIndex) => {
+              const isImage = surfaceIndex === pathSurfaceIds.length - 1 && !blocked
               const bend = y * (1 - surfaceIndex / (last + 1))
               const point = [isImage ? 103.5 : surfaceIndex * 3, isImage ? y / 3 : bend, 0]
               return { surface_id: surfaceId, point_mm: point, local_point_mm: [0, surfaceIndex === 0 ? y : point[1], 0], direction: [1, 0, 0] }
@@ -500,6 +502,12 @@ test('P005 preview renders baseline paths through both mirrors and the image pla
   const baseline = page.locator('#layout-svg path[data-ray-layer="baseline"]')
   await expect(baseline).toHaveCount(9)
   await expect(baseline.first()).toHaveCSS('stroke-width', '2.1px')
+  const blockedPaths = page.locator('#layout-svg path[data-ray-layer="baseline"][data-baseline-status="blocked"]')
+  await expect(blockedPaths).toHaveCount(3)
+  await expect(blockedPaths.first()).toHaveCSS('stroke', 'rgb(111, 111, 111)')
+  await expect(blockedPaths.first()).toHaveCSS('stroke-dasharray', '3px, 2px')
+  await expect(page.locator('#layout-svg [data-ray-end-marker="blocked"]')).toHaveCount(3)
+  await expect(page.getByTestId('layout-legend')).toContainText('Vignetted ray')
   const paths = await baseline.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('d') ?? ''))
   expect(paths.every((path) => (path.match(/L/g) ?? []).length >= 2)).toBe(true)
   expect(paths.every((path) => path.startsWith('M 36 '))).toBe(true)
