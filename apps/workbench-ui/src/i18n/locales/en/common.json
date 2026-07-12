@@ -68,6 +68,10 @@
         "P011": {
           "name": "Planar-Type 6-Element Double Gauss 50mm F1.4 Demo",
           "summary": "Symmetric six-element Planar/Xenon topology with two cemented BK7/F2 doublets."
+        },
+        "P012": {
+          "name": "Tessar-Type 50mm F2.8 Demo",
+          "summary": "Four-element, three-group Tessar topology with a cemented BK7/F2 rear doublet."
         }
       }
     },

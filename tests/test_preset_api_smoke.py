@@ -160,6 +160,7 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
         "P009": {"alive": 81},
         "P010": {"alive": 81},
         "P011": {"alive": 81},
+        "P012": {"alive": 81},
     }
     expected_paraxial = {
         "P001": (50.0, 50.0, 4.0),
@@ -173,6 +174,7 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
         "P009": (49.21298867869991, 47.53621678328241, 3.0758117924187443),
         "P010": (49.21298867869991, 47.53621678328241, 3.0758117924187443),
         "P011": (49.98319335121228, 35.36298255546046, 1.4079772774989374),
+        "P012": (49.9824925346071, 40.22239204035907, 2.8001396377931145),
     }
     fields = [
         {"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0},
@@ -324,6 +326,54 @@ def test_p011_planar_double_gauss_has_six_positive_thickness_elements():
     )
     assert center_trace.status.tolist() == ["alive"] * 81
     assert analyze_spot(center_trace).rms_radius_mm == pytest.approx(0.46542296012362827)
+
+
+def test_p012_tessar_meets_f28_target_with_four_positive_thickness_elements():
+    preset = next(item for item in _shipped_presets() if item["id"] == "P012")
+    compiled = compile_system(load_system(preset["system"]))
+    paraxial = analyze_paraxial(compiled)
+    assert paraxial.effective_focal_length_mm == pytest.approx(49.9824925346071)
+    assert paraxial.back_focal_length_mm == pytest.approx(40.22239204035907)
+    assert paraxial.f_number == pytest.approx(2.8001396377931145)
+
+    surfaces = {surface["id"]: surface for surface in preset["system"]["surfaces"]}
+
+    def sag(radius: float, height: float) -> float:
+        return radius - math.copysign(math.sqrt(radius * radius - height * height), radius)
+
+    pairs = (("S1", "S2"), ("S3", "S4"), ("S5", "C1"), ("C1", "S6"))
+    edge_thicknesses = []
+    for first_id, second_id in pairs:
+        first = surfaces[first_id]
+        second = surfaces[second_id]
+        height = min(float(first["semi_diameter_mm"]), float(second["semi_diameter_mm"]))
+        edge_thicknesses.append(
+            float(first["thickness_after_mm"])
+            + sag(float(second["radius_mm"]), height)
+            - sag(float(first["radius_mm"]), height)
+        )
+    assert edge_thicknesses == pytest.approx(
+        [3.9114640350, 2.6019935228, 2.6316735242, 3.3170410440],
+        abs=1.0e-9,
+    )
+    assert min(edge_thicknesses) > 2.5
+
+    trace = trace_forward(
+        compiled,
+        preset["recommendedFields"],
+        {"samples_per_field": 25, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+        preset["system"]["wavelengths_nm"]["samples"],
+    )
+    assert trace.status.tolist() == ["alive"] * 225
+
+    center_trace = trace_forward(
+        compiled,
+        [preset["recommendedFields"][0]],
+        {"samples_per_field": 81, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+        [587.56],
+    )
+    assert center_trace.status.tolist() == ["alive"] * 81
+    assert analyze_spot(center_trace).rms_radius_mm == pytest.approx(0.03686279799887928)
 
 
 def test_p007_fast_meniscus_preserves_bright_paraxial_target_and_positive_edge_thickness():

@@ -425,6 +425,36 @@ export const presets: Preset[] = [
         ],
       },
     },
+    {
+      id: 'P012',
+      name: 'Tessar-Type 50mm F2.8 Demo',
+      summary: 'Four-element, three-group Tessar topology with a cemented BK7/F2 rear doublet.',
+      recommendedAnalysis: ['preview', 'spot', 'ray_fan', 'mtf', 'distortion', 'field_curvature', 'paraxial'],
+      recommendedFields: [
+        { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
+        { id: 'mid-y', type: 'angular', theta_y_deg: 7.036366, theta_z_deg: 0, preset_label: 'image_height_70pct' },
+        { id: 'edge-y', type: 'angular', theta_y_deg: 10, theta_z_deg: 0 },
+      ],
+      system: {
+        name: 'P012 Tessar-Type 50mm F2.8',
+        units: 'mm',
+        optical_axis: '+X',
+        system_type: 'focal',
+        wavelengths_nm: { primary: 587.56, samples: [486.13, 587.56, 656.27] },
+        materials: commonMaterials,
+        surfaces: [
+          { id: 'S1', kind: 'refractive', surface_type: 'spherical', radius_mm: 91.85, thickness_after_mm: 5, material_after: 'N-BK7', semi_diameter_mm: 13 },
+          { id: 'S2', kind: 'refractive', surface_type: 'spherical', radius_mm: -334, thickness_after_mm: 1.5, material_after: 'AIR', semi_diameter_mm: 12.5 },
+          { id: 'S3', kind: 'refractive', surface_type: 'spherical', radius_mm: -250.5, thickness_after_mm: 3, material_after: 'N-F2', semi_diameter_mm: 12 },
+          { id: 'S4', kind: 'refractive', surface_type: 'spherical', radius_mm: -100.2, thickness_after_mm: 4, material_after: 'AIR', semi_diameter_mm: 11.5 },
+          { id: 'STOP', kind: 'aperture_stop', surface_type: 'plane', thickness_after_mm: 4, semi_diameter_mm: 8.925, aperture: { shape: 'circle', semi_diameter_mm: 8.925 } },
+          { id: 'S5', kind: 'refractive', surface_type: 'spherical', radius_mm: 100.2, thickness_after_mm: 3, material_after: 'N-F2', semi_diameter_mm: 10.25 },
+          { id: 'C1', kind: 'refractive', surface_type: 'spherical', radius_mm: 334, thickness_after_mm: 4, material_after: 'N-BK7', semi_diameter_mm: 10.25 },
+          { id: 'S6', kind: 'refractive', surface_type: 'spherical', radius_mm: -100.2, thickness_after_mm: 39.4, material_after: 'AIR', semi_diameter_mm: 10.25 },
+          { id: 'IMG', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 36, height_mm: 24 } },
+        ],
+      },
+    },
   ]
 
 export const visualFixturePresets: Preset[] = [

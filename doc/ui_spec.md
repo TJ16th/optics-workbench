@@ -521,7 +521,7 @@ UI側でrequest/response型を手書きしない。
 
 ## 9.1 プリセットの目的
 
-初期版では、代表的な光学系を11個内蔵する。このうち通常のUIプリセット一覧には10個を表示し、反射系検証用のP005は定義・テストカバレッジを維持したまま非表示とする。
+初期版では、代表的な光学系を12個内蔵する。このうち通常のUIプリセット一覧には11個を表示し、反射系検証用のP005は定義・テストカバレッジを維持したまま非表示とする。
 
 目的は以下。
 
@@ -849,6 +849,32 @@ EFL = 3000 mm, F/15
 - 3 field × 3 wavelength × 9 samplesはalive 81
 - 25 samplesではalive 213 / aiming_failed 12 / blocked 0
 - Layout Viewで6枚、2接合面、4群の構成を確認できる
+
+### P012: Tessar-Type 50mm F2.8 Demo
+
+目的：前群の空気間隔単玉2枚と、STOP後のBK7/F2接合ダブレットからなる4枚3群Tessar型で、中口径写真レンズのspot、MTF、歪曲、像面湾曲を確認する。
+
+| No | id | kind | surface_type | R | D | N | semiD | aperture |
+|---:|---|---|---|---:|---:|---|---:|---|
+| 1 | S1 | refractive | spherical | 91.85 | 5.0 | N-BK7 | 13.0 | - |
+| 2 | S2 | refractive | spherical | -334.0 | 1.5 | AIR | 12.5 | - |
+| 3 | S3 | refractive | spherical | -250.5 | 3.0 | N-F2 | 12.0 | - |
+| 4 | S4 | refractive | spherical | -100.2 | 4.0 | AIR | 11.5 | - |
+| 5 | STOP | aperture_stop | plane | 0 | 4.0 | AIR | 8.925 | circle 8.925 |
+| 6 | S5 | refractive | spherical | 100.2 | 3.0 | N-F2 | 10.25 | - |
+| 7 | C1 | refractive | spherical | 334.0 | 4.0 | N-BK7 | 10.25 | cemented |
+| 8 | S6 | refractive | spherical | -100.2 | 39.4 | AIR | 10.25 | - |
+| 9 | IMG | sensor | plane | 0 | 0.0 | - | - | 36×24 |
+
+推奨fieldはcenter `0 deg`、70%像高 `7.036366 deg`、edge-y `10 deg`とする。
+
+期待値（主波長587.56nm）：
+
+- EFL ≒ 49.982 mm、BFL ≒ 40.222 mm、F number ≒ 2.800
+- 軸上best-focus相当の最終空気間隔は39.4 mm、center 81-ray spot RMS ≒ 0.036863 mm
+- 4枚のedge thicknessは約3.911 / 2.602 / 2.632 / 3.317 mmで、すべて正
+- 3 field × 3 wavelength × 9 / 25 / 81 samplesはいずれも全光線alive、blocked 0
+- Layout Viewで4枚、1接合面、3群の構成を確認できる
 
 ---
 
