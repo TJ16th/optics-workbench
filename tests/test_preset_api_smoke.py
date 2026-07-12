@@ -134,7 +134,16 @@ def test_p005_p006_preview_returns_visible_baseline_paths(preset_id: str, center
     assert len(baseline) == 9
     center = [ray for ray in baseline if ray["field_id"] == "center"]
     assert {ray["role"] for ray in center} == {"chief", "marginal_lower", "marginal_upper"}
-    assert all([hit["surface_id"] for hit in ray["path"]] == center_path for ray in center)
+    if preset_id == "P005":
+        by_role = {ray["role"]: ray for ray in center}
+        assert [hit["surface_id"] for hit in by_role["chief"]["path"]] == ["STOP"]
+        assert by_role["chief"]["status"] == "blocked"
+        assert all(
+            [hit["surface_id"] for hit in by_role[role]["path"]] == center_path
+            for role in ("marginal_lower", "marginal_upper")
+        )
+    else:
+        assert all([hit["surface_id"] for hit in ray["path"]] == center_path for ray in center)
     _assert_json_finite_or_null(baseline)
 
 
@@ -212,8 +221,16 @@ def test_p005_annular_stop_blocks_the_secondary_mirror_central_obscuration():
     assert all(40.0 - 1.0e-6 <= radius <= 100.0 + 1.0e-6 for radius in stop_radii)
 
     baseline = trace.metadata["layout_baseline_rays"]
-    assert all(abs(float(ray["stop_y_mm"])) >= 40.0 - 1.0e-6 for ray in baseline)
-    assert all([hit["surface_id"] for hit in ray["path"]][:2] == ["STOP", "M1"] for ray in baseline)
+    by_role = {ray["role"]: ray for ray in baseline}
+    assert by_role["chief"]["stop_y_mm"] == pytest.approx(0.0, abs=1.0e-9)
+    assert by_role["chief"]["status"] == "blocked"
+    assert by_role["marginal_lower"]["stop_y_mm"] == pytest.approx(-100.0, abs=1.0e-6)
+    assert by_role["marginal_upper"]["stop_y_mm"] == pytest.approx(100.0, abs=1.0e-6)
+    assert [hit["surface_id"] for hit in by_role["chief"]["path"]] == ["STOP"]
+    assert all(
+        [hit["surface_id"] for hit in by_role[role]["path"]][:2] == ["STOP", "M1"]
+        for role in ("marginal_lower", "marginal_upper")
+    )
 
 
 def test_p005_mirror_reflections_match_the_vector_reflection_law():

@@ -746,6 +746,11 @@ def _layout_baseline_rays(
     samples = np.array([[0.0, 0.0], [-1.0, 0.0], [1.0, 0.0]], dtype=float)
     roles = ["chief", "marginal_lower", "marginal_upper"]
     targets = _target_points_for_stop_with_layout(compiled, samples, centers_mm, rotations, configuration)
+    _, _, stop_inner = _aperture_radius(compiled, configuration)
+    if stop_inner > 0.0:
+        # The chief ray is defined by the stop center even when an annular
+        # obstruction blocks it. Do not relabel the +inner-edge sample as chief.
+        targets[0] = centers_mm[reference_idx]
     stop_id = compiled.surfaces[reference_idx].id
     rows: list[dict[str, Any]] = []
     for field_index, field in enumerate(fields):
@@ -776,6 +781,9 @@ def _layout_baseline_rays(
                 configuration=configuration,
             )
             for ray_index, role in enumerate(roles):
+                status = str(trace.status[ray_index])
+                if not aiming_ok[ray_index] and not (stop_inner > 0.0 and role == "chief"):
+                    status = STATUS_AIMING_FAILED
                 rows.append(
                     {
                         "role": role,
@@ -783,7 +791,7 @@ def _layout_baseline_rays(
                         "field_index": int(field_index),
                         "wavelength_nm": float(wavelength),
                         "wavelength_index": int(wavelength_index),
-                        "status": STATUS_AIMING_FAILED if not aiming_ok[ray_index] else str(trace.status[ray_index]),
+                        "status": status,
                         "path": trace.paths[ray_index],
                         "stop_y_mm": _path_stop_y(trace.paths[ray_index], stop_id),
                         "aiming_ok": bool(aiming_ok[ray_index]),
