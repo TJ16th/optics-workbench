@@ -44,10 +44,12 @@ innerは`40 mm × 0.92 px/mm = 36.8 px`、outerは`100 mm`を共通表示上限�
 - `npm run ci`: 成功
 - `npm run ui:e2e`: `28 passed (41.9s)`
 - テストファイル: `apps/workbench-ui/tests/e2e/analysis-conditions.spec.ts`
-- 実装根拠: 本報告と同一のR54コミット（`fix(ui): render annulus stop as cross section (R54)`）
+- 実装根拠: R54実装コミット`a49c162de2acd5a352dd5619fbc6f9692ffefba5`（短縮形`a49c162`、`fix(ui): render annulus stop as cross section (R54)`）
 
 最初の全検証をpytestとUI CIで並列実行した際、artifact TTLテストが`ttl_seconds=0.02`を超えて1件失敗し、再試行時にはPlaywright用一時Viteサーバー`5177`が途中終了した。コードアサーションの失敗ではなく、順次再実行では上記の通り全テストがグリーンになった。テストの削除・skip・緩和は行っていない。
 
 ## プロセス整合
 
-機能コミット後にAPI・UIを再起動し、`GET /v1/meta`の`build_info.git_commit`と当該コミットのHEADが一致することを確認して完了した。
+R54実装コミットは`a49c162de2acd5a352dd5619fbc6f9692ffefba5`（短縮形`a49c162`）である。2026-07-12のフォローアップ確認時点で、`git rev-parse HEAD`は`a49c162de2acd5a352dd5619fbc6f9692ffefba5`、`GET /v1/meta`の`build_info.git_commit`は`a49c162`だった。R54実装コミット、確認時点のHEAD、実行中プロセスのbuild commitは一致している。
+
+同時点の`build_info.git_dirty`は`true`だった。`git status --short`の内訳は未追跡の`doc/work_orders/active/codex_r46_screenshot_storage_convention.md`と本フォローアップ指示書であり、R54実装コードと実行中buildの不一致を示すものではない。本フォローアップは報告書の記載補完だけで、コード変更がないためAPI/UI再起動およびテスト再実行の対象外である。
