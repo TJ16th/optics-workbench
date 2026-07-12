@@ -603,21 +603,18 @@ body {
 
 .legend-stop::before {
   content: "";
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--ow-amber);
+  width: 3px;
+  height: 14px;
+  background: linear-gradient(var(--ow-amber), var(--ow-amber)) center / 3px 14px no-repeat;
 }
 
 .legend-annulus::before {
   content: "";
-  width: 12px;
+  width: 3px;
   height: 14px;
   background:
-    linear-gradient(var(--ow-amber), var(--ow-amber)) center 0 / 2px 3px no-repeat,
-    linear-gradient(var(--ow-amber), var(--ow-amber)) center 4px / 2px 3px no-repeat,
-    linear-gradient(var(--ow-amber), var(--ow-amber)) center 8px / 2px 3px no-repeat,
-    linear-gradient(var(--ow-amber), var(--ow-amber)) center 12px / 2px 2px no-repeat;
+    linear-gradient(var(--ow-amber), var(--ow-amber)) center top / 3px 5px no-repeat,
+    linear-gradient(var(--ow-amber), var(--ow-amber)) center bottom / 3px 5px no-repeat;
 }
 
 .legend-img::before {
@@ -696,11 +693,11 @@ body {
   fill: var(--ow-amber);
 }
 
-.stop-annulus-marker {
+.stop-aperture-marker {
   fill: none;
 }
 
-.stop-annulus-boundary {
+.stop-aperture-segment {
   stroke: var(--ow-amber);
   stroke-width: 3;
 }

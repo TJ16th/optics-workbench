@@ -970,9 +970,13 @@ function LayoutView({
       {surfaceViews.map(({ surface, x, sx, sy, semiD, h, rawH, annulusInnerSemiD, mirrorIncidentSign, centralHoleSemiDiameter, tiltDx, transform, profilePoints, profileSegments, cementedBoundary }) => {
         const className = `surface-line surface-${surface.kind}${transform.active ? ' surface-configured' : ''}${cementedBoundary ? ' surface-cemented' : ''}`
         const labelY = sy + h + 22 + (labelRows.get(surface.id) ?? 0) * 13
-        const isAnnulusStop = surface.kind === 'aperture_stop' && Boolean(annulusInnerSemiD)
+        const isStop = surface.kind === 'aperture_stop'
+        const isAnnulusStop = isStop && Boolean(annulusInnerSemiD)
         const annulusInnerRadiusPx = isAnnulusStop && semiD > 0 ? h * (annulusInnerSemiD as number) / semiD : undefined
-        const annulusTickHalfHeight = 5
+        const stopInnerRadiusPx = annulusInnerRadiusPx ?? 0
+        const stopPhysicalLengthPx = Math.max(0, h - stopInnerRadiusPx)
+        const stopVisualLengthPx = Math.max(4, stopPhysicalLengthPx)
+        const stopSegmentMidRadiusPx = (h + stopInnerRadiusPx) / 2
         return (
           <g
             key={surface.id}
@@ -990,38 +994,40 @@ function LayoutView({
             data-annulus-inner-radius-px={annulusInnerRadiusPx}
             data-annulus-outer-radius-px={isAnnulusStop ? h : undefined}
           >
-            {isAnnulusStop
+            {isStop
               ? null
               : profilePoints.length > 2
                 ? profileSegments.map((segment, segmentIndex) => <path key={segmentIndex} d={pointsPath(segment)} className={className} fill="none" />)
                 : <line x1={sx - tiltDx} x2={sx + tiltDx} y1={sy - h} y2={sy + h} className={className} />}
             {surface.kind === 'sensor' ? <rect x={sx - 3} y={sy - h} width="6" height={h * 2} className="sensor-plane" /> : null}
-            {isAnnulusStop
+            {isStop
               ? (
-                  <g className="stop-annulus-marker">
-                    {([-1, 1] as const).flatMap((sign) => ([
-                      { boundary: 'inner', radius: annulusInnerRadiusPx as number },
-                      { boundary: 'outer', radius: h },
-                    ]).map(({ boundary, radius }) => {
-                      const markerY = sy + sign * radius
+                  <g
+                    className={`stop-aperture-marker${isAnnulusStop ? ' stop-annulus-marker' : ' stop-circle-marker'}`}
+                    data-stop-min-visual-length-px="4"
+                  >
+                    {([-1, 1] as const).map((sign) => {
+                      const segmentCenterY = sy + sign * stopSegmentMidRadiusPx
                       return (
                         <line
-                          key={`${boundary}-${sign}`}
+                          key={sign}
                           x1={sx}
                           x2={sx}
-                          y1={markerY - annulusTickHalfHeight}
-                          y2={markerY + annulusTickHalfHeight}
-                          className="stop-annulus-boundary"
-                          data-annulus-boundary={boundary}
-                          data-annulus-sign={sign}
+                          y1={segmentCenterY - stopVisualLengthPx / 2}
+                          y2={segmentCenterY + stopVisualLengthPx / 2}
+                          className="stop-aperture-segment"
+                          data-stop-sign={sign}
+                          data-stop-inner-radius-px={stopInnerRadiusPx}
+                          data-stop-outer-radius-px={h}
+                          data-stop-physical-length-px={stopPhysicalLengthPx}
+                          data-stop-visual-length-px={stopVisualLengthPx}
                         />
                       )
-                    }))}
+                    })}
+                    {!isAnnulusStop ? <circle cx={sx} cy={sy} r={Math.max(3, Math.min(6, h * 0.12))} className="stop-dot" /> : null}
                   </g>
                 )
-              : surface.kind === 'aperture_stop'
-                ? <circle cx={sx} cy={sy} r={Math.max(3, Math.min(6, h * 0.12))} className="stop-dot" />
-                : null}
+              : null}
             {transform.active ? <circle cx={sx} cy={sy - h - 10} r="3.5" className="configured-dot" /> : null}
             <text x={sx} y={labelY} textAnchor="middle" className="surface-label">
               {surface.id}

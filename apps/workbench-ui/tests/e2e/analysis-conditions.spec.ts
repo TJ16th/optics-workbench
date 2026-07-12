@@ -642,6 +642,24 @@ test('layout view scales stop, sensor, and eye symbols from physical dimensions'
 
   await selectPresetOption(page, 'P002 N-BK7 Biconvex Singlet 50mm Demo')
   expect(await layoutSurfaceScale(page, 'STOP')).toMatchObject({ semiDiameterMm: 8, visualHalfHeightPx: 32, rawHalfHeightPx: 32, clamped: false })
+  const circleMarker = page.locator('#layout-svg [data-surface-id="STOP"] .stop-circle-marker')
+  await expect(circleMarker).toHaveCount(1)
+  await expect(circleMarker).toHaveAttribute('data-stop-min-visual-length-px', '4')
+  const circleSegments = circleMarker.locator('.stop-aperture-segment')
+  await expect(circleSegments).toHaveCount(2)
+  const circleRanges = await circleSegments.evaluateAll((nodes) => nodes.map((node) => {
+    const line = node as SVGLineElement
+    return {
+      sign: Number(line.dataset.stopSign),
+      innerRadiusPx: Number(line.dataset.stopInnerRadiusPx),
+      outerRadiusPx: Number(line.dataset.stopOuterRadiusPx),
+      minY: Math.min(line.y1.baseVal.value, line.y2.baseVal.value),
+      maxY: Math.max(line.y1.baseVal.value, line.y2.baseVal.value),
+    }
+  }))
+  expect(circleRanges.find((item) => item.sign === -1)).toMatchObject({ innerRadiusPx: 0, outerRadiusPx: 32, minY: 138, maxY: 170 })
+  expect(circleRanges.find((item) => item.sign === 1)).toMatchObject({ innerRadiusPx: 0, outerRadiusPx: 32, minY: 170, maxY: 202 })
+  await expect(circleMarker.locator('.stop-dot')).toHaveCount(1)
   expect(await layoutSurfaceScale(page, 'IMG')).toMatchObject({ semiDiameterMm: 18, visualHalfHeightPx: 72, rawHalfHeightPx: 72, clamped: false })
   await expect(page.locator('#layout-svg [data-surface-id="IMG"] rect.sensor-plane')).toHaveAttribute('height', '144')
 
@@ -650,10 +668,9 @@ test('layout view scales stop, sensor, and eye symbols from physical dimensions'
   await expect(page.locator('#layout-svg [data-surface-id="STOP"]')).toHaveAttribute('data-annulus-inner-semi-diameter-mm', '40')
   await expect(page.locator('#layout-svg [data-surface-id="STOP"] .stop-obscuration')).toHaveCount(0)
   await expect(page.locator('#layout-svg [data-surface-id="STOP"] .stop-annulus-marker')).toHaveCount(1)
-  const annulusBoundaries = page.locator('#layout-svg [data-surface-id="STOP"] .stop-annulus-boundary')
-  await expect(annulusBoundaries).toHaveCount(4)
-  await expect(page.locator('#layout-svg [data-surface-id="STOP"] [data-annulus-boundary="inner"]')).toHaveCount(2)
-  await expect(page.locator('#layout-svg [data-surface-id="STOP"] [data-annulus-boundary="outer"]')).toHaveCount(2)
+  await expect(page.locator('#layout-svg [data-surface-id="STOP"] .stop-annulus-marker')).toHaveAttribute('data-stop-min-visual-length-px', '4')
+  const annulusSegments = page.locator('#layout-svg [data-surface-id="STOP"] .stop-aperture-segment')
+  await expect(annulusSegments).toHaveCount(2)
   await expect(page.locator('#layout-svg [data-surface-id="STOP"] .stop-dot')).toHaveCount(0)
   await expect(page.locator('#layout-svg [data-surface-id="STOP"] .surface-aperture_stop')).toHaveCount(0)
   await expect(page.getByTestId('layout-legend').locator('.legend-stop')).toHaveCount(0)
@@ -671,17 +688,33 @@ test('layout view scales stop, sensor, and eye symbols from physical dimensions'
   const p005Stop = page.locator('#layout-svg [data-surface-id="STOP"]')
   expect(Number(await p005Stop.getAttribute('data-annulus-inner-radius-px'))).toBeCloseTo(p005M2Scale.visualHalfHeightPx)
   expect(Number(await p005Stop.getAttribute('data-annulus-outer-radius-px'))).toBeCloseTo(92)
-  const boundaryCenters = await annulusBoundaries.evaluateAll((nodes) => nodes.map((node) => {
+  const stopSegments = await annulusSegments.evaluateAll((nodes) => nodes.map((node) => {
     const line = node as SVGLineElement
     return {
-      boundary: line.dataset.annulusBoundary,
-      centerY: (line.y1.baseVal.value + line.y2.baseVal.value) / 2,
+      sign: Number(line.dataset.stopSign),
+      innerRadiusPx: Number(line.dataset.stopInnerRadiusPx),
+      outerRadiusPx: Number(line.dataset.stopOuterRadiusPx),
+      physicalLengthPx: Number(line.dataset.stopPhysicalLengthPx),
+      visualLengthPx: Number(line.dataset.stopVisualLengthPx),
+      minY: Math.min(line.y1.baseVal.value, line.y2.baseVal.value),
+      maxY: Math.max(line.y1.baseVal.value, line.y2.baseVal.value),
       height: Math.abs(line.y2.baseVal.value - line.y1.baseVal.value),
     }
   }))
-  boundaryCenters.filter((item) => item.boundary === 'inner').forEach((item) => expect(Math.abs(item.centerY - 170)).toBeCloseTo(36.8))
-  boundaryCenters.filter((item) => item.boundary === 'outer').forEach((item) => expect(Math.abs(item.centerY - 170)).toBeCloseTo(92))
-  expect(boundaryCenters.every((item) => item.height === 10)).toBe(true)
+  expect(stopSegments.map((item) => item.sign).sort()).toEqual([-1, 1])
+  stopSegments.forEach((item) => {
+    expect(item.innerRadiusPx).toBeCloseTo(36.8)
+    expect(item.outerRadiusPx).toBeCloseTo(92)
+    expect(item.physicalLengthPx).toBeCloseTo(55.2)
+    expect(item.visualLengthPx).toBeCloseTo(55.2)
+    expect(item.height).toBeCloseTo(55.2)
+  })
+  const negativeAnnulusSegment = stopSegments.find((item) => item.sign === -1)
+  const positiveAnnulusSegment = stopSegments.find((item) => item.sign === 1)
+  expect(negativeAnnulusSegment?.minY).toBeCloseTo(78)
+  expect(negativeAnnulusSegment?.maxY).toBeCloseTo(133.2)
+  expect(positiveAnnulusSegment?.minY).toBeCloseTo(206.8)
+  expect(positiveAnnulusSegment?.maxY).toBeCloseTo(262)
   expect(await layoutSurfaceScale(page, 'IMG')).toMatchObject({ semiDiameterMm: 15, visualHalfHeightPx: 20, rawHalfHeightPx: 60, clamped: true })
 
   await selectPresetOption(page, 'P006 Keplerian Afocal Telescope Demo')
