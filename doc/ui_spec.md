@@ -521,7 +521,7 @@ UI側でrequest/response型を手書きしない。
 
 ## 9.1 プリセットの目的
 
-初期版では、代表的な光学系を8つ内蔵する。
+初期版では、代表的な光学系を9つ内蔵する。
 
 目的は以下。
 
@@ -766,6 +766,28 @@ EFL = 3000 mm, F/15
 - 軸上25 samplesの残存divergence ≒ 0.368 D
 - 3 field × 3 wavelength × 25 samplesの実光線225本がEYEへ到達し、各面でケラれない
 - P006の理想薄レンズ系と比較して、実ガラス・実曲率による残存角度収差を確認できる
+
+### P009: N-BK7 Aspheric Singlet 50mm Demo
+
+目的：P002と同じ曲率・口径・硝材の単玉を基準に、前面をeven asphere化したときの球面収差補正をspotとray fanで比較する。
+
+| No | id | kind | surface_type | R | conic / asphere | D | N | semiD | aperture |
+|---:|---|---|---|---:|---|---:|---|---:|---|
+| 1 | STOP | aperture_stop | plane | 0 | - | 2.0 | AIR | 8.0 | circle 8.0 |
+| 2 | ASP1 | refractive | aspherical_even | 50.0 | k=-1.1792 / A4=-2.4992e-6 | 5.0 | N-BK7 | 9.5 | - |
+| 3 | S2 | refractive | spherical | -50.0 | - | 46.9248 | AIR | 9.75 | - |
+| 4 | IMG | sensor | plane | 0 | - | 0.0 | - | - | 36×24 |
+
+推奨fieldはP002と同じcenter `0 deg`、70%像高 `9.900092 deg`、edge-y `14 deg`とする。
+
+期待値（主波長587.56nm、center、81-ray hexapolar）：
+
+- P002球面版spot RMS ≒ 0.0466582 mm
+- P009非球面版spot RMS ≒ 0.0228093 mm
+- P009はP002に対してspot RMSを約49%低減する
+- EFL ≒ 49.213 mm、F number ≒ 3.076でP002と近軸powerが一致する
+- 3 field × 3 wavelength × 25 samplesの実光線225本がIMGへ到達する
+- Layout ViewでASP1の非球面形状を確認できる
 
 ---
 

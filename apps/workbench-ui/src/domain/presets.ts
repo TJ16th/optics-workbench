@@ -276,6 +276,48 @@ export const presets: Preset[] = [
         ],
       },
     },
+    {
+      id: 'P009',
+      name: 'N-BK7 Aspheric Singlet 50mm Demo',
+      summary: 'P002-derived singlet with an even-aspheric front surface for direct spherical-aberration comparison.',
+      recommendedAnalysis: ['preview', 'spot', 'ray_fan', 'paraxial'],
+      recommendedFields: [
+        { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
+        { id: 'mid-y', type: 'angular', theta_y_deg: 9.900092, theta_z_deg: 0, preset_label: 'image_height_70pct' },
+        { id: 'edge-y', type: 'angular', theta_y_deg: 14, theta_z_deg: 0 },
+      ],
+      system: {
+        name: 'P009 N-BK7 Aspheric Singlet',
+        units: 'mm',
+        optical_axis: '+X',
+        system_type: 'focal',
+        wavelengths_nm: { primary: 587.56, samples: [486.13, 587.56, 656.27] },
+        materials: commonMaterials,
+        surfaces: [
+          {
+            id: 'STOP',
+            kind: 'aperture_stop',
+            surface_type: 'plane',
+            thickness_after_mm: 2,
+            semi_diameter_mm: 8,
+            aperture: { shape: 'circle', semi_diameter_mm: 8 },
+          },
+          {
+            id: 'ASP1',
+            kind: 'refractive',
+            surface_type: 'aspherical_even',
+            radius_mm: 50,
+            conic: -1.1792,
+            asphere_coefficients: { A4: -0.0000024992 },
+            thickness_after_mm: 5,
+            material_after: 'N-BK7',
+            semi_diameter_mm: 9.5,
+          },
+          { id: 'S2', kind: 'refractive', surface_type: 'spherical', radius_mm: -50, thickness_after_mm: 46.9248, material_after: 'AIR', semi_diameter_mm: 9.75 },
+          { id: 'IMG', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 36, height_mm: 24 } },
+        ],
+      },
+    },
   ]
 
 export const visualFixturePresets: Preset[] = [

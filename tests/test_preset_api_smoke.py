@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 import numpy as np
 
-from optics_engine import analyze_afocal, analyze_exit_pupil, analyze_paraxial, compile_system, load_system, trace_forward
+from optics_engine import analyze_afocal, analyze_exit_pupil, analyze_paraxial, analyze_spot, compile_system, load_system, trace_forward
 from optics_engine.core import asphere_sag_and_slope, reflect, surface_normals_for_surface
 
 
@@ -156,6 +156,7 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
         "P006": {"alive": 1, "blocked": 26},
         "P007": {"alive": 81},
         "P008": {"alive": 27, "blocked": 54},
+        "P009": {"alive": 81},
     }
     expected_paraxial = {
         "P001": (50.0, 50.0, 4.0),
@@ -165,6 +166,7 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
         "P006": (None, None, None),
         "P007": (519.6281203750518, 452.04242770474303, 19.682883347539843),
         "P008": (None, None, None),
+        "P009": (49.21298867869991, 47.53621678328241, 3.0758117924187443),
     }
     fields = [
         {"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0},
@@ -221,6 +223,34 @@ def test_p008_real_achromatic_afocal_preset_metrics_and_throughput():
     )
     assert trace.status.tolist() == ["alive"] * 225
     assert all([hit["surface_id"] for hit in path] == ["STOP", "O1", "O2", "O3", "E1", "E2", "E3", "EYE"] for path in trace.paths)
+
+
+def test_p009_aspheric_singlet_reduces_primary_wavelength_spherical_spot():
+    presets = _shipped_presets()
+    spherical = next(item for item in presets if item["id"] == "P002")
+    aspheric = next(item for item in presets if item["id"] == "P009")
+    asp1 = next(surface for surface in aspheric["system"]["surfaces"] if surface["id"] == "ASP1")
+    assert asp1["surface_type"] == "aspherical_even"
+    assert asp1["conic"] == pytest.approx(-1.1792)
+    assert asp1["asphere_coefficients"] == {"A4": pytest.approx(-2.4992e-6)}
+
+    sampling = {"samples_per_field": 81, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}}
+    field = [aspheric["recommendedFields"][0]]
+    spherical_trace = trace_forward(compile_system(load_system(spherical["system"])), field, sampling, [587.56])
+    aspheric_trace = trace_forward(compile_system(load_system(aspheric["system"])), field, sampling, [587.56])
+    spherical_rms = analyze_spot(spherical_trace).rms_radius_mm
+    aspheric_rms = analyze_spot(aspheric_trace).rms_radius_mm
+    assert spherical_rms == pytest.approx(0.04665818793319052)
+    assert aspheric_rms == pytest.approx(0.0228093022785783)
+    assert aspheric_rms < spherical_rms * 0.5
+
+    throughput = trace_forward(
+        compile_system(load_system(aspheric["system"])),
+        aspheric["recommendedFields"],
+        {"samples_per_field": 25, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+        aspheric["system"]["wavelengths_nm"]["samples"],
+    )
+    assert throughput.status.tolist() == ["alive"] * 225
 
 
 def test_p005_annular_stop_blocks_the_secondary_mirror_central_obscuration():
