@@ -650,6 +650,10 @@ test('layout view scales stop, sensor, and eye symbols from physical dimensions'
   await expect(page.locator('#layout-svg [data-surface-id="STOP"]')).toHaveAttribute('data-annulus-inner-semi-diameter-mm', '40')
   await expect(page.locator('#layout-svg [data-surface-id="STOP"] .stop-obscuration')).toHaveCount(0)
   await expect(page.locator('#layout-svg [data-surface-id="STOP"] .stop-annulus-marker')).toHaveCount(1)
+  const annulusBoundaries = page.locator('#layout-svg [data-surface-id="STOP"] .stop-annulus-boundary')
+  await expect(annulusBoundaries).toHaveCount(4)
+  await expect(page.locator('#layout-svg [data-surface-id="STOP"] [data-annulus-boundary="inner"]')).toHaveCount(2)
+  await expect(page.locator('#layout-svg [data-surface-id="STOP"] [data-annulus-boundary="outer"]')).toHaveCount(2)
   await expect(page.locator('#layout-svg [data-surface-id="STOP"] .stop-dot')).toHaveCount(0)
   await expect(page.locator('#layout-svg [data-surface-id="STOP"] .surface-aperture_stop')).toHaveCount(0)
   await expect(page.getByTestId('layout-legend').locator('.legend-stop')).toHaveCount(0)
@@ -667,7 +671,17 @@ test('layout view scales stop, sensor, and eye symbols from physical dimensions'
   const p005Stop = page.locator('#layout-svg [data-surface-id="STOP"]')
   expect(Number(await p005Stop.getAttribute('data-annulus-inner-radius-px'))).toBeCloseTo(p005M2Scale.visualHalfHeightPx)
   expect(Number(await p005Stop.getAttribute('data-annulus-outer-radius-px'))).toBeCloseTo(92)
-  expect(Number(await p005Stop.locator('.stop-annulus-marker').getAttribute('r'))).toBeCloseTo(p005M2Scale.visualHalfHeightPx)
+  const boundaryCenters = await annulusBoundaries.evaluateAll((nodes) => nodes.map((node) => {
+    const line = node as SVGLineElement
+    return {
+      boundary: line.dataset.annulusBoundary,
+      centerY: (line.y1.baseVal.value + line.y2.baseVal.value) / 2,
+      height: Math.abs(line.y2.baseVal.value - line.y1.baseVal.value),
+    }
+  }))
+  boundaryCenters.filter((item) => item.boundary === 'inner').forEach((item) => expect(Math.abs(item.centerY - 170)).toBeCloseTo(36.8))
+  boundaryCenters.filter((item) => item.boundary === 'outer').forEach((item) => expect(Math.abs(item.centerY - 170)).toBeCloseTo(92))
+  expect(boundaryCenters.every((item) => item.height === 10)).toBe(true)
   expect(await layoutSurfaceScale(page, 'IMG')).toMatchObject({ semiDiameterMm: 15, visualHalfHeightPx: 20, rawHalfHeightPx: 60, clamped: true })
 
   await selectPresetOption(page, 'P006 Keplerian Afocal Telescope Demo')

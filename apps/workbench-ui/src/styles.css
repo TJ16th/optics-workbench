@@ -612,10 +612,12 @@ body {
 .legend-annulus::before {
   content: "";
   width: 12px;
-  height: 12px;
-  border: 3px solid var(--ow-amber);
-  border-radius: 50%;
-  box-sizing: border-box;
+  height: 14px;
+  background:
+    linear-gradient(var(--ow-amber), var(--ow-amber)) center 0 / 2px 3px no-repeat,
+    linear-gradient(var(--ow-amber), var(--ow-amber)) center 4px / 2px 3px no-repeat,
+    linear-gradient(var(--ow-amber), var(--ow-amber)) center 8px / 2px 3px no-repeat,
+    linear-gradient(var(--ow-amber), var(--ow-amber)) center 12px / 2px 2px no-repeat;
 }
 
 .legend-img::before {
@@ -695,7 +697,10 @@ body {
 }
 
 .stop-annulus-marker {
-  fill: #ffffff;
+  fill: none;
+}
+
+.stop-annulus-boundary {
   stroke: var(--ow-amber);
   stroke-width: 3;
 }
