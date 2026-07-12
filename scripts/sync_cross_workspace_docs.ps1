@@ -6,6 +6,8 @@ param(
     [string]$ClaudeReports = 'F:\vscode\claude\opt\doc\reports',
     [string]$CodexAgentsPath = 'F:\vscode\opt\AGENTS.md',
     [string]$ClaudeAgentsPath = 'F:\vscode\claude\opt\doc\AGENTS.md',
+    [string]$CodexSpecs = 'F:\vscode\opt\doc',
+    [string]$ClaudeSpecs = 'F:\vscode\claude\opt\doc',
     [string]$LogPath = (Join-Path $env:LOCALAPPDATA 'OpticsDocSync\sync.log'),
     [int]$PollMilliseconds = 750
 )
@@ -13,7 +15,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-foreach ($path in @($IncomingWorkOrders, $CodexWorkOrders, $CodexReports, $ClaudeReports, (Split-Path -Parent $ClaudeAgentsPath))) {
+foreach ($path in @($IncomingWorkOrders, $CodexWorkOrders, $CodexReports, $ClaudeReports, (Split-Path -Parent $ClaudeAgentsPath), $CodexSpecs, $ClaudeSpecs)) {
     if (-not (Test-Path -LiteralPath $path -PathType Container)) {
         New-Item -ItemType Directory -Path $path -Force | Out-Null
     }
@@ -27,7 +29,8 @@ if (-not (Test-Path -LiteralPath $logDirectory -PathType Container)) {
 $routes = @(
     [pscustomobject]@{ Mode = 'work_orders'; SourceRoot = $IncomingWorkOrders; DestinationRoot = $CodexWorkOrders; Recurse = $false },
     [pscustomobject]@{ Mode = 'reports'; SourceRoot = $CodexReports; DestinationRoot = $ClaudeReports; Recurse = $true },
-    [pscustomobject]@{ Mode = 'agents'; SourceRoot = (Split-Path -Parent $CodexAgentsPath); DestinationRoot = (Split-Path -Parent $ClaudeAgentsPath); Recurse = $false; SourceName = (Split-Path -Leaf $CodexAgentsPath) }
+    [pscustomobject]@{ Mode = 'agents'; SourceRoot = (Split-Path -Parent $CodexAgentsPath); DestinationRoot = (Split-Path -Parent $ClaudeAgentsPath); Recurse = $false; SourceName = (Split-Path -Leaf $CodexAgentsPath) },
+    [pscustomobject]@{ Mode = 'specs'; SourceRoot = $CodexSpecs; DestinationRoot = $ClaudeSpecs; Recurse = $false; SourceNames = @('engine_spec.md', 'ui_spec.md') }
 )
 
 function Get-RelativeSyncPath {
@@ -44,6 +47,7 @@ function Get-SyncFiles {
     $files = Get-ChildItem -LiteralPath $Route.SourceRoot -File -Recurse:$Route.Recurse -ErrorAction SilentlyContinue
     if ($Route.Mode -eq 'work_orders') { return $files }
     if ($Route.Mode -eq 'agents') { return $files | Where-Object { $_.Name -ceq $Route.SourceName } }
+    if ($Route.Mode -eq 'specs') { return $files | Where-Object { $Route.SourceNames -ccontains $_.Name } }
     return $files | Where-Object {
         $relative = Get-RelativeSyncPath -Root $Route.SourceRoot -Path $_.FullName
         $isRootMarkdown = -not $relative.Contains([System.IO.Path]::DirectorySeparatorChar) -and $_.Extension -eq '.md'
