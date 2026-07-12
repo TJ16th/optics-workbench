@@ -220,8 +220,8 @@ export const presets: Preset[] = [
       wavelengths_nm: { primary: 587.56, samples: [486.13, 587.56, 656.27] },
       materials: commonMaterials,
       surfaces: [
-        { id: 'S1', kind: 'refractive', surface_type: 'spherical', radius_mm: 26.0, thickness_after_mm: 5.0, material_after: 'N-BK7', semi_diameter_mm: 16 },
-        { id: 'S2', kind: 'refractive', surface_type: 'spherical', radius_mm: 60.0, thickness_after_mm: 3.0, material_after: 'AIR', semi_diameter_mm: 15.25 },
+          { id: 'S1', kind: 'refractive', surface_type: 'spherical', radius_mm: 15.0, thickness_after_mm: 10.5, material_after: 'N-BK7', semi_diameter_mm: 14.5 },
+          { id: 'S2', kind: 'refractive', surface_type: 'spherical', radius_mm: 60.0, thickness_after_mm: 3.0, material_after: 'AIR', semi_diameter_mm: 14.5 },
         {
           id: 'STOP',
           kind: 'aperture_stop',
@@ -231,7 +231,7 @@ export const presets: Preset[] = [
           aperture: { shape: 'circle', semi_diameter_mm: 13.2 },
         },
         { id: 'S3', kind: 'refractive', surface_type: 'spherical', radius_mm: -35.0, thickness_after_mm: 3.0, material_after: 'N-F2', semi_diameter_mm: 14.25 },
-        { id: 'S4', kind: 'refractive', surface_type: 'spherical', radius_mm: -100.0, thickness_after_mm: 31.8, material_after: 'AIR', semi_diameter_mm: 15 },
+          { id: 'S4', kind: 'refractive', surface_type: 'spherical', radius_mm: -100.0, thickness_after_mm: 26.948477258301352, material_after: 'AIR', semi_diameter_mm: 15 },
         { id: 'IMG', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 36, height_mm: 24 } },
       ],
       },

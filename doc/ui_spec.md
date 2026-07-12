@@ -723,20 +723,20 @@ EFL = 3000 mm, F/15
 
 | No | id | kind | surface_type | R | D | N | semiD | aperture |
 |---:|---|---|---|---:|---:|---|---:|---|
-| 1 | S1 | refractive | spherical | 26.0 | 5.0 | N-BK7 | 16.0 | - |
-| 2 | S2 | refractive | spherical | 60.0 | 3.0 | AIR | 15.25 | - |
+| 1 | S1 | refractive | spherical | 15.0 | 10.5 | N-BK7 | 14.5 | - |
+| 2 | S2 | refractive | spherical | 60.0 | 3.0 | AIR | 14.5 | - |
 | 3 | STOP | aperture_stop | plane | 0 | 3.0 | AIR | 13.2 | circle 13.2 |
 | 4 | S3 | refractive | spherical | -35.0 | 3.0 | N-F2 | 14.25 | - |
-| 5 | S4 | refractive | spherical | -100.0 | 31.8 | AIR | 15.0 | - |
+| 5 | S4 | refractive | spherical | -100.0 | 26.948477258301352 | AIR | 15.0 | - |
 | 6 | IMG | sensor | plane | 0 | 0.0 | - | - | 36×24 |
 
 推奨field：center `0 deg`、70%像高 `1.050122 deg`、edge-y `1.5 deg`。
 
 期待値（現行実装値の近軸・実光線検証）：
 
-- EFL ≒ 519.628 mm
-- BFL ≒ 452.042 mm
-- F number ≒ 19.683
+- EFL ≒ 47.954 mm
+- BFL ≒ 26.948 mm
+- F number ≒ 1.816
 - 3 field × 3 wavelength × 9 samplesの実光線81本がIMGへ到達する
 - S1/S2の正曲率とS3/S4の負曲率がLayout Viewで明確に区別できる
 - spot、ray fan、paraxial解析を実行できる

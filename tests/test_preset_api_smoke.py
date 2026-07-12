@@ -164,7 +164,7 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
         "P003": (93.14346592275818, 90.43162704589228, 4.657173296137909),
         "P005": (3000.0, 1050.0, 15.0),
         "P006": (None, None, None),
-        "P007": (519.6281203750518, 452.04242770474303, 19.682883347539843),
+        "P007": (47.953755611726336, 26.948477258301352, 1.816430136807816),
         "P008": (None, None, None),
         "P009": (49.21298867869991, 47.53621678328241, 3.0758117924187443),
     }
@@ -223,6 +223,32 @@ def test_p008_real_achromatic_afocal_preset_metrics_and_throughput():
     )
     assert trace.status.tolist() == ["alive"] * 225
     assert all([hit["surface_id"] for hit in path] == ["STOP", "O1", "O2", "O3", "E1", "E2", "E3", "EYE"] for path in trace.paths)
+
+
+def test_p007_fast_meniscus_preserves_bright_paraxial_target_and_positive_edge_thickness():
+    preset = next(item for item in _shipped_presets() if item["id"] == "P007")
+    compiled = compile_system(load_system(preset["system"]))
+    paraxial = analyze_paraxial(compiled)
+    assert paraxial.effective_focal_length_mm == pytest.approx(47.953755611726336)
+    assert paraxial.back_focal_length_mm == pytest.approx(26.948477258301352)
+    assert paraxial.f_number == pytest.approx(1.816430136807816)
+
+    s1, s2 = preset["system"]["surfaces"][:2]
+    height = min(float(s1["semi_diameter_mm"]), float(s2["semi_diameter_mm"]))
+    sag1 = float(s1["radius_mm"]) - math.sqrt(float(s1["radius_mm"]) ** 2 - height**2)
+    sag2 = float(s2["radius_mm"]) - math.sqrt(float(s2["radius_mm"]) ** 2 - height**2)
+    edge_thickness = float(s1["thickness_after_mm"]) + sag2 - sag1
+    assert float(s1["radius_mm"]) > height
+    assert edge_thickness == pytest.approx(1.1190132933115944)
+    assert edge_thickness > 1.0
+
+    trace = trace_forward(
+        compiled,
+        preset["recommendedFields"],
+        {"samples_per_field": 9, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+        preset["system"]["wavelengths_nm"]["samples"],
+    )
+    assert trace.status.tolist() == ["alive"] * 81
 
 
 def test_p009_aspheric_singlet_reduces_primary_wavelength_spherical_spot():
