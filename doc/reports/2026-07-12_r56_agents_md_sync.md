@@ -56,6 +56,6 @@ Codex正本は変化せず、ClaudeからCodexへの逆書き戻しが無いこ�
 - 逆方向書き戻し防止: `true`
 - 起動時復元: `true`
 - 同期ログ記録: `true`
-- 実装根拠: 本報告と同一のR56コミット（`feat(ops): sync AGENTS.md to Claude workspace (R56)`）
+- 実装根拠: R56実装コミット `250d9536da40a4a0d7f470bcae57c9b5b7abb386`（短縮形: `250d953`、`feat(ops): sync AGENTS.md to Claude workspace (R56)`）
 
 本タスクは同期運用と文書だけの変更であり、エンジンAPI・UI機能を変更していないため、pytest、UI CI、API/UI再起動は対象外である。
