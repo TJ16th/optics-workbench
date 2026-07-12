@@ -318,6 +318,48 @@ export const presets: Preset[] = [
         ],
       },
     },
+    {
+      id: 'P010',
+      name: 'High-Order Aspheric Singlet Inflection Demo',
+      summary: 'Strong A4/A6/A8 terms create two radial curvature reversals for high-order asphere inspection.',
+      recommendedAnalysis: ['preview', 'spot', 'ray_fan', 'paraxial'],
+      recommendedFields: [
+        { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
+        { id: 'mid-y', type: 'angular', theta_y_deg: 6.68117, theta_z_deg: 0, preset_label: 'image_height_70pct' },
+        { id: 'edge-y', type: 'angular', theta_y_deg: 9.5, theta_z_deg: 0 },
+      ],
+      system: {
+        name: 'P010 High-Order Aspheric Singlet',
+        units: 'mm',
+        optical_axis: '+X',
+        system_type: 'focal',
+        wavelengths_nm: { primary: 587.56, samples: [486.13, 587.56, 656.27] },
+        materials: commonMaterials,
+        surfaces: [
+          {
+            id: 'STOP',
+            kind: 'aperture_stop',
+            surface_type: 'plane',
+            thickness_after_mm: 2,
+            semi_diameter_mm: 8,
+            aperture: { shape: 'circle', semi_diameter_mm: 8 },
+          },
+          {
+            id: 'ASP1',
+            kind: 'refractive',
+            surface_type: 'aspherical_even',
+            radius_mm: 50,
+            conic: -1,
+            asphere_coefficients: { A4: -0.0001, A6: 0.0000005, A8: -0.0000000005 },
+            thickness_after_mm: 5,
+            material_after: 'N-BK7',
+            semi_diameter_mm: 9.5,
+          },
+          { id: 'S2', kind: 'refractive', surface_type: 'spherical', radius_mm: -50, thickness_after_mm: 63.175, material_after: 'AIR', semi_diameter_mm: 9.75 },
+          { id: 'IMG', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 36, height_mm: 24 } },
+        ],
+      },
+    },
   ]
 
 export const visualFixturePresets: Preset[] = [

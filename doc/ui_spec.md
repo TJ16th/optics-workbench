@@ -789,6 +789,28 @@ EFL = 3000 mm, F/15
 - 3 field × 3 wavelength × 25 samplesの実光線225本がIMGへ到達する
 - Layout ViewでASP1の非球面形状を確認できる
 
+### P010: High-Order Aspheric Singlet Inflection Demo
+
+目的：A4 / A6 / A8を含む強いeven asphereを使い、口径内で曲率が2回反転する高次非球面形状をSurface Table、Layout View、spot、ray fanで確認する。
+
+| No | id | kind | surface_type | R | conic / asphere | D | N | semiD | aperture |
+|---:|---|---|---|---:|---|---:|---|---:|---|
+| 1 | STOP | aperture_stop | plane | 0 | - | 2.0 | AIR | 8.0 | circle 8.0 |
+| 2 | ASP1 | refractive | aspherical_even | 50.0 | k=-1 / A4=-1.0e-4 / A6=5.0e-7 / A8=-5.0e-10 | 5.0 | N-BK7 | 9.5 | - |
+| 3 | S2 | refractive | spherical | -50.0 | - | 63.175 | AIR | 9.75 | - |
+| 4 | IMG | sensor | plane | 0 | - | 0.0 | - | - | 36×24 |
+
+推奨fieldはcenter `0 deg`、70%像高 `6.681170 deg`、edge-y `9.5 deg`とする。
+
+期待値（主波長587.56nm）：
+
+- ASP1のメリジオナル曲率は半径約4.79 mmで正から負、約8.38 mmで負から正へ反転する
+- 半径4.0 / 5.0 / 8.0 / 8.5 mmでの曲率はそれぞれ約`+0.0045253 / -0.0010625 / -0.0027000 / +0.0010407 mm^-1`
+- EFL ≒ 49.213 mm、BFL ≒ 47.536 mm、F number ≒ 3.076
+- 軸上best-focus相当の最終空気間隔は63.175 mm、center 81-ray spot RMS ≒ 0.464633 mm
+- 3 field × 3 wavelength × 25 samplesの実光線225本がIMGへ到達する
+- Layout ViewでASP1の曲率反転を含む高次非球面形状を確認できる
+
 ---
 
 # 10. UI状態モデル

@@ -157,6 +157,7 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
         "P007": {"alive": 81},
         "P008": {"alive": 27, "blocked": 54},
         "P009": {"alive": 81},
+        "P010": {"alive": 81},
     }
     expected_paraxial = {
         "P001": (50.0, 50.0, 4.0),
@@ -167,6 +168,7 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
         "P007": (47.953755611726336, 26.948477258301352, 1.816430136807816),
         "P008": (None, None, None),
         "P009": (49.21298867869991, 47.53621678328241, 3.0758117924187443),
+        "P010": (49.21298867869991, 47.53621678328241, 3.0758117924187443),
     }
     fields = [
         {"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0},
@@ -277,6 +279,52 @@ def test_p009_aspheric_singlet_reduces_primary_wavelength_spherical_spot():
         aspheric["system"]["wavelengths_nm"]["samples"],
     )
     assert throughput.status.tolist() == ["alive"] * 225
+
+
+def test_p010_high_order_asphere_has_two_curvature_reversals_and_full_throughput():
+    preset = next(item for item in _shipped_presets() if item["id"] == "P010")
+    surface = next(item for item in preset["system"]["surfaces"] if item["id"] == "ASP1")
+    assert surface["conic"] == pytest.approx(-1.0)
+    assert surface["asphere_coefficients"] == {
+        "A4": pytest.approx(-1.0e-4),
+        "A6": pytest.approx(5.0e-7),
+        "A8": pytest.approx(-5.0e-10),
+    }
+
+    radii = np.array([4.0, 5.0, 8.0, 8.5], dtype=float)
+    delta = 1.0e-4
+    _, slope_plus = asphere_sag_and_slope(
+        radii + delta, surface["radius_mm"], surface["conic"], surface["asphere_coefficients"]
+    )
+    _, slope_minus = asphere_sag_and_slope(
+        radii - delta, surface["radius_mm"], surface["conic"], surface["asphere_coefficients"]
+    )
+    curvature = (slope_plus - slope_minus) / (2.0 * delta)
+    assert curvature.tolist() == pytest.approx([0.0045252852, -0.0010625122, -0.0027000317, 0.0010407135], abs=1.0e-9)
+
+    compiled = compile_system(load_system(preset["system"]))
+    paraxial = analyze_paraxial(compiled)
+    assert paraxial.effective_focal_length_mm == pytest.approx(49.21298867869991)
+    assert paraxial.back_focal_length_mm == pytest.approx(47.53621678328241)
+    assert paraxial.f_number == pytest.approx(3.0758117924187443)
+
+    trace = trace_forward(
+        compiled,
+        preset["recommendedFields"],
+        {"samples_per_field": 25, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+        preset["system"]["wavelengths_nm"]["samples"],
+    )
+    assert trace.status.tolist() == ["alive"] * 225
+    assert np.nanmax(np.abs(trace.sensor_y_mm)) <= 12.0
+    assert np.nanmax(np.abs(trace.sensor_z_mm)) <= 18.0
+
+    center_trace = trace_forward(
+        compiled,
+        [preset["recommendedFields"][0]],
+        {"samples_per_field": 81, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+        [587.56],
+    )
+    assert analyze_spot(center_trace).rms_radius_mm == pytest.approx(0.46463283438394304)
 
 
 def test_p005_annular_stop_blocks_the_secondary_mirror_central_obscuration():
