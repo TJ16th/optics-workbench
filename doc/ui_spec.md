@@ -521,7 +521,7 @@ UI側でrequest/response型を手書きしない。
 
 ## 9.1 プリセットの目的
 
-初期版では、代表的な光学系を6つ内蔵する。
+初期版では、代表的な光学系を7つ内蔵する。
 
 目的は以下。
 
@@ -716,6 +716,30 @@ EFL = 3000 mm, F/15
 - exit pupil diameter ≒ 5 mm
 - residual divergence diopter ≒ 0
 - focal系とは異なる角度単位で表示される
+
+### P007: Fast Positive-Negative Meniscus Pair Demo
+
+目的：強い正曲率・負曲率を持つ2群メニスカス構成で、Layout Viewの面形状、実光線、spot、ray fan、近軸量を確認する。
+
+| No | id | kind | surface_type | R | D | N | semiD | aperture |
+|---:|---|---|---|---:|---:|---|---:|---|
+| 1 | S1 | refractive | spherical | 26.0 | 5.0 | N-BK7 | 16.0 | - |
+| 2 | S2 | refractive | spherical | 60.0 | 3.0 | AIR | 15.25 | - |
+| 3 | STOP | aperture_stop | plane | 0 | 3.0 | AIR | 13.2 | circle 13.2 |
+| 4 | S3 | refractive | spherical | -35.0 | 3.0 | N-F2 | 14.25 | - |
+| 5 | S4 | refractive | spherical | -100.0 | 31.8 | AIR | 15.0 | - |
+| 6 | IMG | sensor | plane | 0 | 0.0 | - | - | 36×24 |
+
+推奨field：center `0 deg`、70%像高 `1.050122 deg`、edge-y `1.5 deg`。
+
+期待値（現行実装値の近軸・実光線検証）：
+
+- EFL ≒ 519.628 mm
+- BFL ≒ 452.042 mm
+- F number ≒ 19.683
+- 3 field × 3 wavelength × 9 samplesの実光線81本がIMGへ到達する
+- S1/S2の正曲率とS3/S4の負曲率がLayout Viewで明確に区別できる
+- spot、ray fan、paraxial解析を実行できる
 
 ---
 
