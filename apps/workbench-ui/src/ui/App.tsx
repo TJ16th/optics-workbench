@@ -2507,7 +2507,14 @@ function ImagePlanePolicyPanel({
 export function App() {
   const { t, i18n } = useTranslation(['common', 'settings', 'analysis', 'layoutView'])
   const fixtureMode = new URLSearchParams(window.location.search).get('fixture')
-  const availablePresets = sortPresetsById(fixtureMode === 'asphere-layout' ? [...presets, ...visualFixturePresets] : presets)
+  const visiblePresets = presets.filter((item) => item.visible !== false)
+  const availablePresets = sortPresetsById(
+    fixtureMode === 'all-presets'
+      ? presets
+      : fixtureMode === 'asphere-layout'
+        ? [...visiblePresets, ...visualFixturePresets]
+        : visiblePresets,
+  )
   const [apiBase, setApiBase] = useState(defaultApiBase)
   const [selectedPresetId, setSelectedPresetId] = useState('P001')
   const [activeTab, setActiveTab] = useState<TabKey>('preview')

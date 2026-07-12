@@ -94,6 +94,7 @@ export const presets: Preset[] = [
     id: 'P005',
     name: 'Coaxial Cassegrain Telescope Demo',
     summary: 'v2.1 corrected coaxial two-mirror telescope: EFL about 3000mm and F/15.',
+    visible: false,
     recommendedAnalysis: ['paraxial', 'preview'],
     recommendedFields: [
       { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },

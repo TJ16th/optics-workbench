@@ -151,6 +151,7 @@ export type Preset = {
   id: string
   name: string
   summary: string
+  visible?: boolean
   recommendedAnalysis: string[]
   recommendedFields?: AnalysisField[]
   system: OpticalSystem

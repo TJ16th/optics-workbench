@@ -324,12 +324,13 @@ test('preset selector lists shipped presets in natural id order', async ({ page 
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   const optionTexts = await page.getByRole('option').allTextContents()
   const presetIds = optionTexts.map((text) => /P\d{3}/.exec(text)?.[0]).filter((id): id is string => Boolean(id))
-  expect(presetIds).toEqual(['P001', 'P002', 'P003', 'P005', 'P006', 'P007', 'P008', 'P009', 'P010'])
+  expect(presetIds).toEqual(['P001', 'P002', 'P003', 'P006', 'P007', 'P008', 'P009', 'P010'])
+  expect(optionTexts.join(' ')).not.toContain('P005')
 })
 
 test('shipped preset selection resets fields to recommended values', async ({ page }) => {
   await mockEngine(page)
-  await page.goto('/?lng=en')
+  await page.goto('/?lng=en&fixture=all-presets')
 
   await page.locator('#field-2-theta-y').fill('20')
   const expected = [
@@ -354,7 +355,7 @@ test('shipped preset selection resets fields to recommended values', async ({ pa
 
 test('P005 System table displays and edits annulus outer and inner radii', async ({ page }) => {
   await mockEngine(page)
-  await page.goto('/?lng=en')
+  await page.goto('/?lng=en&fixture=all-presets')
   await selectPresetOption(page, 'P005 Coaxial Cassegrain Telescope Demo')
   await page.getByRole('tab', { name: 'System' }).click()
 
@@ -477,7 +478,7 @@ test('layout view uses trace path polylines when preview returns surface hits', 
 
 test('layout view legend explains ray, wavelength, element, and marker styles', async ({ page }) => {
   await mockEngine(page)
-  await page.goto('/?lng=en')
+  await page.goto('/?lng=en&fixture=all-presets')
 
   const legend = page.getByTestId('layout-legend')
   await expect(legend).toBeVisible()
@@ -509,7 +510,7 @@ test('layout view legend explains ray, wavelength, element, and marker styles', 
 
 test('P005 preview renders baseline paths through both mirrors and the image plane', async ({ page }) => {
   await mockEngine(page)
-  await page.goto('/?lng=en')
+  await page.goto('/?lng=en&fixture=all-presets')
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByText('P005 Coaxial Cassegrain Telescope Demo').click()
   await page.getByRole('button', { name: 'Run Preview' }).click()
@@ -660,7 +661,7 @@ test('layout view keeps plane boundary elements and warns on negative edge thick
 
 test('layout view scales stop, sensor, and eye symbols from physical dimensions', async ({ page }) => {
   await mockEngine(page)
-  await page.goto('/?lng=en')
+  await page.goto('/?lng=en&fixture=all-presets')
 
   await selectPresetOption(page, 'P002 N-BK7 Biconvex Singlet 50mm Demo')
   expect(await layoutSurfaceScale(page, 'STOP')).toMatchObject({ semiDiameterMm: 8, visualHalfHeightPx: 32, rawHalfHeightPx: 32, clamped: false })
@@ -771,7 +772,7 @@ test('P007 fast meniscus pair preset renders strong positive and negative curvat
 
 test('shipped presets keep layout glass fills free of edge-thickness warnings', async ({ page }) => {
   await mockEngine(page)
-  await page.goto('/?lng=en')
+  await page.goto('/?lng=en&fixture=all-presets')
 
   const labels = [
     'P001 Ideal Thin Lens 50mm F4',
@@ -789,7 +790,7 @@ test('shipped presets keep layout glass fills free of edge-thickness warnings', 
 
 test('shipped presets keep layout scale stable after preview response', async ({ page }) => {
   await mockEngine(page)
-  await page.goto('/?lng=en')
+  await page.goto('/?lng=en&fixture=all-presets')
 
   const labels = [
     'P001 Ideal Thin Lens 50mm F4',
