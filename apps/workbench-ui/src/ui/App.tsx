@@ -1646,6 +1646,13 @@ function SliderControl({
   )
 }
 
+function markerAppearance(pointCount: number) {
+  if (pointCount <= 6) return { radius: 2.7, opacity: 0.85 }
+  if (pointCount <= 24) return { radius: 2.2, opacity: 0.78 }
+  if (pointCount <= 60) return { radius: 1.7, opacity: 0.68 }
+  return { radius: 1.3, opacity: 0.58 }
+}
+
 function SpotStrip({ trace }: { trace?: TraceResponse }) {
   const { t } = useTranslation(['layoutView'])
   const samples = Math.max(1, Number(trace?.metadata.samples_per_field ?? 1))
@@ -1658,9 +1665,20 @@ function SpotStrip({ trace }: { trace?: TraceResponse }) {
     })
     .filter((point): point is { y: number; z: number; status: string; wavelength: number | undefined; wavelengthIndex: number } => Number.isFinite(point.y) && Number.isFinite(point.z))
     .slice(0, 120)
+  const pointCount = points?.length ?? 0
+  const marker = markerAppearance(pointCount)
 
   return (
-    <svg id="spot-svg" className="spot-strip" viewBox="0 0 260 220" role="img" aria-label={t('layoutView.spot_diagram_aria')}>
+    <svg
+      id="spot-svg"
+      className="spot-strip"
+      viewBox="0 0 260 220"
+      role="img"
+      aria-label={t('layoutView.spot_diagram_aria')}
+      data-point-count={pointCount}
+      data-marker-radius={marker.radius}
+      data-marker-opacity={marker.opacity}
+    >
       <title>{t('layoutView.spot_diagram')}</title>
       <line x1="130" x2="130" y1="18" y2="202" className="plot-axis" />
       <line x1="28" x2="232" y1="110" y2="110" className="plot-axis" />
@@ -1679,7 +1697,8 @@ function SpotStrip({ trace }: { trace?: TraceResponse }) {
             key={index}
             cx={x}
             cy={y}
-            r="2.7"
+            r={marker.radius}
+            opacity={marker.opacity}
             className={point.status === 'alive' ? 'spot-point' : 'spot-blocked'}
             style={point.status === 'alive' && color ? { fill: color } : undefined}
             data-wavelength-index={point.wavelengthIndex}
@@ -1894,10 +1913,19 @@ function ChartSvg({
   const y1 = maxY + padY
   const sx = (x: number) => 56 + ((x - x0) / (x1 - x0)) * 294
   const sy = (y: number) => 178 - ((y - y0) / (y1 - y0)) * 144
+  const marker = markerAppearance(points.length)
 
   return (
     <div className="chart-box">
-      <svg viewBox="0 0 390 240" role="img" className="analysis-chart" data-testid={testId}>
+      <svg
+        viewBox="0 0 390 240"
+        role="img"
+        className="analysis-chart"
+        data-testid={testId}
+        data-point-count={points.length}
+        data-marker-radius={marker.radius}
+        data-marker-opacity={marker.opacity}
+      >
         <line x1="56" x2="350" y1="178" y2="178" className="plot-axis" />
         <line x1="56" x2="56" y1="34" y2="178" className="plot-axis" />
         <text x="203" y="224" className="plot-label plot-label--x" textAnchor="middle">
@@ -1925,7 +1953,7 @@ function ChartSvg({
             <g key={item.id}>
               {ordered.length > 1 ? <polyline points={polyline} fill="none" stroke={item.color} strokeWidth="2" /> : null}
               {ordered.map((point, index) => (
-                <circle key={index} cx={sx(point.x)} cy={sy(point.y)} r="2.7" fill={item.color} />
+                <circle key={index} cx={sx(point.x)} cy={sy(point.y)} r={marker.radius} fill={item.color} opacity={marker.opacity} />
               ))}
             </g>
           )

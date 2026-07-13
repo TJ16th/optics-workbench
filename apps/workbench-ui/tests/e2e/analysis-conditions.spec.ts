@@ -630,6 +630,14 @@ test('P003 slider preview keeps layout rays on education preview surface paths',
   )
   expect(new Set(spotColors.map((item) => item.wavelength))).toEqual(new Set(['486.13', '587.56', '656.27']))
   expect(new Set(spotColors.map((item) => item.fill))).toEqual(new Set(['rgb(15, 98, 254)', 'rgb(138, 116, 0)', 'rgb(218, 30, 40)']))
+  const spot = page.locator('#spot-svg')
+  const spotPointCount = Number(await spot.getAttribute('data-point-count'))
+  const expectedMarker = spotPointCount <= 6 ? { radius: 2.7, opacity: 0.85 }
+    : spotPointCount <= 24 ? { radius: 2.2, opacity: 0.78 }
+      : spotPointCount <= 60 ? { radius: 1.7, opacity: 0.68 }
+        : { radius: 1.3, opacity: 0.58 }
+  await expect(spot).toHaveAttribute('data-marker-radius', String(expectedMarker.radius))
+  await expect(spot).toHaveAttribute('data-marker-opacity', String(expectedMarker.opacity))
 })
 
 test('debug tab shows connected engine build info', async ({ page }) => {
@@ -1161,6 +1169,12 @@ test('P002 and P003 analysis charts render standard aberration panels without co
     await expect(page.getByTestId('ray-fan-y-chart').locator('circle')).toHaveCount(27)
     await expect(page.getByTestId('ray-fan-z-chart').locator('circle')).toHaveCount(27)
     await expect(page.getByTestId('mtf-chart').locator('circle')).toHaveCount(30)
+    await expect(page.getByTestId('ray-fan-y-chart')).toHaveAttribute('data-point-count', '27')
+    await expect(page.getByTestId('ray-fan-y-chart')).toHaveAttribute('data-marker-radius', '1.7')
+    await expect(page.getByTestId('ray-fan-y-chart')).toHaveAttribute('data-marker-opacity', '0.68')
+    await expect(page.getByTestId('standard-distortion-chart')).toHaveAttribute('data-point-count', '3')
+    await expect(page.getByTestId('standard-distortion-chart')).toHaveAttribute('data-marker-radius', '2.7')
+    await expect(page.getByTestId('standard-distortion-chart')).toHaveAttribute('data-marker-opacity', '0.85')
     for (const legend of ['center M', 'center S', 'mid-y M', 'mid-y S', 'edge-y M', 'edge-y S']) {
       await expect(page.getByTestId('mtf-chart').locator('..').getByText(legend, { exact: true })).toBeVisible()
     }
