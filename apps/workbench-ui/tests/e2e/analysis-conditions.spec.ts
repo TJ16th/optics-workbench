@@ -165,7 +165,7 @@ async function mockEngine(
               sensor_z_mm: fieldIndex - pupil / 10,
               transverse_error_y_mm: pupil * 0.02 + fieldIndex * 0.01,
               transverse_error_z_mm: -pupil * 0.015,
-              status: 'alive',
+              status: request.ray_sampling?.ray_aiming?.mode === 'full' && pupil === -1 ? 'aiming_failed' : 'alive',
             })),
           ),
         ),
@@ -190,7 +190,7 @@ async function mockEngine(
               focus_x_z_mm: 100 + pupil * 0.02,
               longitudinal_error_y_mm: pupil * 0.03 + wavelengthIndex * 0.005,
               longitudinal_error_z_mm: pupil * 0.02,
-              status: 'alive',
+              status: request.ray_sampling?.ray_aiming?.mode === 'full' && pupil === -1 ? 'aiming_failed' : 'alive',
             })),
           ),
         ),
@@ -1245,6 +1245,23 @@ test('MTF mode switches between monochromatic and weighted white-light endpoints
   await expect(page.getByText('Monochromatic', { exact: true }).last()).toBeVisible()
   await expect(page.getByTestId('mtf-chart').locator('..').getByText('center M', { exact: true })).toBeVisible()
   expect(mtfRequests.filter((request) => request.url.endsWith('/v1/analysis/mtf'))).toHaveLength(3)
+})
+
+test('P007 full aiming reports excluded failures in ray fan and longitudinal panels', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await selectPresetOption(page, 'P007 Fast Positive-Negative Meniscus Pair 50mm')
+  await page.locator('#aiming').selectOption('full')
+  await page.getByRole('tab', { name: 'Analysis' }).click()
+  await page.getByRole('button', { name: 'Run Charts' }).click()
+
+  await expect(page.getByTestId('longitudinal-aiming-warning')).toContainText('aiming_failed detected')
+  await expect(page.getByTestId('longitudinal-aiming-warning')).toContainText('Excluded from the plotted curve: 3 ray(s).')
+  await expect(page.getByTestId('ray-fan-aiming-warning')).toContainText('aiming_failed detected')
+  await expect(page.getByTestId('ray-fan-aiming-warning')).toContainText('fan_y: 9, fan_z: 9 ray(s).')
+  await expect(page.getByTestId('longitudinal-aberration-chart').locator('circle')).toHaveCount(6)
+  await expect(page.getByTestId('ray-fan-y-chart').locator('circle')).toHaveCount(18)
+  await expect(page.getByTestId('ray-fan-z-chart').locator('circle')).toHaveCount(18)
 })
 
 test('image-plane policy solves focus, writes back sensor, and disables for afocal preset', async ({ page }) => {

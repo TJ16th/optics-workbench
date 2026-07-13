@@ -2001,6 +2001,10 @@ function seriesFromRayFan(points: RayFanPoint[] | undefined, axis: 'y' | 'z'): C
   return [...groups.values()]
 }
 
+function aimingFailureCount(points: Array<{ status: string }> | undefined): number {
+  return (points ?? []).filter((point) => point.status === 'aiming_failed').length
+}
+
 function seriesFromDistortion(rows: DistortionRow[] | undefined): ChartSeries[] {
   return [
     {
@@ -2201,6 +2205,15 @@ function AnalysisCharts({ result, onOpenHelp }: { result?: ChartAnalysisResult; 
         <div className="standard-aberration-grid" data-testid="standard-aberration-grid">
           <div>
             <h3>{termLabel('longitudinal_aberration', i18n.language)}</h3>
+            {aimingFailureCount(result.longitudinal?.points) > 0 ? (
+              <InlineNotification
+                lowContrast
+                kind="warning"
+                title={t('analysis:analysis.aiming_failed_title')}
+                subtitle={t('analysis:analysis.aiming_failed_count', { count: aimingFailureCount(result.longitudinal?.points) })}
+                data-testid="longitudinal-aiming-warning"
+              />
+            ) : null}
             <ChartSvg
               series={seriesFromLongitudinal(result.longitudinal?.points)}
               xLabel={t('analysis:analysis.axis_focus_shift_mm')}
@@ -2235,6 +2248,18 @@ function AnalysisCharts({ result, onOpenHelp }: { result?: ChartAnalysisResult; 
         <h2>
           <TermHelp termId="ray_fan" fallback={termLabel('ray_fan', i18n.language)} onOpenHelp={onOpenHelp} />
         </h2>
+        {aimingFailureCount(result.rayFan?.fan_y_points) + aimingFailureCount(result.rayFan?.fan_z_points) > 0 ? (
+          <InlineNotification
+            lowContrast
+            kind="warning"
+            title={t('analysis:analysis.aiming_failed_title')}
+            subtitle={t('analysis:analysis.aiming_failed_fan_counts', {
+              fanY: aimingFailureCount(result.rayFan?.fan_y_points),
+              fanZ: aimingFailureCount(result.rayFan?.fan_z_points),
+            })}
+            data-testid="ray-fan-aiming-warning"
+          />
+        ) : null}
         <div className="chart-pair">
           <ChartSvg
             series={seriesFromRayFan(result.rayFan?.fan_y_points ?? result.rayFan?.points, 'y')}
