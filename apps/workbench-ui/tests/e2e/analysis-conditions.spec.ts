@@ -1191,9 +1191,13 @@ test('P002 and P003 analysis charts render standard aberration panels without co
     await expect(page.getByTestId('ray-fan-y-chart')).toHaveAttribute('data-point-count', '27')
     await expect(page.getByTestId('ray-fan-y-chart')).toHaveAttribute('data-marker-radius', '1.7')
     await expect(page.getByTestId('ray-fan-y-chart')).toHaveAttribute('data-marker-opacity', '0.68')
-    await expect(page.getByTestId('standard-distortion-chart')).toHaveAttribute('data-point-count', '3')
-    await expect(page.getByTestId('standard-distortion-chart')).toHaveAttribute('data-marker-radius', '2.7')
-    await expect(page.getByTestId('standard-distortion-chart')).toHaveAttribute('data-marker-opacity', '0.85')
+    await expect(page.getByTestId('standard-field-curvature-chart')).toHaveAttribute('data-point-count', '32')
+    await expect(page.getByTestId('standard-distortion-chart')).toHaveAttribute('data-point-count', '16')
+    await expect(page.getByTestId('distortion-chart')).toHaveAttribute('data-point-count', '16')
+    await expect(page.getByTestId('field-curvature-chart')).toHaveAttribute('data-point-count', '32')
+    await expect(page.getByTestId('relative-illumination-chart')).toHaveAttribute('data-point-count', '16')
+    await expect(page.getByTestId('standard-distortion-chart')).toHaveAttribute('data-marker-radius', '2.2')
+    await expect(page.getByTestId('standard-distortion-chart')).toHaveAttribute('data-marker-opacity', '0.78')
     for (const legend of ['center M', 'center S', 'mid-y M', 'mid-y S', 'edge-y M', 'edge-y S']) {
       await expect(page.getByTestId('mtf-chart').locator('..').getByText(legend, { exact: true })).toBeVisible()
     }
@@ -1209,6 +1213,53 @@ test('P002 and P003 analysis charts render standard aberration panels without co
       expect(box.width).toBeGreaterThan(5)
       expect(box.height).toBeGreaterThan(5)
     }
+  }
+})
+
+test('curve analyses use dense fields without changing ray fan or MTF sampling', async ({ page }) => {
+  const requests: Array<{ endpoint: string; body: Record<string, unknown> }> = []
+  page.on('request', (request) => {
+    const endpoint = new URL(request.url()).pathname
+    if (
+      ['/v1/analysis/distortion', '/v1/analysis/field-curvature', '/v1/analysis/ms-image-surface', '/v1/analysis/relative-illumination', '/v1/analysis/ray-fan', '/v1/analysis/mtf'].includes(endpoint)
+    ) {
+      requests.push({ endpoint, body: request.postDataJSON() })
+    }
+  })
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await selectPresetOption(page, 'P002 N-BK7 Biconvex Singlet 50mm Demo')
+  await page.getByRole('tab', { name: 'Analysis' }).click()
+  await page.getByRole('button', { name: 'Run Charts' }).click()
+  await expect(page.getByTestId('analysis-chart-grid')).toBeVisible()
+
+  const curveEndpoints = [
+    '/v1/analysis/distortion',
+    '/v1/analysis/field-curvature',
+    '/v1/analysis/ms-image-surface',
+    '/v1/analysis/relative-illumination',
+  ]
+  for (const endpoint of curveEndpoints) {
+    const request = requests.find((candidate) => candidate.endpoint === endpoint)
+    expect(request, `${endpoint} request`).toBeDefined()
+    const fields = request?.body.fields as Array<{ id: string; theta_y_deg: number; theta_z_deg: number }>
+    expect(fields).toHaveLength(16)
+    expect(fields.map((field) => field.theta_y_deg)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9.900092, 10, 11, 12, 13, 14])
+    expect(fields.find((field) => field.theta_y_deg === 0)?.id).toBe('center')
+    expect(fields.find((field) => field.theta_y_deg === 9.900092)?.id).toBe('mid-y')
+    expect(fields.find((field) => field.theta_y_deg === 14)?.id).toBe('edge-y')
+    expect(fields.every((field) => field.theta_z_deg === 0)).toBe(true)
+  }
+
+  const rayFanRequests = requests.filter((request) => request.endpoint === '/v1/analysis/ray-fan')
+  expect(rayFanRequests).toHaveLength(2)
+  for (const request of rayFanRequests) {
+    expect(request.body.fields).toHaveLength(3)
+  }
+  const mtfRequests = requests.filter((request) => request.endpoint === '/v1/analysis/mtf')
+  expect(mtfRequests).toHaveLength(3)
+  for (const request of mtfRequests) {
+    expect(request.body.fields).toHaveLength(1)
   }
 })
 

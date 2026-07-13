@@ -2279,15 +2279,15 @@ function AnalysisCharts({ result, onOpenHelp }: { result?: ChartAnalysisResult; 
       </section>
       <section className="panel chart-panel">
         <h2>{termLabel('distortion', i18n.language)}</h2>
-        <ChartSvg series={seriesFromDistortion(result.distortion?.rows)} xLabel="field deg" yLabel="%" emptyLabel={empty} />
+        <ChartSvg series={seriesFromDistortion(result.distortion?.rows)} xLabel="field deg" yLabel="%" emptyLabel={empty} testId="distortion-chart" />
       </section>
       <section className="panel chart-panel">
         <h2>{termLabel('field_curvature', i18n.language)}</h2>
-        <ChartSvg series={seriesFromFieldCurvature(result.fieldCurvature?.rows)} xLabel="field deg" yLabel="mm" emptyLabel={empty} />
+        <ChartSvg series={seriesFromFieldCurvature(result.fieldCurvature?.rows)} xLabel="field deg" yLabel="mm" emptyLabel={empty} testId="field-curvature-chart" />
       </section>
       <section className="panel chart-panel">
         <h2>{termLabel('relative_illumination', i18n.language)}</h2>
-        <ChartSvg series={seriesFromRelativeIllumination(result.relativeIllumination?.rows)} xLabel="field deg" yLabel="%" emptyLabel={empty} />
+        <ChartSvg series={seriesFromRelativeIllumination(result.relativeIllumination?.rows)} xLabel="field deg" yLabel="%" emptyLabel={empty} testId="relative-illumination-chart" />
       </section>
       <section className="panel chart-panel">
         <h2>

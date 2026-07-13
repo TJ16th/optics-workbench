@@ -141,11 +141,46 @@ async function postAnalysis<T>(apiBase: string, endpoint: string, request: objec
   return readJson(response, 'api_error')
 }
 
+const CURVE_ANALYSIS_SAMPLE_COUNT = 15
+
+function fieldCoordinateKey(field: Pick<AnalysisField, 'theta_y_deg' | 'theta_z_deg'>) {
+  return `${field.theta_y_deg.toFixed(12)}:${field.theta_z_deg.toFixed(12)}`
+}
+
+export function buildCurveAnalysisFields(fields: AnalysisField[]): AnalysisField[] {
+  if (!fields.length) return []
+  const maxField = fields.reduce((current, field) =>
+    Math.hypot(field.theta_y_deg, field.theta_z_deg) > Math.hypot(current.theta_y_deg, current.theta_z_deg) ? field : current,
+  )
+  if (Math.hypot(maxField.theta_y_deg, maxField.theta_z_deg) <= Number.EPSILON) {
+    return fields.map((field) => ({ ...field }))
+  }
+
+  const byCoordinate = new Map<string, AnalysisField>()
+  for (let index = 0; index < CURVE_ANALYSIS_SAMPLE_COUNT; index += 1) {
+    const fraction = index / (CURVE_ANALYSIS_SAMPLE_COUNT - 1)
+    const field: AnalysisField = {
+      id: `curve-${String(index + 1).padStart(2, '0')}`,
+      type: 'angular',
+      theta_y_deg: maxField.theta_y_deg * fraction,
+      theta_z_deg: maxField.theta_z_deg * fraction,
+    }
+    byCoordinate.set(fieldCoordinateKey(field), field)
+  }
+  for (const field of fields) {
+    byCoordinate.set(fieldCoordinateKey(field), { ...field })
+  }
+  return [...byCoordinate.values()].sort(
+    (left, right) => Math.hypot(left.theta_y_deg, left.theta_z_deg) - Math.hypot(right.theta_y_deg, right.theta_z_deg),
+  )
+}
+
 export async function runChartAnalyses(apiBase: string, request: AnalysisRequest, mtfMode: MtfMode = 'monochromatic'): Promise<ChartAnalysisResult> {
   const axialField = [...request.fields].sort(
     (left, right) => Math.hypot(left.theta_y_deg ?? 0, left.theta_z_deg ?? 0) - Math.hypot(right.theta_y_deg ?? 0, right.theta_z_deg ?? 0),
   )[0]
   const mtfFields = request.fields.length ? request.fields : [undefined]
+  const curveRequest = { ...request, fields: buildCurveAnalysisFields(request.fields) }
   const wavelengthWeights = (request.wavelength_weights ?? request.wavelengths_nm.map((wavelength_nm) => ({ wavelength_nm, weight: 1 }))).reduce<Record<string, number>>(
     (weights, sample) => {
       const key = String(sample.wavelength_nm)
@@ -168,10 +203,10 @@ export async function runChartAnalyses(apiBase: string, request: AnalysisRequest
       fields: axialField ? [axialField] : request.fields,
       ray_sampling: { ...request.ray_sampling, pupil_distribution: 'fan_y' },
     }),
-    postAnalysis<ChartAnalysisResult['distortion']>(apiBase, '/v1/analysis/distortion', request),
-    postAnalysis<{ rows: FieldCurvatureRow[]; artifacts?: Record<string, string> }>(apiBase, '/v1/analysis/field-curvature', request),
-    postAnalysis<{ rows: FieldCurvatureRow[] }>(apiBase, '/v1/analysis/ms-image-surface', request),
-    postAnalysis<ChartAnalysisResult['relativeIllumination']>(apiBase, '/v1/analysis/relative-illumination', request),
+    postAnalysis<ChartAnalysisResult['distortion']>(apiBase, '/v1/analysis/distortion', curveRequest),
+    postAnalysis<{ rows: FieldCurvatureRow[]; artifacts?: Record<string, string> }>(apiBase, '/v1/analysis/field-curvature', curveRequest),
+    postAnalysis<{ rows: FieldCurvatureRow[] }>(apiBase, '/v1/analysis/ms-image-surface', curveRequest),
+    postAnalysis<ChartAnalysisResult['relativeIllumination']>(apiBase, '/v1/analysis/relative-illumination', curveRequest),
     Promise.all(
       mtfFields.map((field) =>
         postAnalysis<NonNullable<ChartAnalysisResult['mtf']> | WhiteMtfResponse>(apiBase, mtfMode === 'white' ? '/v1/analysis/white-mtf' : '/v1/analysis/mtf', {
