@@ -134,6 +134,14 @@ class EyeReference(BaseModel):
     offset_from_last_surface_mm: float | None = None
 
 
+class VisualEvaluation(BaseModel):
+    mode: Literal["instrument_only", "instrument_and_retinal"] = "instrument_only"
+    eye_model: Literal["gullstrand_simplified_relaxed"] | None = None
+    wavelength_nm: float = 587.56
+    accommodation_diopter: float = 0.0
+    retina_surface: Literal["plane"] = "plane"
+
+
 class Surface(BaseModel):
     id: str
     kind: Literal[
@@ -190,6 +198,7 @@ class OpticalSystem(BaseModel):
     units: Literal["mm"] = "mm"
     optical_axis: Literal["+X"] = "+X"
     system_type: Literal["focal", "afocal"] = "focal"
+    visual_evaluation: VisualEvaluation | None = None
     wavelengths_nm: Wavelengths = Field(default_factory=Wavelengths)
     materials: list[Material] = Field(default_factory=lambda: [Material(id="AIR", n=1.0)])
     surfaces: list[Surface]

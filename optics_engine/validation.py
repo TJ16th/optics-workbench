@@ -5,6 +5,7 @@ from .models import OpticalSystem, ValidationIssue, ValidationResult
 
 def validate_system(system: OpticalSystem) -> ValidationResult:
     issues: list[ValidationIssue] = []
+    composite = system.visual_evaluation is not None and system.visual_evaluation.mode == "instrument_and_retinal"
 
     stop_count = sum(1 for surface in system.surfaces if surface.kind == "aperture_stop")
     if stop_count > 1:
@@ -37,12 +38,71 @@ def validate_system(system: OpticalSystem) -> ValidationResult:
                 )
             )
     if system.system_type == "afocal":
-        if not system.surfaces or system.surfaces[-1].kind != "eye_reference":
+        if not system.surfaces or (not composite and system.surfaces[-1].kind != "eye_reference"):
             issues.append(
                 ValidationIssue(
                     type="missing_terminal_eye_reference",
                     params={"system_type": system.system_type},
                     message="afocal systems must end with an eye_reference surface",
+                    severity="error",
+                )
+            )
+
+    eye_indices = [idx for idx, surface in enumerate(system.surfaces) if surface.kind == "eye_reference"]
+    if composite:
+        if system.system_type != "afocal":
+            issues.append(
+                ValidationIssue(
+                    type="visual_composite_requires_afocal",
+                    params={"system_type": system.system_type},
+                    message="instrument_and_retinal visual evaluation requires an afocal system",
+                    severity="error",
+                )
+            )
+        if len(eye_indices) != 1:
+            issues.append(
+                ValidationIssue(
+                    type="invalid_visual_composite_boundary",
+                    params={"eye_reference_count": len(eye_indices)},
+                    message="instrument_and_retinal visual evaluation requires exactly one eye_reference",
+                    severity="error",
+                )
+            )
+        elif not system.surfaces or system.surfaces[-1].kind != "sensor":
+            issues.append(
+                ValidationIssue(
+                    type="missing_terminal_retina_sensor",
+                    params={},
+                    message="instrument_and_retinal visual evaluation must end with a retina sensor",
+                    severity="error",
+                )
+            )
+        elif not any(surface.kind == "refractive" for surface in system.surfaces[eye_indices[0] + 1 : -1]):
+            issues.append(
+                ValidationIssue(
+                    type="missing_schematic_eye_surfaces",
+                    params={},
+                    message="instrument_and_retinal visual evaluation requires refractive eye surfaces after eye_reference",
+                    severity="error",
+                )
+            )
+        if any(surface.kind == "aperture_stop" for surface in system.surfaces[(eye_indices[0] + 1 if eye_indices else 0) :]):
+            issues.append(
+                ValidationIssue(
+                    type="retinal_aperture_stop_not_supported",
+                    params={},
+                    message="the initial visual composite does not support an aperture_stop after eye_reference",
+                    severity="error",
+                )
+            )
+        eye = system.surfaces[eye_indices[0]].eye if eye_indices else None
+        if eye is not None and eye.position_mode == "fixed_offset" and eye.offset_from_last_surface_mm is None:
+            issues.append(
+                ValidationIssue(
+                    type="missing_eye_reference_offset",
+                    params={"surface_id": system.surfaces[eye_indices[0]].id},
+                    message="fixed_offset eye_reference requires offset_from_last_surface_mm in a visual composite",
+                    surface_id=system.surfaces[eye_indices[0]].id,
                     severity="error",
                 )
             )

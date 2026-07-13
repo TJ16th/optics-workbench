@@ -5,6 +5,7 @@ from typing import Any
 
 import numpy as np
 
+from .analysis import SpotResult, analyze_spot
 from .system import CompiledSystem
 from .tracing import TraceResult, trace_forward
 
@@ -65,8 +66,20 @@ class TelescopeResult:
     apparent_field_deg: float | None
 
 
+@dataclass(frozen=True)
+class VisualCompositeResult:
+    instrument: AfocalEvaluationResult
+    exit_pupil: ExitPupilResult
+    retinal: SpotResult
+
+
+def _instrument_surfaces(compiled: CompiledSystem):
+    end = compiled.eye_reference_index if compiled.eye_reference_index is not None else len(compiled.surfaces)
+    return compiled.surfaces[:end]
+
+
 def _thin_lenses(compiled: CompiledSystem):
-    return [surface for surface in compiled.surfaces if surface.kind == "thin_lens" and surface.focal_length_mm is not None]
+    return [surface for surface in _instrument_surfaces(compiled) if surface.kind == "thin_lens" and surface.focal_length_mm is not None]
 
 
 def angular_magnification(compiled: CompiledSystem) -> float | None:
@@ -75,7 +88,8 @@ def angular_magnification(compiled: CompiledSystem) -> float | None:
         return -float(lenses[0].focal_length_mm) / float(lenses[-1].focal_length_mm)
 
     powered = {"thin_lens", "refractive"}
-    last_power = next((idx for idx in range(len(compiled.surfaces) - 1, -1, -1) if compiled.surfaces[idx].kind in powered), None)
+    instrument = _instrument_surfaces(compiled)
+    last_power = next((idx for idx in range(len(instrument) - 1, -1, -1) if instrument[idx].kind in powered), None)
     if last_power is None:
         return None
     wavelength = compiled.system.wavelengths_nm.primary
@@ -110,7 +124,7 @@ def _eye_relief(compiled: CompiledSystem) -> float | None:
     eye_idx = next((idx for idx, surface in enumerate(compiled.surfaces) if surface.kind == "eye_reference"), None)
     if eye_idx is None:
         return None
-    powered = [idx for idx, surface in enumerate(compiled.surfaces) if surface.kind in {"thin_lens", "refractive", "mirror"}]
+    powered = [idx for idx, surface in enumerate(compiled.surfaces[:eye_idx]) if surface.kind in {"thin_lens", "refractive", "mirror"}]
     if not powered:
         return None
     return float(compiled.surface_positions_mm[eye_idx] - compiled.surface_positions_mm[powered[-1]])
@@ -156,6 +170,29 @@ def afocal_from_trace(trace: TraceResult, field_id: str = "field") -> AfocalEval
         centroid_theta_z_deg=cz,
         angular_rms_deg=rms,
         residual_divergence_diopter=float(np.tan(np.deg2rad(rms)) * 1000.0),
+    )
+
+
+def analyze_visual_composite(
+    compiled: CompiledSystem,
+    field: dict[str, Any] | None = None,
+    sampling: dict[str, Any] | None = None,
+    configuration: dict[str, Any] | None = None,
+) -> VisualCompositeResult:
+    if compiled.system.visual_evaluation is None or compiled.system.visual_evaluation.mode != "instrument_and_retinal":
+        raise ValueError("visual composite analysis requires visual_evaluation.mode=instrument_and_retinal")
+    field = field or {"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}
+    trace = trace_forward(
+        compiled,
+        [field],
+        sampling or {"samples_per_field": 21, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}},
+        [compiled.system.visual_evaluation.wavelength_nm],
+        {"configuration": configuration or {}},
+    )
+    return VisualCompositeResult(
+        instrument=afocal_from_trace(trace, str(field.get("id", "field"))),
+        exit_pupil=analyze_exit_pupil(compiled),
+        retinal=analyze_spot(trace),
     )
 
 

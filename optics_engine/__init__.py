@@ -45,6 +45,7 @@ from .visual import (
     ExitPupilResult,
     EyeBoxResult,
     TelescopeResult,
+    VisualCompositeResult,
     afocal_from_trace,
     analyze_afocal,
     analyze_angular_mtf,
@@ -52,6 +53,7 @@ from .visual import (
     analyze_exit_pupil,
     analyze_eye_box,
     analyze_telescope,
+    analyze_visual_composite,
     angular_magnification,
 )
 
@@ -94,6 +96,7 @@ __all__ = [
     "SpotResult",
     "TraceResult",
     "TelescopeResult",
+    "VisualCompositeResult",
     "ValidationResult",
     "WhiteMTFResult",
     "WhitePSFResult",
@@ -116,6 +119,7 @@ __all__ = [
     "analyze_white_mtf",
     "analyze_white_psf",
     "analyze_telescope",
+    "analyze_visual_composite",
     "afocal_from_trace",
     "angular_magnification",
     "apply_variables",
