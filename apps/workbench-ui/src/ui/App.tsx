@@ -1890,12 +1890,16 @@ function ChartSvg({
   yLabel,
   emptyLabel,
   testId,
+  xDomain,
+  yDomain,
 }: {
   series: ChartSeries[]
   xLabel: string
   yLabel: string
   emptyLabel: string
   testId?: string
+  xDomain?: readonly [number, number]
+  yDomain?: readonly [number, number]
 }) {
   const points = series.flatMap((item) => item.points)
   if (!points.length) {
@@ -1909,10 +1913,10 @@ function ChartSvg({
   const maxY = Math.max(...ys)
   const padX = maxX === minX ? 1 : (maxX - minX) * 0.05
   const padY = maxY === minY ? 1 : (maxY - minY) * 0.12
-  const x0 = minX - padX
-  const x1 = maxX + padX
-  const y0 = minY - padY
-  const y1 = maxY + padY
+  const x0 = xDomain?.[0] ?? minX - padX
+  const x1 = xDomain?.[1] ?? maxX + padX
+  const y0 = yDomain?.[0] ?? minY - padY
+  const y1 = yDomain?.[1] ?? maxY + padY
   const sx = (x: number) => 56 + ((x - x0) / (x1 - x0)) * 294
   const sy = (y: number) => 178 - ((y - y0) / (y1 - y0)) * 144
   const marker = markerAppearance(points.length)
@@ -1927,6 +1931,10 @@ function ChartSvg({
         data-point-count={points.length}
         data-marker-radius={marker.radius}
         data-marker-opacity={marker.opacity}
+        data-x-domain-min={x0}
+        data-x-domain-max={x1}
+        data-y-domain-min={y0}
+        data-y-domain-max={y1}
       >
         <line x1="56" x2="350" y1="178" y2="178" className="plot-axis" />
         <line x1="56" x2="56" y1="34" y2="178" className="plot-axis" />
@@ -2094,6 +2102,12 @@ function seriesFromMtf(points: MtfPoint[] | undefined, mode: MtfMode = 'monochro
       { id: `${prefix}S`, color: colors[(index * 2 + 1) % colors.length], points: fieldPoints.map((point) => ({ x: point.frequency_lp_per_mm, y: point.mtf_z })) },
     ]
   })
+}
+
+function mtfFrequencyDomain(points: MtfPoint[] | undefined): readonly [number, number] {
+  const frequencies = (points ?? []).map((point) => point.frequency_lp_per_mm).filter(Number.isFinite)
+  const maxFrequency = Math.max(0, ...frequencies)
+  return [0, maxFrequency > 0 ? maxFrequency : 1]
 }
 
 function seriesFromFocusCurve(points: FocusCurvePoint[] | undefined, bestOffset?: number): ChartSeries[] {
@@ -2296,7 +2310,15 @@ function AnalysisCharts({ result, onOpenHelp }: { result?: ChartAnalysisResult; 
         <Tag type={result.mtf?.mode === 'white' ? 'cyan' : 'gray'}>
           {result.mtf?.mode === 'white' ? t('analysis:analysis.mtf_mode_white') : t('analysis:analysis.mtf_mode_monochromatic')}
         </Tag>
-        <ChartSvg series={seriesFromMtf(result.mtf?.points, result.mtf?.mode)} xLabel="lp/mm" yLabel="MTF" emptyLabel={empty} testId="mtf-chart" />
+        <ChartSvg
+          series={seriesFromMtf(result.mtf?.points, result.mtf?.mode)}
+          xLabel="lp/mm"
+          yLabel="MTF"
+          emptyLabel={empty}
+          testId="mtf-chart"
+          xDomain={mtfFrequencyDomain(result.mtf?.points)}
+          yDomain={[0, 1]}
+        />
         {result.mtf?.mode === 'white' ? <p className="muted">{t('analysis:analysis.white_mtf_note')}</p> : null}
         {result.mtf?.diffraction_included === false ? <p className="muted">{t('analysis:analysis.geometric_mtf_note')}</p> : null}
       </section>
