@@ -711,3 +711,28 @@ R68の設計調査では、現行traceカーネルが`eye_reference`で停止せ
 - Z成分を持つ光線について、2D投影と3D開口判定の違いをUI上で確認できる。
 - circle/annulusの通過・遮蔽statusと表示説明が矛盾しない。
 - 既存のX-Y Layout Viewを過密にせず、キーボード操作とja/en表示に対応する。
+
+## Issue: 同軸系の像面湾曲・M/S像面にCoddington方式を実装しmethodを正す
+
+ラベル案: `engine`, `testing`
+
+### 背景
+
+R74作業1で、`POST /v1/analysis/field-curvature`と`POST /v1/analysis/ms-image-surface`は外部`ray_sampling`を解析関数へ渡さず、内部固定の`21 rays / grid / paraxial`でセンサー位置を11点走査するRMS探索を実行していることを確認した。同軸系では`method: coddington_rms_consistent`を返すが、Coddington方程式は実装されておらず、`doc/engine_spec.md` 21.2節の「同軸系はCoddingtonを既定」と一致しない。
+
+P003ではfield curvatureとM/S像面の全fieldが既定探索範囲の端`-5.0 mm`へ張り付くが、非収束または範囲不足として通知されない。既存`tests/test_phase5_tilt_asymmetric_ms.py`は値が非nullであることとmethod文字列だけを確認しており、実方式や探索端を検証していない。
+
+### 対応案
+
+- 同軸系向けに、aiming済み主光線に沿ったCoddington方程式によるM/S像面計算を実装し、既定方式とする。
+- RMS探索は偏芯・チルト系および相互検証用の明示modeとして残し、サンプル数、distribution、aiming、探索範囲、探索刻みを結果metadataへ含める。
+- `field-curvature`と`ms-image-surface`の両レスポンスへ実際の計算方式を示すmethod metadataを追加し、`coddington_rms_consistent`という誤解を招く名称を廃止する。
+- RMS最良点が探索範囲端にある場合は、探索範囲拡張または`solve_not_converged`相当の構造化warningを返す。
+
+### 受け入れ条件
+
+- P002/P003同軸系の既定応答が実際の`coddington`計算となり、瞳サンプル数を変えても同一値になる。
+- Coddington結果を独立した近軸参照式またはGolden Testで検証し、RMS探索との比較差をテストする。
+- 偏芯・チルト系のRMS modeでは、使用したサンプリング条件と探索条件がmetadataから確認できる。
+- P003のように探索解が範囲端へ張り付く場合、収束済みの値として無警告で返さない。
+- `field-curvature`と`ms-image-surface`のmethod表示が実際の計算経路と一致する。
