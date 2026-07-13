@@ -295,6 +295,7 @@ export type RelativeIlluminationRow = {
 }
 
 export type MtfPoint = {
+  field_id?: string
   frequency_lp_per_mm: number
   mtf_y: number
   mtf_z: number
@@ -302,7 +303,13 @@ export type MtfPoint = {
 }
 
 export type ChartAnalysisResult = {
-  rayFan?: { points: RayFanPoint[]; metadata?: Record<string, unknown>; artifacts?: ArtifactMap }
+  rayFan?: {
+    points: RayFanPoint[]
+    fan_y_points?: RayFanPoint[]
+    fan_z_points?: RayFanPoint[]
+    metadata?: Record<string, unknown>
+    artifacts?: ArtifactMap
+  }
   longitudinal?: { points: LongitudinalAberrationPoint[]; metadata?: Record<string, unknown>; artifacts?: ArtifactMap }
   distortion?: { rows: DistortionRow[]; metadata?: Record<string, unknown>; artifacts?: ArtifactMap }
   fieldCurvature?: { rows: FieldCurvatureRow[]; artifacts?: ArtifactMap }

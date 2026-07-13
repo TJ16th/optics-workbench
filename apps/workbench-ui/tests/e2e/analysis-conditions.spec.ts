@@ -169,7 +169,7 @@ async function mockEngine(
             })),
           ),
         ),
-        metadata: { pupil_distribution: 'fan_y' },
+        metadata: { pupil_distribution: request.ray_sampling?.pupil_distribution },
       },
     })
   })
@@ -1157,6 +1157,13 @@ test('P002 and P003 analysis charts render standard aberration panels without co
     await expect(page.getByText('Relative Illumination').first()).toBeVisible()
     await expect(page.getByText('MTF').first()).toBeVisible()
     await expect(page.getByText('Diffraction included: false')).toBeVisible()
+    await expect(page.getByTestId('longitudinal-aberration-chart').locator('circle')).toHaveCount(9)
+    await expect(page.getByTestId('ray-fan-y-chart').locator('circle')).toHaveCount(27)
+    await expect(page.getByTestId('ray-fan-z-chart').locator('circle')).toHaveCount(27)
+    await expect(page.getByTestId('mtf-chart').locator('circle')).toHaveCount(30)
+    for (const legend of ['center M', 'center S', 'mid-y M', 'mid-y S', 'edge-y M', 'edge-y S']) {
+      await expect(page.getByTestId('mtf-chart').locator('..').getByText(legend, { exact: true })).toBeVisible()
+    }
 
     const labelBoxes = await page.getByTestId('standard-aberration-grid').locator('.plot-label').evaluateAll((nodes) =>
       nodes.map((node) => {

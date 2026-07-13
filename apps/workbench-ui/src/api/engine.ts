@@ -134,27 +134,50 @@ async function postAnalysis<T>(apiBase: string, endpoint: string, request: Analy
 }
 
 export async function runChartAnalyses(apiBase: string, request: AnalysisRequest): Promise<ChartAnalysisResult> {
-  const [rayFan, longitudinal, distortion, fieldCurvature, msImageSurface, relativeIllumination, mtf] = await Promise.all([
+  const axialField = [...request.fields].sort(
+    (left, right) => Math.hypot(left.theta_y_deg ?? 0, left.theta_z_deg ?? 0) - Math.hypot(right.theta_y_deg ?? 0, right.theta_z_deg ?? 0),
+  )[0]
+  const mtfFields = request.fields.length ? request.fields : [undefined]
+  const [rayFanY, rayFanZ, longitudinal, distortion, fieldCurvature, msImageSurface, relativeIllumination, mtfByField] = await Promise.all([
     postAnalysis<ChartAnalysisResult['rayFan']>(apiBase, '/v1/analysis/ray-fan', {
       ...request,
       ray_sampling: { ...request.ray_sampling, pupil_distribution: 'fan_y' },
     }),
+    postAnalysis<ChartAnalysisResult['rayFan']>(apiBase, '/v1/analysis/ray-fan', {
+      ...request,
+      ray_sampling: { ...request.ray_sampling, pupil_distribution: 'fan_z' },
+    }),
     postAnalysis<ChartAnalysisResult['longitudinal']>(apiBase, '/v1/analysis/longitudinal-aberration', {
       ...request,
+      fields: axialField ? [axialField] : request.fields,
       ray_sampling: { ...request.ray_sampling, pupil_distribution: 'fan_y' },
     }),
     postAnalysis<ChartAnalysisResult['distortion']>(apiBase, '/v1/analysis/distortion', request),
     postAnalysis<{ rows: FieldCurvatureRow[]; artifacts?: Record<string, string> }>(apiBase, '/v1/analysis/field-curvature', request),
     postAnalysis<{ rows: FieldCurvatureRow[] }>(apiBase, '/v1/analysis/ms-image-surface', request),
     postAnalysis<ChartAnalysisResult['relativeIllumination']>(apiBase, '/v1/analysis/relative-illumination', request),
-    postAnalysis<ChartAnalysisResult['mtf']>(apiBase, '/v1/analysis/mtf', {
-      ...request,
-      frequencies_lp_per_mm: request.frequencies_lp_per_mm ?? [0, 10, 20, 40, 80],
-    }),
+    Promise.all(
+      mtfFields.map((field) =>
+        postAnalysis<ChartAnalysisResult['mtf']>(apiBase, '/v1/analysis/mtf', {
+          ...request,
+          ...(field ? { fields: [field] } : {}),
+          frequencies_lp_per_mm: request.frequencies_lp_per_mm ?? [0, 10, 20, 40, 80],
+        }),
+      ),
+    ),
   ])
   const msRowsByField = new Map((msImageSurface.rows ?? []).map((row) => [row.field_id, row]))
+  const mtfPoints = mtfByField.flatMap((result, index) =>
+    (result?.points ?? []).map((point) => ({ ...point, field_id: mtfFields[index]?.id })),
+  )
   return {
-    rayFan,
+    rayFan: {
+      points: rayFanY?.points ?? [],
+      fan_y_points: rayFanY?.points ?? [],
+      fan_z_points: rayFanZ?.points ?? [],
+      metadata: rayFanY?.metadata,
+      artifacts: rayFanY?.artifacts,
+    },
     longitudinal,
     distortion,
     fieldCurvature: {
@@ -162,7 +185,7 @@ export async function runChartAnalyses(apiBase: string, request: AnalysisRequest
       artifacts: fieldCurvature.artifacts,
     },
     relativeIllumination,
-    mtf: { points: mtf?.points ?? [], metadata: mtf?.metadata, artifacts: mtf?.artifacts, diffraction_included: false },
+    mtf: { points: mtfPoints, metadata: mtfByField[0]?.metadata, artifacts: mtfByField[0]?.artifacts, diffraction_included: false },
   }
 }
 

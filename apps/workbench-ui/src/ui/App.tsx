@@ -1861,7 +1861,7 @@ function EvaluatedFieldList({ trace, fields }: { trace?: TraceResponse; fields: 
 }
 
 type ChartPoint = { x: number; y: number }
-type ChartSeries = { id: string; color: string; points: ChartPoint[] }
+type ChartSeries = { id: string; color: string; points: ChartPoint[]; sortBy?: 'x' | 'y' }
 
 function ChartSvg({
   series,
@@ -1919,7 +1919,7 @@ function ChartSvg({
           {formatFixed(y1, 2)}
         </text>
         {series.map((item) => {
-          const ordered = [...item.points].sort((a, b) => a.x - b.x)
+          const ordered = [...item.points].sort((a, b) => (item.sortBy === 'y' ? a.y - b.y : a.x - b.x))
           const polyline = ordered.map((point) => `${sx(point.x)},${sy(point.y)}`).join(' ')
           return (
             <g key={item.id}>
@@ -1949,7 +1949,7 @@ function seriesFromLongitudinal(points: LongitudinalAberrationPoint[] | undefine
     if (point.status !== 'alive') continue
     if (!finitePoint(point.longitudinal_error_y_mm, point.pupil_y)) continue
     const key = `${formatFixed(point.wavelength_nm, 0)}nm`
-    const existing = groups.get(key) ?? { id: key, color: wavelengthColor(point.wavelength_nm), points: [] }
+    const existing = groups.get(key) ?? { id: key, color: wavelengthColor(point.wavelength_nm), points: [], sortBy: 'y' as const }
     existing.points.push({ x: point.longitudinal_error_y_mm as number, y: point.pupil_y })
     groups.set(key, existing)
   }
@@ -2046,11 +2046,19 @@ function seriesFromRelativeIllumination(rows: RelativeIlluminationRow[] | undefi
 }
 
 function seriesFromMtf(points: MtfPoint[] | undefined): ChartSeries[] {
-  const safePoints = points ?? []
-  return [
-    { id: 'M', color: '#0f62fe', points: safePoints.map((point) => ({ x: point.frequency_lp_per_mm, y: point.mtf_y })) },
-    { id: 'S', color: '#da1e28', points: safePoints.map((point) => ({ x: point.frequency_lp_per_mm, y: point.mtf_z })) },
-  ]
+  const groups = new Map<string, MtfPoint[]>()
+  for (const point of points ?? []) {
+    const fieldId = point.field_id ?? ''
+    groups.set(fieldId, [...(groups.get(fieldId) ?? []), point])
+  }
+  const colors = ['#0f62fe', '#da1e28', '#24a148', '#8a3ffc', '#ff832b', '#007d79']
+  return [...groups.entries()].flatMap(([fieldId, fieldPoints], index) => {
+    const prefix = fieldId ? `${fieldId} ` : ''
+    return [
+      { id: `${prefix}M`, color: colors[(index * 2) % colors.length], points: fieldPoints.map((point) => ({ x: point.frequency_lp_per_mm, y: point.mtf_y })) },
+      { id: `${prefix}S`, color: colors[(index * 2 + 1) % colors.length], points: fieldPoints.map((point) => ({ x: point.frequency_lp_per_mm, y: point.mtf_z })) },
+    ]
+  })
 }
 
 function seriesFromFocusCurve(points: FocusCurvePoint[] | undefined, bestOffset?: number): ChartSeries[] {
@@ -2197,8 +2205,20 @@ function AnalysisCharts({ result, onOpenHelp }: { result?: ChartAnalysisResult; 
           <TermHelp termId="ray_fan" fallback={termLabel('ray_fan', i18n.language)} onOpenHelp={onOpenHelp} />
         </h2>
         <div className="chart-pair">
-          <ChartSvg series={seriesFromRayFan(result.rayFan?.points, 'y')} xLabel="Py" yLabel="Y mm" emptyLabel={empty} />
-          <ChartSvg series={seriesFromRayFan(result.rayFan?.points, 'z')} xLabel="Pz" yLabel="Z mm" emptyLabel={empty} />
+          <ChartSvg
+            series={seriesFromRayFan(result.rayFan?.fan_y_points ?? result.rayFan?.points, 'y')}
+            xLabel="Py"
+            yLabel="Y mm"
+            emptyLabel={empty}
+            testId="ray-fan-y-chart"
+          />
+          <ChartSvg
+            series={seriesFromRayFan(result.rayFan?.fan_z_points ?? result.rayFan?.points, 'z')}
+            xLabel="Pz"
+            yLabel="Z mm"
+            emptyLabel={empty}
+            testId="ray-fan-z-chart"
+          />
         </div>
       </section>
       <section className="panel chart-panel">
@@ -2217,7 +2237,7 @@ function AnalysisCharts({ result, onOpenHelp }: { result?: ChartAnalysisResult; 
         <h2>
           <TermHelp termId="mtf" fallback={termLabel('mtf', i18n.language)} onOpenHelp={onOpenHelp} />
         </h2>
-        <ChartSvg series={seriesFromMtf(result.mtf?.points)} xLabel="lp/mm" yLabel="MTF" emptyLabel={empty} />
+        <ChartSvg series={seriesFromMtf(result.mtf?.points)} xLabel="lp/mm" yLabel="MTF" emptyLabel={empty} testId="mtf-chart" />
         {result.mtf?.diffraction_included === false ? <p className="muted">{t('analysis:analysis.geometric_mtf_note')}</p> : null}
       </section>
     </div>
