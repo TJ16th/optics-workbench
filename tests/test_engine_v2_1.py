@@ -596,6 +596,47 @@ def test_ray_fan_longitudinal_distortion_and_profiling_are_available():
     assert trace.metadata["pupil_distribution"] == "fan_y"
 
 
+def test_longitudinal_aberration_uses_wavelength_paraxial_focus_for_axial_sample():
+    field = [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}]
+    wavelengths = [486.13, 587.56, 656.27]
+    sampling = {"samples_per_field": 9, "pupil_distribution": "fan_y", "ray_aiming": {"mode": "paraxial"}}
+    chromatic_spans = {}
+
+    for preset_id, system_factory in (("P002", p002_singlet_system), ("P003", p003_achromat_system)):
+        compiled = compile_system(system_factory(), use_cache=False)
+        result = analyze_longitudinal_aberration(compiled, field, sampling, wavelengths)
+        reference_x = analyze_paraxial(compiled).paraxial_image_position_mm
+        assert result.metadata == {
+            "pupil_distribution": "fan_y",
+            "reference_x_mm": pytest.approx(reference_x),
+            "reference_kind": "primary_wavelength_paraxial_focus",
+            "reference_wavelength_nm": 587.56,
+        }
+
+        centers = []
+        for wavelength in wavelengths:
+            rows = [point for point in result.points if point.wavelength_nm == wavelength]
+            center = next(point for point in rows if point.pupil_y == 0.0)
+            expected_focus = analyze_paraxial(compiled, wavelength_nm=wavelength).paraxial_image_position_mm
+            assert center.focus_x_y_mm == pytest.approx(expected_focus, abs=1.0e-12)
+            assert center.focus_x_z_mm == pytest.approx(expected_focus, abs=1.0e-12)
+            assert center.longitudinal_error_y_mm == pytest.approx(expected_focus - reference_x, abs=1.0e-12)
+            centers.append(center.focus_x_y_mm)
+
+            for negative, positive in zip(rows[:4], reversed(rows[5:])):
+                assert negative.focus_x_y_mm == pytest.approx(positive.focus_x_y_mm, abs=1.0e-12)
+                assert negative.focus_x_z_mm is None
+                assert positive.focus_x_z_mm is None
+
+        primary_rows = [point for point in result.points if point.wavelength_nm == 587.56 and point.pupil_y >= 0.0]
+        primary_errors = [abs(float(point.longitudinal_error_y_mm)) for point in primary_rows]
+        assert primary_errors[0] == pytest.approx(0.0, abs=1.0e-12)
+        assert primary_errors == sorted(primary_errors)
+        chromatic_spans[preset_id] = max(centers) - min(centers)
+
+    assert chromatic_spans["P003"] < chromatic_spans["P002"]
+
+
 def test_reverse_trace_runs_from_sensor_to_object_side():
     compiled = compile_system(thin_lens_system(focal_length=100.0, sensor_x=100.0))
     reverse = trace_reverse(compiled, [{"y_mm": 0.0, "z_mm": 0.0}], wavelengths=[587.56])

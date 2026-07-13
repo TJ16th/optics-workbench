@@ -5,7 +5,6 @@ from typing import Any
 
 import numpy as np
 
-from .configuration import runtime_layout
 from .paraxial import analyze_paraxial
 from .system import CompiledSystem
 from .tracing import TraceResult, _unit_disk_samples, trace_forward
@@ -138,13 +137,22 @@ def analyze_longitudinal_aberration(
     options = {**dict(options or {}), "store_path": True}
     trace = trace_forward(compiled, fields, sampling, wavelengths, options)
     samples, distribution = _samples_for_trace(sampling)
-    layout = runtime_layout(compiled, options.get("configuration"))
     paraxial = analyze_paraxial(compiled, options.get("configuration"))
     reference_x = paraxial.paraxial_image_position_mm
+    reference_wavelength_nm = float(compiled.system.wavelengths_nm.primary)
     points: list[LongitudinalAberrationPoint] = []
     idx = 0
     for field in fields:
+        axial_field = (
+            abs(float(field.get("theta_y_deg", 0.0))) <= 1.0e-12
+            and abs(float(field.get("theta_z_deg", 0.0))) <= 1.0e-12
+        )
         for wavelength in wavelengths:
+            wavelength_paraxial_x = analyze_paraxial(
+                compiled,
+                options.get("configuration"),
+                wavelength_nm=wavelength,
+            ).paraxial_image_position_mm
             for sample in samples:
                 focus_y = None
                 focus_z = None
@@ -155,10 +163,10 @@ def analyze_longitudinal_aberration(
                         focus_y = float(sensor_point[0] - sensor_point[1] * direction[0] / direction[1])
                     if abs(direction[2]) > 1.0e-12:
                         focus_z = float(sensor_point[0] - sensor_point[2] * direction[0] / direction[2])
-                    if focus_y is None and abs(sensor_point[1]) <= 1.0e-12:
-                        focus_y = float(layout.centers_mm[compiled.sensor_index, 0]) if compiled.sensor_index is not None else None
-                    if focus_z is None and abs(sensor_point[2]) <= 1.0e-12:
-                        focus_z = float(layout.centers_mm[compiled.sensor_index, 0]) if compiled.sensor_index is not None else None
+                    # The optical-axis ray has no unique axis crossing; use its physical h->0 limit.
+                    if axial_field and float(np.hypot(sample[0], sample[1])) <= 1.0e-12:
+                        focus_y = wavelength_paraxial_x
+                        focus_z = wavelength_paraxial_x
                 points.append(
                     LongitudinalAberrationPoint(
                         field_id=str(field.get("id", "field")),
@@ -173,7 +181,15 @@ def analyze_longitudinal_aberration(
                     )
                 )
                 idx += 1
-    return LongitudinalAberrationResult(points=points, metadata={"pupil_distribution": distribution, "reference_x_mm": reference_x})
+    return LongitudinalAberrationResult(
+        points=points,
+        metadata={
+            "pupil_distribution": distribution,
+            "reference_x_mm": reference_x,
+            "reference_kind": "primary_wavelength_paraxial_focus",
+            "reference_wavelength_nm": reference_wavelength_nm,
+        },
+    )
 
 
 def analyze_distortion(
