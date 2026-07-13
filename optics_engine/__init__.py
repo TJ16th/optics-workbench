@@ -35,6 +35,7 @@ from .psf_mtf import (
     analyze_white_psf,
     encircled_energy,
 )
+from .presets import gullstrand_visual_composite_demo
 from .system import CompiledSystem, compile_system, get_cached_system
 from .tracing import ReverseTraceResult, TraceResult, trace_forward, trace_reverse
 from .validation import validate_system
@@ -127,6 +128,7 @@ __all__ = [
     "evaluate_batch",
     "evaluate_system",
     "get_cached_system",
+    "gullstrand_visual_composite_demo",
     "load_system",
     "health_payload",
     "meta_payload",
