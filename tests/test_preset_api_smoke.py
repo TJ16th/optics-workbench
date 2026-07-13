@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 import numpy as np
 
-from optics_engine import analyze_afocal, analyze_exit_pupil, analyze_paraxial, analyze_spot, compile_system, load_system, trace_forward
+from optics_engine import analyze_afocal, analyze_angular_mtf, analyze_exit_pupil, analyze_paraxial, analyze_spot, compile_system, load_system, trace_forward
 from optics_engine.core import asphere_sag_and_slope, reflect, surface_normals_for_surface
 
 
@@ -50,6 +50,31 @@ def _assert_json_finite_or_null(value: Any) -> None:
     elif isinstance(value, list):
         for item in value:
             _assert_json_finite_or_null(item)
+
+
+def test_r69_keeps_p006_p008_afocal_metrics_bit_identical():
+    expected = {
+        "P006": (-5.0, 10.0, 20.0, 5, 3.722743809616492e-15, 6.497413668604473e-14, 1.0),
+        "P008": (-4.999999999909559, 2.400000000043412, 20.0, 21, 0.014371311382372567, 0.2508267067119125, 0.8131422715654928),
+    }
+    field = {"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}
+    sampling = {"samples_per_field": 21, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}}
+    for preset in (item for item in _shipped_presets() if item["id"] in expected):
+        compiled = compile_system(load_system(preset["system"]), use_cache=False)
+        pupil = analyze_exit_pupil(compiled)
+        afocal = analyze_afocal(compiled, field, sampling)
+        trace = trace_forward(compiled, [field], sampling, [587.56])
+        mtf = analyze_angular_mtf(trace, [0.0, 10.0])
+        actual = (
+            pupil.angular_magnification,
+            pupil.exit_pupil_diameter_mm,
+            pupil.eye_relief_mm,
+            afocal.arrived_count,
+            afocal.angular_rms_deg,
+            afocal.residual_divergence_diopter,
+            mtf.points[1].mtf,
+        )
+        assert actual == expected[preset["id"]]
 
 
 def _trace_payload(system_id: str, wavelengths_nm: list[float], aiming_mode: str = "paraxial") -> dict[str, Any]:
