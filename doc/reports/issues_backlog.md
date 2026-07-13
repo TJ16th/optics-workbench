@@ -722,6 +722,8 @@ R74作業1で、`POST /v1/analysis/field-curvature`と`POST /v1/analysis/ms-imag
 
 P003ではfield curvatureとM/S像面の全fieldが既定探索範囲の端`-5.0 mm`へ張り付くが、非収束または範囲不足として通知されない。既存`tests/test_phase5_tilt_asymmetric_ms.py`は値が非nullであることとmethod文字列だけを確認しており、実方式や探索端を検証していない。
 
+R75作業1の実装コミット`84c592fdd967ca4f96c70a8a3b938992e1ebb01e`で、P002/P003を含む球面・平面屈折系と理想薄レンズ系のCoddington計算、正しいmethod、RMS探索端warning、再現条件metadataは対応済みとなった。残件は、ミラー反射の符号規約とeven asphereの局所主曲率をCoddington漸化式へ組み込み、同軸のミラー・非球面系でも`rms_search`フォールバックを不要にすることである。
+
 ### 対応案
 
 - 同軸系向けに、aiming済み主光線に沿ったCoddington方程式によるM/S像面計算を実装し、既定方式とする。
