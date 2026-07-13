@@ -40,6 +40,7 @@ import type {
   LayoutBaselineRay,
   LongitudinalAberrationPoint,
   MtfPoint,
+  MtfMode,
   OpticalGroup,
   OpticalSystem,
   RayFanPoint,
@@ -73,6 +74,7 @@ type Snapshot = {
     samples_per_field: number
     pupil_distribution: string
     aiming_mode: string
+    mtf_mode: MtfMode
     image_plane_policy?: ImagePlanePolicy
     evaluation_plane?: EvaluationPlaneMetadata
   }
@@ -2073,7 +2075,7 @@ function seriesFromRelativeIllumination(rows: RelativeIlluminationRow[] | undefi
   ]
 }
 
-function seriesFromMtf(points: MtfPoint[] | undefined): ChartSeries[] {
+function seriesFromMtf(points: MtfPoint[] | undefined, mode: MtfMode = 'monochromatic'): ChartSeries[] {
   const groups = new Map<string, MtfPoint[]>()
   for (const point of points ?? []) {
     const fieldId = point.field_id ?? ''
@@ -2081,7 +2083,8 @@ function seriesFromMtf(points: MtfPoint[] | undefined): ChartSeries[] {
   }
   const colors = ['#0f62fe', '#da1e28', '#24a148', '#8a3ffc', '#ff832b', '#007d79']
   return [...groups.entries()].flatMap(([fieldId, fieldPoints], index) => {
-    const prefix = fieldId ? `${fieldId} ` : ''
+    const modePrefix = mode === 'white' ? 'white ' : ''
+    const prefix = fieldId ? `${modePrefix}${fieldId} ` : modePrefix
     return [
       { id: `${prefix}M`, color: colors[(index * 2) % colors.length], points: fieldPoints.map((point) => ({ x: point.frequency_lp_per_mm, y: point.mtf_y })) },
       { id: `${prefix}S`, color: colors[(index * 2 + 1) % colors.length], points: fieldPoints.map((point) => ({ x: point.frequency_lp_per_mm, y: point.mtf_z })) },
@@ -2265,7 +2268,11 @@ function AnalysisCharts({ result, onOpenHelp }: { result?: ChartAnalysisResult; 
         <h2>
           <TermHelp termId="mtf" fallback={termLabel('mtf', i18n.language)} onOpenHelp={onOpenHelp} />
         </h2>
-        <ChartSvg series={seriesFromMtf(result.mtf?.points)} xLabel="lp/mm" yLabel="MTF" emptyLabel={empty} testId="mtf-chart" />
+        <Tag type={result.mtf?.mode === 'white' ? 'cyan' : 'gray'}>
+          {result.mtf?.mode === 'white' ? t('analysis:analysis.mtf_mode_white') : t('analysis:analysis.mtf_mode_monochromatic')}
+        </Tag>
+        <ChartSvg series={seriesFromMtf(result.mtf?.points, result.mtf?.mode)} xLabel="lp/mm" yLabel="MTF" emptyLabel={empty} testId="mtf-chart" />
+        {result.mtf?.mode === 'white' ? <p className="muted">{t('analysis:analysis.white_mtf_note')}</p> : null}
         {result.mtf?.diffraction_included === false ? <p className="muted">{t('analysis:analysis.geometric_mtf_note')}</p> : null}
       </section>
     </div>
@@ -2278,6 +2285,7 @@ function AnalysisConditionPanel({
   samplesPerField,
   pupilDistribution,
   aimingMode,
+  mtfMode,
   analysisDirty,
   trace,
   onAddField,
@@ -2290,12 +2298,14 @@ function AnalysisConditionPanel({
   onSetSamplesPerField,
   onSetPupilDistribution,
   onSetAimingMode,
+  onSetMtfMode,
 }: {
   fields: AnalysisField[]
   wavelengths: WavelengthSample[]
   samplesPerField: number
   pupilDistribution: string
   aimingMode: string
+  mtfMode: MtfMode
   analysisDirty: boolean
   trace?: TraceResponse
   onAddField: () => void
@@ -2308,8 +2318,9 @@ function AnalysisConditionPanel({
   onSetSamplesPerField: (value: number) => void
   onSetPupilDistribution: (value: string) => void
   onSetAimingMode: (value: string) => void
+  onSetMtfMode: (value: MtfMode) => void
 }) {
-  const { t } = useTranslation(['settings'])
+  const { t } = useTranslation(['settings', 'analysis'])
   const [presetWavelength, setPresetWavelength] = useState(String(wavelengthPresets[1].wavelength_nm))
   const [customWavelength, setCustomWavelength] = useState(546.07)
 
@@ -2366,6 +2377,14 @@ function AnalysisConditionPanel({
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="condition-group" data-testid="mtf-mode-control">
+        <h3>{t('analysis:analysis.mtf_mode')}</h3>
+        <ContentSwitcher selectedIndex={mtfMode === 'monochromatic' ? 0 : 1} onChange={({ name }) => onSetMtfMode(name as MtfMode)}>
+          <Switch name="monochromatic" text={t('analysis:analysis.mtf_mode_monochromatic')} />
+          <Switch name="white" text={t('analysis:analysis.mtf_mode_white')} />
+        </ContentSwitcher>
       </div>
 
       <div className="condition-group">
@@ -2572,6 +2591,7 @@ export function App() {
   const [wavelengths, setWavelengths] = useState<WavelengthSample[]>(() => initialWavelengths(presets[0].system))
   const [pupilDistribution, setPupilDistribution] = useState('grid')
   const [aimingMode, setAimingMode] = useState('paraxial')
+  const [mtfMode, setMtfMode] = useState<MtfMode>('monochromatic')
   const [showDensityRays, setShowDensityRays] = useState(true)
   const [imagePlanePolicy, setImagePlanePolicy] = useState<ImagePlanePolicyDraft>(() => ({ ...defaultImagePlanePolicy }))
   const imagePlanePolicyRef = useRef<ImagePlanePolicyDraft>(imagePlanePolicy)
@@ -2659,6 +2679,11 @@ export function App() {
 
   const updateAimingMode = (value: string) => {
     setAimingMode(value)
+    markAnalysisDirty()
+  }
+
+  const updateMtfMode = (value: MtfMode) => {
+    setMtfMode(value)
     markAnalysisDirty()
   }
 
@@ -2945,7 +2970,7 @@ export function App() {
       const id = await ensureRegisteredSystem()
       const request = makeAnalysisRequest(id)
       setLastRequest(request)
-      return runChartAnalyses(apiBase, request)
+      return runChartAnalyses(apiBase, request, mtfMode)
     },
     onSuccess: (result) => {
       setChartResult(result)
@@ -3033,6 +3058,7 @@ export function App() {
         samples_per_field: samplesPerField,
         pupil_distribution: pupilDistribution,
         aiming_mode: aimingMode,
+        mtf_mode: mtfMode,
         ...(policyDisabled ? {} : { image_plane_policy: makePolicy(readImagePlanePolicyForm(), analysisFields, wavelengths) }),
         evaluation_plane: evaluationPlane,
       },
@@ -3382,6 +3408,7 @@ export function App() {
             samplesPerField={samplesPerField}
             pupilDistribution={pupilDistribution}
             aimingMode={aimingMode}
+            mtfMode={mtfMode}
             analysisDirty={analysisDirty}
             trace={trace}
             onAddField={addField}
@@ -3394,6 +3421,7 @@ export function App() {
             onSetSamplesPerField={updateSamplesPerField}
             onSetPupilDistribution={updatePupilDistribution}
             onSetAimingMode={updateAimingMode}
+            onSetMtfMode={updateMtfMode}
           />
 
           <ImagePlanePolicyPanel

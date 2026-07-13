@@ -302,6 +302,8 @@ export type MtfPoint = {
   mtf_radial: number
 }
 
+export type MtfMode = 'monochromatic' | 'white'
+
 export type ChartAnalysisResult = {
   rayFan?: {
     points: RayFanPoint[]
@@ -314,7 +316,14 @@ export type ChartAnalysisResult = {
   distortion?: { rows: DistortionRow[]; metadata?: Record<string, unknown>; artifacts?: ArtifactMap }
   fieldCurvature?: { rows: FieldCurvatureRow[]; artifacts?: ArtifactMap }
   relativeIllumination?: { rows: RelativeIlluminationRow[]; metadata?: Record<string, unknown>; artifacts?: ArtifactMap }
-  mtf?: { points: MtfPoint[]; diffraction_included?: boolean; metadata?: Record<string, unknown>; artifacts?: ArtifactMap }
+  mtf?: {
+    points: MtfPoint[]
+    mode?: MtfMode
+    wavelength_weights?: Record<string, number>
+    diffraction_included?: boolean
+    metadata?: Record<string, unknown>
+    artifacts?: ArtifactMap
+  }
 }
 
 export type VisualCompositeResponse = {

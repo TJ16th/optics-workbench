@@ -1376,6 +1376,8 @@ unit: cycles/degree
 - wavelength
 - evaluation plane
 
+focal系のWorkbench UIは、解析条件の`MTFモード`を`単色` / `白色光`のセグメントで切り替える。`単色`は`POST /v1/analysis/mtf`、`白色光`は`POST /v1/analysis/white-mtf`へ接続し、白色光では解析条件の波長ウェイトを使用する。結果パネルには実行したモードを明示し、白色光の凡例には`white`を付けて単色結果と区別する。両モードの横軸単位はfocal系では`lp/mm`とする。現行実装はいずれも幾何MTFであり、`diffraction included: false`を表示する。
+
 ## 17.6 PSF Heatmap View
 
 表示項目：

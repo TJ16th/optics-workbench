@@ -6,6 +6,8 @@ import type {
   EngineMeta,
   FieldCurvatureRow,
   ImagePlanePolicy,
+  MtfMode,
+  MtfPoint,
   OpticalSystem,
   RuntimeConfiguration,
   TraceResponse,
@@ -124,7 +126,13 @@ export type AnalysisRequest = PreviewRequest & {
   image_plane_policy?: ImagePlanePolicy
 }
 
-async function postAnalysis<T>(apiBase: string, endpoint: string, request: AnalysisRequest): Promise<T> {
+type WhiteMtfResponse = {
+  mtf: { points: MtfPoint[]; metadata?: Record<string, unknown>; artifacts?: Record<string, string> }
+  wavelength_weights: Record<string, number>
+  metadata?: Record<string, unknown>
+}
+
+async function postAnalysis<T>(apiBase: string, endpoint: string, request: object): Promise<T> {
   const response = await fetch(`${apiBase}${endpoint}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -133,11 +141,19 @@ async function postAnalysis<T>(apiBase: string, endpoint: string, request: Analy
   return readJson(response, 'api_error')
 }
 
-export async function runChartAnalyses(apiBase: string, request: AnalysisRequest): Promise<ChartAnalysisResult> {
+export async function runChartAnalyses(apiBase: string, request: AnalysisRequest, mtfMode: MtfMode = 'monochromatic'): Promise<ChartAnalysisResult> {
   const axialField = [...request.fields].sort(
     (left, right) => Math.hypot(left.theta_y_deg ?? 0, left.theta_z_deg ?? 0) - Math.hypot(right.theta_y_deg ?? 0, right.theta_z_deg ?? 0),
   )[0]
   const mtfFields = request.fields.length ? request.fields : [undefined]
+  const wavelengthWeights = (request.wavelength_weights ?? request.wavelengths_nm.map((wavelength_nm) => ({ wavelength_nm, weight: 1 }))).reduce<Record<string, number>>(
+    (weights, sample) => {
+      const key = String(sample.wavelength_nm)
+      weights[key] = (weights[key] ?? 0) + sample.weight
+      return weights
+    },
+    {},
+  )
   const [rayFanY, rayFanZ, longitudinal, distortion, fieldCurvature, msImageSurface, relativeIllumination, mtfByField] = await Promise.all([
     postAnalysis<ChartAnalysisResult['rayFan']>(apiBase, '/v1/analysis/ray-fan', {
       ...request,
@@ -158,18 +174,27 @@ export async function runChartAnalyses(apiBase: string, request: AnalysisRequest
     postAnalysis<ChartAnalysisResult['relativeIllumination']>(apiBase, '/v1/analysis/relative-illumination', request),
     Promise.all(
       mtfFields.map((field) =>
-        postAnalysis<ChartAnalysisResult['mtf']>(apiBase, '/v1/analysis/mtf', {
+        postAnalysis<NonNullable<ChartAnalysisResult['mtf']> | WhiteMtfResponse>(apiBase, mtfMode === 'white' ? '/v1/analysis/white-mtf' : '/v1/analysis/mtf', {
           ...request,
           ...(field ? { fields: [field] } : {}),
+          ...(mtfMode === 'white' ? { wavelength_weights: wavelengthWeights } : {}),
           frequencies_lp_per_mm: request.frequencies_lp_per_mm ?? [0, 10, 20, 40, 80],
         }),
       ),
     ),
   ])
   const msRowsByField = new Map((msImageSurface.rows ?? []).map((row) => [row.field_id, row]))
-  const mtfPoints = mtfByField.flatMap((result, index) =>
-    (result?.points ?? []).map((point) => ({ ...point, field_id: mtfFields[index]?.id })),
-  )
+  const mtfPoints = mtfByField.flatMap((result, index) => {
+    const points = mtfMode === 'white' ? (result as WhiteMtfResponse).mtf?.points : (result as NonNullable<ChartAnalysisResult['mtf']>)?.points
+    return (points ?? []).map((point) => ({ ...point, field_id: mtfFields[index]?.id }))
+  })
+  const firstMtf = mtfByField[0]
+  const mtfMetadata = mtfMode === 'white'
+    ? (firstMtf as WhiteMtfResponse | undefined)?.metadata ?? (firstMtf as WhiteMtfResponse | undefined)?.mtf?.metadata
+    : (firstMtf as NonNullable<ChartAnalysisResult['mtf']> | undefined)?.metadata
+  const mtfArtifacts = mtfMode === 'white'
+    ? (firstMtf as WhiteMtfResponse | undefined)?.mtf?.artifacts
+    : (firstMtf as NonNullable<ChartAnalysisResult['mtf']> | undefined)?.artifacts
   return {
     rayFan: {
       points: rayFanY?.points ?? [],
@@ -185,7 +210,14 @@ export async function runChartAnalyses(apiBase: string, request: AnalysisRequest
       artifacts: fieldCurvature.artifacts,
     },
     relativeIllumination,
-    mtf: { points: mtfPoints, metadata: mtfByField[0]?.metadata, artifacts: mtfByField[0]?.artifacts, diffraction_included: false },
+    mtf: {
+      points: mtfPoints,
+      mode: mtfMode,
+      ...(mtfMode === 'white' ? { wavelength_weights: (firstMtf as WhiteMtfResponse | undefined)?.wavelength_weights ?? wavelengthWeights } : {}),
+      metadata: mtfMetadata,
+      artifacts: mtfArtifacts,
+      diffraction_included: false,
+    },
   }
 }
 

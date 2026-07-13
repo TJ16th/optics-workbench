@@ -270,6 +270,25 @@ async function mockEngine(
       },
     })
   })
+  await page.route('http://127.0.0.1:8000/v1/analysis/white-mtf', async (route) => {
+    const request = route.request().postDataJSON()
+    const frequencies = request.frequencies_lp_per_mm ?? [0, 10, 20]
+    const totalWeight = Object.values(request.wavelength_weights ?? {}).reduce((sum: number, weight) => sum + Number(weight), 0) || 1
+    const wavelengthWeights = Object.fromEntries(Object.entries(request.wavelength_weights ?? {}).map(([wavelength, weight]) => [wavelength, Number(weight) / totalWeight]))
+    await route.fulfill({
+      json: {
+        mtf: {
+          points: frequencies.map((frequency: number) => ({
+            frequency_lp_per_mm: frequency,
+            mtf_y: Math.max(0, 1 - frequency / 95),
+            mtf_z: Math.max(0, 1 - frequency / 115),
+            mtf_radial: Math.max(0, 1 - frequency / 105),
+          })),
+        },
+        wavelength_weights: wavelengthWeights,
+      },
+    })
+  })
   await page.route('http://127.0.0.1:8000/v1/analysis/visual-composite', async (route) => {
     await route.fulfill({
       json: {
@@ -1191,6 +1210,41 @@ test('P002 and P003 analysis charts render standard aberration panels without co
       expect(box.height).toBeGreaterThan(5)
     }
   }
+})
+
+test('MTF mode switches between monochromatic and weighted white-light endpoints', async ({ page }) => {
+  const mtfRequests: Array<{ url: string; body: Record<string, unknown> }> = []
+  page.on('request', (request) => {
+    if (request.url().endsWith('/v1/analysis/mtf') || request.url().endsWith('/v1/analysis/white-mtf')) {
+      mtfRequests.push({ url: request.url(), body: request.postDataJSON() })
+    }
+  })
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await selectPresetOption(page, 'P002 N-BK7 Biconvex Singlet 50mm Demo')
+  await page.getByRole('tab', { name: 'Analysis' }).click()
+
+  const modeControl = page.getByTestId('mtf-mode-control')
+  await expect(modeControl.getByRole('tab', { name: 'Monochromatic' })).toHaveAttribute('aria-selected', 'true')
+  await modeControl.getByRole('tab', { name: 'White light' }).click()
+  await page.getByRole('button', { name: 'Run Charts' }).click()
+
+  await expect(page.getByText('White light', { exact: true }).last()).toBeVisible()
+  await expect(page.getByText('White-light MTF uses the wavelength weights from the analysis conditions. Unit: lp/mm.')).toBeVisible()
+  for (const legend of ['white center M', 'white center S', 'white mid-y M', 'white mid-y S', 'white edge-y M', 'white edge-y S']) {
+    await expect(page.getByTestId('mtf-chart').locator('..').getByText(legend, { exact: true })).toBeVisible()
+  }
+  const whiteRequests = mtfRequests.filter((request) => request.url.endsWith('/v1/analysis/white-mtf'))
+  expect(whiteRequests).toHaveLength(3)
+  expect(Array.isArray(whiteRequests[0].body.wavelength_weights)).toBe(false)
+  expect(whiteRequests[0].body.wavelength_weights).toEqual({ '486.13': 0.5, '587.56': 1, '656.27': 0.5 })
+  await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-point-count', '30')
+
+  await modeControl.getByRole('tab', { name: 'Monochromatic' }).click()
+  await page.getByRole('button', { name: 'Run Charts' }).click()
+  await expect(page.getByText('Monochromatic', { exact: true }).last()).toBeVisible()
+  await expect(page.getByTestId('mtf-chart').locator('..').getByText('center M', { exact: true })).toBeVisible()
+  expect(mtfRequests.filter((request) => request.url.endsWith('/v1/analysis/mtf'))).toHaveLength(3)
 })
 
 test('image-plane policy solves focus, writes back sensor, and disables for afocal preset', async ({ page }) => {

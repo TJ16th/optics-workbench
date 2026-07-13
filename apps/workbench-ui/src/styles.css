@@ -136,6 +136,10 @@ body {
   margin: 0;
 }
 
+.analysis-conditions .cds--content-switcher-btn {
+  padding-inline: 0.5rem;
+}
+
 .condition-group {
   display: flex;
   flex-direction: column;
