@@ -736,3 +736,29 @@ P003ではfield curvatureとM/S像面の全fieldが既定探索範囲の端`-5.0
 - 偏芯・チルト系のRMS modeでは、使用したサンプリング条件と探索条件がmetadataから確認できる。
 - P003のように探索解が範囲端へ張り付く場合、収束済みの値として無警告で返さない。
 - `field-curvature`と`ms-image-surface`のmethod表示が実際の計算経路と一致する。
+
+## Issue: 周辺光量に解析専用サンプリングと正確な放射量metadataを導入する
+
+ラベル案: `engine`, `performance`, `testing`
+
+### 背景
+
+R74作業2で、WorkbenchのRun Chartsは共有`ray_sampling`を`POST /v1/analysis/relative-illumination`へそのまま渡し、UI既定の`9 rays / grid / paraxial`で周辺光量を計算することを確認した。周辺光量専用の最小サンプル数や収束判定はない。
+
+P002の40 deg fieldでは、100000 rays時のthroughput `0.89541`に対し、9 raysでは`1.0`となり、relative illuminationを`11.68%`過大評価した。現行実装は瞳gridの到達率へcos⁴を明示乗算する`ray_throughput_times_cos4`であり、仕様16.5・21.4節の等立体角または等価な重み付きサンプリングからcos⁴を自然導出する定義とは異なる。またresponse metadataにサンプル数、distribution、aiming、重み付け方式がない。
+
+### 対応案
+
+- 周辺光量解析に専用sampling設定を設け、共有preview値とは分離して既定を少なくとも1000 rays/fieldとする。
+- 仕様16.5節に沿い、物体空間の等立体角サンプリングまたはヤコビアンを持つ重み付き瞳サンプリングを実装する。
+- cos⁴を別途乗算する近似を維持する場合は、仕様方式と明確にmodeを分け、二重計上を防ぐ。
+- response metadataへ要求/実使用サンプル数、distribution、aiming、weighting、seed、到達数を含める。
+- UIに周辺光量の精度presetまたは収束状態を表示し、Run Chartsの30秒性能ガードと両立させる。
+
+### 受け入れ条件
+
+- Run Charts既定9 raysが、周辺光量の最終値に暗黙利用されない。
+- P002 40 deg等のpartial vignetting系で、既定設定が高密度参照値に対する規定誤差内へ収束する。
+- 放射量サンプリングとcos⁴の扱いが`doc/engine_spec.md` 16.5・21.4節と一致する。
+- response metadataだけで計算の再現条件を取得できる。
+- 同一seed入力はビット同一となり、sampling精度と実行時間の回帰テストがある。
