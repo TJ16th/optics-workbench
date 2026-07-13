@@ -220,14 +220,23 @@ follow-up3時点では、`semi_diameter_mm: { variable: "iris_radius_mm", defaul
 
 ### 対応案
 
-- まず単色・軸上・円形瞳の回折PSFを実装する。
-- 幾何PSFとの責務境界を明確にする。
-- white PSF/MTFは波長重み付き結合として段階的に追加する。
+- まず単色・軸上・円形瞳を対象に、実光線追跡で光路長（OPL）と瞳座標を取得し、参照球面との差からOPDを求める。
+- OPDを規則瞳格子へ写像し、`P(u,v) = A(u,v) exp(i 2π OPD/λ)`のFFTから回折PSFを計算する。`A(u,v)`にはcircle/annulus、ケラレを反映する。
+- 幾何PSFとの責務境界をAPIの`mode: geometric | diffraction`と`diffraction_included` metadataで明確にし、未実装中は`capabilities.diffraction_psf=false`を維持する。
+- white PSF/MTFは波長ごとの回折PSFを共通の像面物理格子へ再標本化して重み付き合成し、その後にMTF化する。
+- Zernike近似は波面診断・圧縮表現には利用できるが、annulusや局所的な瞳欠損を失わないよう、直接OPD格子を正本とする。
 
 ### 受け入れ条件
 
-- 理想円形瞳でAiry disk相当の基礎検証ができる。
+- 理想円形瞳でAiry第1暗環`1.22 λ N`と円形瞳の解析MTFに対する基礎検証ができる。
+- OPDのpiston不変性、既知defocus、annulus遮蔽、ケラレ、複数波長の共通物理格子合成を直接テストできる。
+- 同一入力・同一格子でPSF/MTF配列が決定論的になる。
 - APIレスポンスのartifact方針が既存PSF/MTFと整合する。
+- 実装完了時にのみ`capabilities.diffraction_psf=true`となり、幾何/回折の別がレスポンスで判別できる。
+
+### R73設計調査追記（2026-07-13）
+
+現行`TraceResult.paths`は交点・入射方向・statusを保持するが、区間光路長、区間屈折率、OPL、正規化瞳座標は保持しない。このため変更は`psf_mtf.py`内に閉じず、traceカーネル、結果モデル、API/artifact、white合成、検証まで横断する「大」規模となる。推奨は、光線ベースのOPL計測と参照球面OPDを正本にして直接FFTする方式である。Zernike fittingは第2段階の診断・高速近似として追加し、初期実装の唯一の波面表現にはしない。
 
 ## Issue: 視覚系のプリズム・正立像モデルを拡張する [issue: #9]
 
