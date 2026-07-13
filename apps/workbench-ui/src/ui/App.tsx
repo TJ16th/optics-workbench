@@ -23,7 +23,7 @@ import {
 import { Add, Checkmark, Download, Play, Renew, Save, TrashCan } from '@carbon/icons-react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, runVisualComposite, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
+import { DEFAULT_MTF_FREQUENCIES_LP_PER_MM, defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, runVisualComposite, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
 import { presets, visualFixturePresets } from '../domain/presets'
 import type {
   AnalysisField,
@@ -2842,7 +2842,7 @@ export function App() {
     wavelengths_nm: wavelengths.map((sample) => sample.wavelength_nm),
     wavelength_weights: wavelengths,
     configuration: overrides.configuration ?? runtimeConfiguration,
-    frequencies_lp_per_mm: [0, 10, 20, 40, 80],
+    frequencies_lp_per_mm: [...DEFAULT_MTF_FREQUENCIES_LP_PER_MM],
     ...(policyDisabled ? {} : { image_plane_policy: makePolicy(readImagePlanePolicyForm(), analysisFields, wavelengths) }),
     options: { store_path: true, profiling: true, include_layout_baseline_rays: true },
   })

@@ -17,6 +17,7 @@ import type {
 } from '../domain/types'
 
 export const defaultApiBase = 'http://127.0.0.1:8000'
+export const DEFAULT_MTF_FREQUENCIES_LP_PER_MM = Array.from({ length: 33 }, (_, index) => index * 2.5)
 
 export class EngineApiError extends Error {
   issue: EngineIssue
@@ -222,7 +223,7 @@ export async function runChartAnalyses(apiBase: string, request: AnalysisRequest
           ...request,
           ...(field ? { fields: [field] } : {}),
           ...(mtfMode === 'white' ? { wavelength_weights: wavelengthWeights } : {}),
-          frequencies_lp_per_mm: request.frequencies_lp_per_mm ?? [0, 10, 20, 40, 80],
+          frequencies_lp_per_mm: request.frequencies_lp_per_mm ?? [...DEFAULT_MTF_FREQUENCIES_LP_PER_MM],
         }),
       ),
     ),

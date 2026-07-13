@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+const expectedMtfFrequencies = Array.from({ length: 33 }, (_, index) => index * 2.5)
+
 async function mockEngine(
   page: import('@playwright/test').Page,
   options: { failArtifacts?: boolean; previewRequests?: unknown[]; registerRequests?: unknown[] } = {},
@@ -1187,7 +1189,7 @@ test('P002 and P003 analysis charts render standard aberration panels without co
     await expect(page.getByTestId('longitudinal-aberration-chart').locator('circle')).toHaveCount(9)
     await expect(page.getByTestId('ray-fan-y-chart').locator('circle')).toHaveCount(27)
     await expect(page.getByTestId('ray-fan-z-chart').locator('circle')).toHaveCount(27)
-    await expect(page.getByTestId('mtf-chart').locator('circle')).toHaveCount(30)
+    await expect(page.getByTestId('mtf-chart').locator('circle')).toHaveCount(198)
     await expect(page.getByTestId('ray-fan-y-chart')).toHaveAttribute('data-point-count', '27')
     await expect(page.getByTestId('ray-fan-y-chart')).toHaveAttribute('data-marker-radius', '1.7')
     await expect(page.getByTestId('ray-fan-y-chart')).toHaveAttribute('data-marker-opacity', '0.68')
@@ -1216,7 +1218,7 @@ test('P002 and P003 analysis charts render standard aberration panels without co
   }
 })
 
-test('curve analyses use dense fields without changing ray fan or MTF sampling', async ({ page }) => {
+test('curve analyses keep dense fields separate from ray fan and MTF frequency sampling', async ({ page }) => {
   const requests: Array<{ endpoint: string; body: Record<string, unknown> }> = []
   page.on('request', (request) => {
     const endpoint = new URL(request.url()).pathname
@@ -1267,6 +1269,7 @@ test('curve analyses use dense fields without changing ray fan or MTF sampling',
   expect(mtfRequests).toHaveLength(3)
   for (const request of mtfRequests) {
     expect(request.body.fields).toHaveLength(1)
+    expect(request.body.frequencies_lp_per_mm).toEqual(expectedMtfFrequencies)
   }
 })
 
@@ -1296,7 +1299,8 @@ test('MTF mode switches between monochromatic and weighted white-light endpoints
   expect(whiteRequests).toHaveLength(3)
   expect(Array.isArray(whiteRequests[0].body.wavelength_weights)).toBe(false)
   expect(whiteRequests[0].body.wavelength_weights).toEqual({ '486.13': 0.5, '587.56': 1, '656.27': 0.5 })
-  await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-point-count', '30')
+  expect(whiteRequests.every((request) => JSON.stringify(request.body.frequencies_lp_per_mm) === JSON.stringify(expectedMtfFrequencies))).toBe(true)
+  await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-point-count', '198')
   await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-x-domain-min', '0')
   await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-x-domain-max', '80')
   await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-y-domain-min', '0')
@@ -1312,7 +1316,10 @@ test('MTF mode switches between monochromatic and weighted white-light endpoints
   await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-y-domain-min', '0')
   await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-y-domain-max', '1')
   await expect(page.getByTestId('mtf-chart').locator('.plot-tick')).toHaveText(['0.00', '80.00', '0.00', '1.00'])
-  expect(mtfRequests.filter((request) => request.url.endsWith('/v1/analysis/mtf'))).toHaveLength(3)
+  const monochromaticRequests = mtfRequests.filter((request) => request.url.endsWith('/v1/analysis/mtf'))
+  expect(monochromaticRequests).toHaveLength(3)
+  expect(monochromaticRequests.every((request) => JSON.stringify(request.body.frequencies_lp_per_mm) === JSON.stringify(expectedMtfFrequencies))).toBe(true)
+  await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-point-count', '198')
 })
 
 test('P007 full aiming reports excluded failures in ray fan and longitudinal panels', async ({ page }) => {
