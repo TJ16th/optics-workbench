@@ -1388,6 +1388,67 @@ unit: cycles/degree
 - peak位置
 - encircled energy
 
+## 17.7 Ray Fan View
+
+表示項目：
+
+- Y fanとZ fanを独立したpanelとして表示する
+- Y fanのX軸は正規化瞳座標`Py`、Y軸はY方向横収差`mm`
+- Z fanのX軸は正規化瞳座標`Pz`、Y軸はZ方向横収差`mm`
+- seriesは`field id + wavelength`の組合せごとに分離する
+- wavelengthごとに区別できる色と凡例を表示する
+- `/v1/analysis/ray-fan`を`fan_y`と`fan_z`で独立実行し、対応する結果だけを各panelへ描画する
+- `status=alive`かつ対象座標・横収差が有限の点をplotする
+- 点数に応じてmarker半径とopacityを調整し、点数自体はDOM metadataとして保持する
+
+未実行時は実行を促すempty stateを表示する。実行済みでplot可能な点がないpanelは「プロット可能なデータがない」状態を表示する。API errorは構造化エラー通知として表示し、不正な点を正常seriesへ混入しない。
+
+## 17.8 Longitudinal Aberration View
+
+表示項目：
+
+- X軸は縦方向焦点ずれ`mm`
+- Y軸は符号付き正規化瞳座標`pupil_y`
+- focal系の軸上fieldを対象とし、複数field条件では`hypot(theta_y_deg, theta_z_deg)`が最小のfieldを使用する
+- seriesはwavelengthごとに分離し、wavelength色と凡例を表示する
+- 各seriesは瞳座標順に結線する
+- `status=alive`かつ瞳座標・焦点ずれが有限の点をplotする
+- ゼロ基準は主波長の近軸焦点とする
+- API metadataとして`reference_kind=primary_wavelength_paraxial_focus`、`reference_wavelength_nm`、`reference_x_mm`を保持する
+- 軸上・瞳中心光線は光軸との交点が一意に定まらないため、その波長の近軸焦点を`pupil_y -> 0`の極限値として使用する
+- 単一波長では主に球面収差、複数波長の重ね描きでは主波長基準の軸上色収差を含む図として扱う
+
+未実行時は実行を促すempty stateを表示する。実行済みでplot可能な点がない場合は「プロット可能なデータがない」状態を表示する。API errorは構造化エラー通知として表示し、不正な点を正常seriesへ混入しない。
+
+## 17.9 Field Curvature / M-S Image Surface View
+
+表示項目：
+
+- 標準収差panelではX軸を焦点ずれ`mm`、Y軸を半画角`deg`とする
+- 個別Field Curvature panelではX軸をfield angle`deg`、Y軸を焦点ずれ`mm`とする
+- `/v1/analysis/field-curvature`と`/v1/analysis/ms-image-surface`のrowを`field_id`で結合する
+- M seriesは`tangential_focus_shift_mm`、S seriesは`sagittal_focus_shift_mm`を表示する
+- M/S値がない場合に限り`best_focus_shift_mm`をfallbackとして使用する
+- MとSを異なる色と凡例で表示し、field順に結線する
+- field angleは`hypot(theta_y_deg, theta_z_deg)`で求める
+- field angle・焦点ずれが有限の点だけをplotする
+
+未実行時は実行を促すempty stateを表示する。実行済みでplot可能な点がないpanelは「プロット可能なデータがない」状態を表示する。API errorは構造化エラー通知として表示し、不正な点を正常seriesへ混入しない。
+
+## 17.10 Distortion View
+
+表示項目：
+
+- 標準収差panelではX軸を歪曲率`%`、Y軸を半画角`deg`とする
+- 個別Distortion panelではX軸をfield angle`deg`、Y軸を歪曲率`%`とする
+- seriesは`distortion`の単一seriesとする
+- field angleは`hypot(theta_y_deg, theta_z_deg)`で求める
+- 歪曲率は近軸EFLから求めたideal image heightに対する実像高の差として表示する
+- 軸上fieldはideal image heightが0で歪曲率を定義できないためplotから除外する
+- field angle・歪曲率が有限の点だけをfield順に結線する
+
+未実行時は実行を促すempty stateを表示する。実行済みでplot可能な点がないpanelは「プロット可能なデータがない」状態を表示する。API errorは構造化エラー通知として表示し、不正な点を正常seriesへ混入しない。
+
 ---
 
 # 18. 単位・表示精度・丸め規約
