@@ -124,6 +124,7 @@ export async function runPreview(apiBase: string, request: PreviewRequest): Prom
 export type AnalysisRequest = PreviewRequest & {
   frequencies_lp_per_mm?: number[]
   image_plane_policy?: ImagePlanePolicy
+  relative_illumination_sampling?: PreviewRequest['ray_sampling']
 }
 
 type WhiteMtfResponse = {
@@ -142,6 +143,11 @@ async function postAnalysis<T>(apiBase: string, endpoint: string, request: objec
 }
 
 const CURVE_ANALYSIS_SAMPLE_COUNT = 15
+const DEFAULT_RELATIVE_ILLUMINATION_SAMPLING: PreviewRequest['ray_sampling'] = {
+  samples_per_field: 1000,
+  pupil_distribution: 'grid',
+  ray_aiming: { mode: 'paraxial' },
+}
 
 function fieldCoordinateKey(field: Pick<AnalysisField, 'theta_y_deg' | 'theta_z_deg'>) {
   return `${field.theta_y_deg.toFixed(12)}:${field.theta_z_deg.toFixed(12)}`
@@ -206,7 +212,10 @@ export async function runChartAnalyses(apiBase: string, request: AnalysisRequest
     postAnalysis<ChartAnalysisResult['distortion']>(apiBase, '/v1/analysis/distortion', curveRequest),
     postAnalysis<{ rows: FieldCurvatureRow[]; artifacts?: Record<string, string> }>(apiBase, '/v1/analysis/field-curvature', curveRequest),
     postAnalysis<{ rows: FieldCurvatureRow[] }>(apiBase, '/v1/analysis/ms-image-surface', curveRequest),
-    postAnalysis<ChartAnalysisResult['relativeIllumination']>(apiBase, '/v1/analysis/relative-illumination', curveRequest),
+    postAnalysis<ChartAnalysisResult['relativeIllumination']>(apiBase, '/v1/analysis/relative-illumination', {
+      ...curveRequest,
+      ray_sampling: request.relative_illumination_sampling ?? DEFAULT_RELATIVE_ILLUMINATION_SAMPLING,
+    }),
     Promise.all(
       mtfFields.map((field) =>
         postAnalysis<NonNullable<ChartAnalysisResult['mtf']> | WhiteMtfResponse>(apiBase, mtfMode === 'white' ? '/v1/analysis/white-mtf' : '/v1/analysis/mtf', {

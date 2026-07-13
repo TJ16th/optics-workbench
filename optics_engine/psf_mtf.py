@@ -10,6 +10,13 @@ from .system import CompiledSystem
 from .tracing import TraceResult, trace_forward
 
 
+DEFAULT_RELATIVE_ILLUMINATION_SAMPLING: dict[str, Any] = {
+    "samples_per_field": 1000,
+    "pupil_distribution": "grid",
+    "ray_aiming": {"mode": "paraxial"},
+}
+
+
 @dataclass(frozen=True)
 class EncircledEnergyPoint:
     radius_mm: float
@@ -152,7 +159,15 @@ def analyze_relative_illumination(
     wavelengths: list[float] | None = None,
     options: dict[str, Any] | None = None,
 ) -> RelativeIlluminationResult:
-    sampling = sampling or {"samples_per_field": 128, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}}
+    requested_sampling = sampling or {}
+    sampling = {
+        **DEFAULT_RELATIVE_ILLUMINATION_SAMPLING,
+        **requested_sampling,
+        "ray_aiming": {
+            **DEFAULT_RELATIVE_ILLUMINATION_SAMPLING["ray_aiming"],
+            **requested_sampling.get("ray_aiming", {}),
+        },
+    }
     rows_raw: list[tuple[dict[str, Any], float, float]] = []
     for field in fields:
         trace = trace_forward(compiled, [field], sampling, wavelengths, options)
@@ -175,10 +190,21 @@ def analyze_relative_illumination(
                 relative_illumination=float(value),
             )
         )
+    aiming_mode = str(sampling["ray_aiming"].get("mode", "paraxial"))
+    aiming_strategy = str(sampling["ray_aiming"].get("strategy", "affine")) if aiming_mode == "full" else aiming_mode
     return RelativeIlluminationResult(
         rows=rows,
         normalization_field_id=None if not rows else rows[0].field_id,
-        metadata={"method": "ray_throughput_times_cos4", "radiometric_basis": "object_space_solid_angle"},
+        metadata={
+            "method": "ray_throughput_times_cos4",
+            "radiometric_basis": "weighted_pupil_plane",
+            "weighting_method": "equal_pupil_samples_times_field_cos4",
+            "samples_per_field": int(sampling["samples_per_field"]),
+            "pupil_distribution": str(sampling["pupil_distribution"]),
+            "ray_aiming_mode": aiming_mode,
+            "ray_aiming_strategy": aiming_strategy,
+            "wavelength_count": len(wavelengths or [compiled.system.wavelengths_nm.primary]),
+        },
     )
 
 

@@ -1251,6 +1251,13 @@ test('curve analyses use dense fields without changing ray fan or MTF sampling',
     expect(fields.every((field) => field.theta_z_deg === 0)).toBe(true)
   }
 
+  const relativeIlluminationRequest = requests.find((request) => request.endpoint === '/v1/analysis/relative-illumination')
+  expect(relativeIlluminationRequest?.body.ray_sampling).toEqual({
+    samples_per_field: 1000,
+    pupil_distribution: 'grid',
+    ray_aiming: { mode: 'paraxial' },
+  })
+
   const rayFanRequests = requests.filter((request) => request.endpoint === '/v1/analysis/ray-fan')
   expect(rayFanRequests).toHaveLength(2)
   for (const request of rayFanRequests) {

@@ -50,6 +50,53 @@ def phase6_trace(sensor_x=95.0):
     )
 
 
+def p002_singlet_system():
+    return load_system(
+        {
+            "name": "P002 N-BK7 Biconvex Singlet",
+            "wavelengths_nm": {"primary": 587.56, "samples": [587.56]},
+            "materials": [
+                {"id": "AIR", "type": "constant", "n": 1.0},
+                {
+                    "id": "N-BK7",
+                    "type": "sellmeier",
+                    "B": [1.03961212, 0.231792344, 1.01046945],
+                    "C": [0.00600069867, 0.0200179144, 103.560653],
+                },
+            ],
+            "surfaces": [
+                {
+                    "id": "STOP",
+                    "kind": "aperture_stop",
+                    "surface_type": "plane",
+                    "thickness_after_mm": 2.0,
+                    "semi_diameter_mm": 8.0,
+                    "aperture": {"shape": "circle", "semi_diameter_mm": 8.0},
+                },
+                {
+                    "id": "S1",
+                    "kind": "refractive",
+                    "surface_type": "spherical",
+                    "radius_mm": 50.0,
+                    "thickness_after_mm": 5.0,
+                    "material_after": "N-BK7",
+                    "semi_diameter_mm": 9.5,
+                },
+                {
+                    "id": "S2",
+                    "kind": "refractive",
+                    "surface_type": "spherical",
+                    "radius_mm": -50.0,
+                    "thickness_after_mm": 46.5,
+                    "material_after": "AIR",
+                    "semi_diameter_mm": 9.75,
+                },
+                {"id": "IMG", "kind": "sensor", "surface_type": "plane", "sensor": {"width_mm": 36.0, "height_mm": 24.0}},
+            ],
+        }
+    )
+
+
 def test_geometric_psf_is_normalized_and_encircled_energy_is_monotonic():
     _, trace = phase6_trace()
     psf = analyze_geometric_psf(trace, grid_size=16)
@@ -84,6 +131,67 @@ def test_relative_illumination_matches_cos4_for_unvignetted_thin_lens():
     expected = math.cos(math.radians(10.0)) ** 4
     assert result.rows[1].relative_illumination == pytest.approx(expected, rel=1e-6)
     assert result.metadata["method"] == "ray_throughput_times_cos4"
+
+
+def test_relative_illumination_default_sampling_is_accurate_for_partial_vignetting():
+    compiled = compile_system(p002_singlet_system())
+    fields = [
+        {"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0},
+        {"id": "partial", "type": "angular", "theta_y_deg": 40.0, "theta_z_deg": 0.0},
+    ]
+    sampling_9 = {"samples_per_field": 9, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}}
+    sampling_1000 = {**sampling_9, "samples_per_field": 1000}
+    sampling_10000 = {**sampling_9, "samples_per_field": 10000}
+
+    coarse = analyze_relative_illumination(compiled, fields, sampling_9, [587.56])
+    default = analyze_relative_illumination(compiled, fields, None, [587.56])
+    explicit_default = analyze_relative_illumination(compiled, fields, sampling_1000, [587.56])
+    reference = analyze_relative_illumination(compiled, fields, sampling_10000, [587.56])
+
+    coarse_value = coarse.rows[1].relative_illumination
+    default_value = default.rows[1].relative_illumination
+    reference_value = reference.rows[1].relative_illumination
+    assert default_value == explicit_default.rows[1].relative_illumination
+    assert abs(default_value - reference_value) < abs(coarse_value - reference_value)
+    assert abs(default_value / reference_value - 1.0) < 0.01
+    assert abs(coarse_value / reference_value - 1.0) > 0.1
+    assert default.metadata == {
+        "method": "ray_throughput_times_cos4",
+        "radiometric_basis": "weighted_pupil_plane",
+        "weighting_method": "equal_pupil_samples_times_field_cos4",
+        "samples_per_field": 1000,
+        "pupil_distribution": "grid",
+        "ray_aiming_mode": "paraxial",
+        "ray_aiming_strategy": "paraxial",
+        "wavelength_count": 1,
+    }
+
+
+def test_relative_illumination_api_uses_default_sampling_and_reports_metadata():
+    from fastapi.testclient import TestClient
+
+    from optics_engine.api.main import app
+
+    client = TestClient(app)
+    system_id = client.post("/v1/systems/register", json=p002_singlet_system().model_dump(mode="json")).json()["system_id"]
+    response = client.post(
+        "/v1/analysis/relative-illumination",
+        json={
+            "system_id": system_id,
+            "fields": [
+                {"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0},
+                {"id": "partial", "type": "angular", "theta_y_deg": 40.0, "theta_z_deg": 0.0},
+            ],
+            "wavelengths_nm": [587.56],
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["metadata"]["samples_per_field"] == 1000
+    assert payload["metadata"]["pupil_distribution"] == "grid"
+    assert payload["metadata"]["ray_aiming_mode"] == "paraxial"
+    assert payload["metadata"]["weighting_method"] == "equal_pupil_samples_times_field_cos4"
+    assert payload["rows"][1]["relative_illumination"] == pytest.approx(0.3099262601)
 
 
 def test_white_psf_and_white_mtf_normalize_wavelength_weights():
