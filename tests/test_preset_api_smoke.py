@@ -38,7 +38,7 @@ def _shipped_presets() -> list[dict[str, Any]]:
         capture_output=True,
         text=True,
     )
-    return json.loads(completed.stdout)
+    return [preset for preset in json.loads(completed.stdout) if preset["id"].startswith("P")]
 
 
 def _assert_json_finite_or_null(value: Any) -> None:

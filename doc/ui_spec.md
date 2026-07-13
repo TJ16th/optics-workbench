@@ -1,6 +1,10 @@
-# Optics Workbench UI 要求仕様・技術仕様書 v0.3
+# Optics Workbench UI 要求仕様・技術仕様書 v0.4
 
 ## 改訂履歴
+
+### v0.4
+
+エンジンv2.4の視覚評価コンポジットに対応した。`visual_evaluation.mode: instrument_and_retinal`の系では、Analysisタブに装置側`instrument`と網膜側`retinal`のセグメント切替を表示し、角度spot/PSF/MTF・射出瞳・アイレリーフと、網膜spot/PSF/MTFを単位系を混在させず表示する。初期UIプリセット`V001`は簡約Gullstrand眼、587.56 nm単色、4 mm固定瞳、無調節、平面網膜に限定する。
 
 ### v0.3
 
@@ -493,6 +497,13 @@ UI側でrequest/response型を手書きしない。
 - 実行ボタン
 - 結果プロット
 - metadata表示
+
+`visual_evaluation.mode: instrument_and_retinal`の系では、通常の写真レンズ解析実行に代えて模型眼評価を実行する。結果領域にはCarbon ContentSwitcherによる`instrument` / `retinal`切替を置く。
+
+- `instrument`: 角度spot RMS（arcmin）、射出瞳径（mm）、アイレリーフ（mm）、角度PSF、角度MTF（cycles/degree）
+- `retinal`: 網膜spot RMS（µm）、網膜重心（mm）、位置PSF、MTF（lp/mm）
+
+識別子`instrument` / `retinal`はAPI schema上では翻訳せず、表示ラベルのみi18nリソースから解決する。未実装の模型眼・曲面網膜・調節状態をUIで選択可能にしてはならない。
 
 ## 8.6 Compareタブ
 

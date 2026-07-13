@@ -72,6 +72,10 @@
         "P012": {
           "name": "Tessar-Type 50mm F2.8 Demo",
           "summary": "Four-element, three-group Tessar topology with a cemented BK7/F2 rear doublet."
+        },
+        "V001": {
+          "name": "Simplified Gullstrand Eye Composite",
+          "summary": "Visual evaluation system connecting an afocal telescope to a relaxed simplified Gullstrand eye and planar retina."
         }
       }
     },

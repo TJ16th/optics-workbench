@@ -47,6 +47,18 @@
     "focus_curve": "Focus Curve",
     "focus_curve_empty": "Focus curveはまだありません。",
     "write_back_sensor": "センサーへ書き戻し",
-    "write_back_confirm": "解決したフォーカス位置をセンサー位置へ書き戻しますか？"
+    "write_back_confirm": "解決したフォーカス位置をセンサー位置へ書き戻しますか？",
+    "run_visual_composite": "模型眼評価を実行",
+    "visual_composite_title": "視覚評価コンポジット",
+    "instrument_mode": "装置側",
+    "retinal_mode": "網膜側",
+    "visual_composite_empty": "模型眼評価を実行すると結果が表示されます。",
+    "angular_spot_rms": "角度spot RMS",
+    "exit_pupil_diameter": "射出瞳径",
+    "eye_relief": "アイレリーフ",
+    "retinal_spot_rms": "網膜spot RMS",
+    "retinal_centroid_y": "網膜重心Y",
+    "psf_samples": "PSF到達光線",
+    "mtf_samples": "MTFサンプル"
   }
 }

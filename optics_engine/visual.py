@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 
 from .analysis import SpotResult, analyze_spot
+from .psf_mtf import GeometricMTFResult, GeometricPSFResult, analyze_geometric_mtf, analyze_geometric_psf
 from .system import CompiledSystem
 from .tracing import TraceResult, trace_forward
 
@@ -70,7 +71,10 @@ class TelescopeResult:
 class VisualCompositeResult:
     instrument: AfocalEvaluationResult
     exit_pupil: ExitPupilResult
+    angular_mtf: AngularMTFResult
     retinal: SpotResult
+    retinal_psf: GeometricPSFResult
+    retinal_mtf: GeometricMTFResult
 
 
 def _instrument_surfaces(compiled: CompiledSystem):
@@ -178,6 +182,8 @@ def analyze_visual_composite(
     field: dict[str, Any] | None = None,
     sampling: dict[str, Any] | None = None,
     configuration: dict[str, Any] | None = None,
+    frequencies_cycles_per_degree: list[float] | None = None,
+    frequencies_lp_per_mm: list[float] | None = None,
 ) -> VisualCompositeResult:
     if compiled.system.visual_evaluation is None or compiled.system.visual_evaluation.mode != "instrument_and_retinal":
         raise ValueError("visual composite analysis requires visual_evaluation.mode=instrument_and_retinal")
@@ -192,7 +198,10 @@ def analyze_visual_composite(
     return VisualCompositeResult(
         instrument=afocal_from_trace(trace, str(field.get("id", "field"))),
         exit_pupil=analyze_exit_pupil(compiled),
+        angular_mtf=analyze_angular_mtf(trace, frequencies_cycles_per_degree or [0.0, 10.0, 20.0]),
         retinal=analyze_spot(trace),
+        retinal_psf=analyze_geometric_psf(trace),
+        retinal_mtf=analyze_geometric_mtf(trace, frequencies_lp_per_mm or [0.0, 10.0, 20.0, 40.0]),
     )
 
 

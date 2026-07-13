@@ -25,6 +25,7 @@ from .. import (
     analyze_exit_pupil,
     analyze_eye_box,
     analyze_telescope,
+    analyze_visual_composite,
     analyze_white_mtf,
     analyze_white_psf,
     compile_system,
@@ -580,6 +581,21 @@ def visual_instrument(payload: dict):
             (payload.get("fields") or [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}])[0],
             payload.get("ray_sampling"),
             payload.get("configuration"),
+        )
+    )
+
+
+@app.post("/v1/analysis/visual-composite")
+def visual_composite(payload: dict):
+    compiled = _compiled_from_payload(payload)
+    return _jsonable(
+        analyze_visual_composite(
+            compiled,
+            (payload.get("fields") or [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}])[0],
+            payload.get("ray_sampling"),
+            payload.get("configuration"),
+            payload.get("frequencies_cycles_per_degree"),
+            payload.get("frequencies_lp_per_mm"),
         )
     )
 

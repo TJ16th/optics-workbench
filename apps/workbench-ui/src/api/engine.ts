@@ -10,6 +10,7 @@ import type {
   RuntimeConfiguration,
   TraceResponse,
   ValidationResult,
+  VisualCompositeResponse,
   WavelengthSample,
 } from '../domain/types'
 
@@ -167,4 +168,8 @@ export async function runChartAnalyses(apiBase: string, request: AnalysisRequest
 
 export async function runBestFocus(apiBase: string, request: AnalysisRequest): Promise<BestFocusResponse> {
   return postAnalysis<BestFocusResponse>(apiBase, '/v1/solve/best-focus', request)
+}
+
+export async function runVisualComposite(apiBase: string, request: AnalysisRequest): Promise<VisualCompositeResponse> {
+  return postAnalysis<VisualCompositeResponse>(apiBase, '/v1/analysis/visual-composite', request)
 }

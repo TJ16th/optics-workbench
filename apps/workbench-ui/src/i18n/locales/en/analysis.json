@@ -47,6 +47,18 @@
     "focus_curve": "Focus Curve",
     "focus_curve_empty": "No focus curve yet.",
     "write_back_sensor": "Write back sensor",
-    "write_back_confirm": "Write solved focus back to the sensor position?"
+    "write_back_confirm": "Write solved focus back to the sensor position?",
+    "run_visual_composite": "Run eye evaluation",
+    "visual_composite_title": "Visual Evaluation Composite",
+    "instrument_mode": "Instrument",
+    "retinal_mode": "Retinal",
+    "visual_composite_empty": "Run the eye evaluation to show results.",
+    "angular_spot_rms": "Angular spot RMS",
+    "exit_pupil_diameter": "Exit pupil diameter",
+    "eye_relief": "Eye relief",
+    "retinal_spot_rms": "Retinal spot RMS",
+    "retinal_centroid_y": "Retinal centroid Y",
+    "psf_samples": "PSF arrived rays",
+    "mtf_samples": "MTF samples"
   }
 }

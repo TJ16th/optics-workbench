@@ -49,6 +49,13 @@ export type OpticalSystem = {
   units?: 'mm'
   optical_axis?: '+X'
   system_type?: 'focal' | 'afocal'
+  visual_evaluation?: {
+    mode: 'instrument_only' | 'instrument_and_retinal'
+    eye_model?: 'gullstrand_simplified_relaxed'
+    wavelength_nm?: number
+    accommodation_diopter?: number
+    retina_surface?: 'plane'
+  }
   wavelengths_nm?: {
     primary: number
     samples: number[]
@@ -301,4 +308,31 @@ export type ChartAnalysisResult = {
   fieldCurvature?: { rows: FieldCurvatureRow[]; artifacts?: ArtifactMap }
   relativeIllumination?: { rows: RelativeIlluminationRow[]; metadata?: Record<string, unknown>; artifacts?: ArtifactMap }
   mtf?: { points: MtfPoint[]; diffraction_included?: boolean; metadata?: Record<string, unknown>; artifacts?: ArtifactMap }
+}
+
+export type VisualCompositeResponse = {
+  instrument: {
+    field_id: string
+    arrived_count: number
+    centroid_theta_y_deg: number | null
+    centroid_theta_z_deg: number | null
+    angular_rms_deg: number | null
+    residual_divergence_diopter: number | null
+  }
+  exit_pupil: {
+    angular_magnification: number | null
+    exit_pupil_diameter_mm: number | null
+    eye_relief_mm: number | null
+  }
+  angular_mtf: { points: Array<{ frequency_cycles_per_degree: number; mtf: number }> }
+  retinal: {
+    arrived_count: number
+    blocked_count: number
+    failed_count: number
+    centroid_y_mm: number | null
+    centroid_z_mm: number | null
+    rms_radius_mm: number | null
+  }
+  retinal_psf: { total_energy: number; centroid_y_mm: number | null; centroid_z_mm: number | null; grid: number[][] }
+  retinal_mtf: { points: MtfPoint[] }
 }

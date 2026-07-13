@@ -1,4 +1,5 @@
 import pytest
+from fastapi.testclient import TestClient
 
 from optics_engine import (
     analyze_exit_pupil,
@@ -80,6 +81,9 @@ def test_visual_composite_returns_separate_instrument_and_retinal_results():
     assert result.retinal.arrived_count > 0
     assert result.retinal.rms_radius_mm is not None
     assert result.exit_pupil.angular_magnification == pytest.approx(-5.0)
+    assert result.angular_mtf.points[0].mtf == pytest.approx(1.0)
+    assert result.retinal_psf.total_energy == pytest.approx(result.retinal.arrived_count)
+    assert result.retinal_mtf.points[0].mtf_radial == pytest.approx(1.0)
 
 
 def test_visual_composite_requires_retina_and_fixed_offset_value():
@@ -93,3 +97,24 @@ def test_visual_composite_requires_retina_and_fixed_offset_value():
     result = validate_system(load_system(payload))
     assert not result.ok
     assert "missing_terminal_retina_sensor" in {issue.code for issue in result.issues}
+
+
+def test_visual_composite_api_and_meta_capabilities():
+    from optics_engine.api.main import app
+
+    client = TestClient(app)
+    meta = client.get("/v1/meta").json()
+    assert meta["api_schema_version"] == "2.4.0"
+    assert "instrument_and_retinal" in meta["capabilities"]["visual_evaluation_modes"]
+    response = client.post(
+        "/v1/analysis/visual-composite",
+        json={
+            **visual_composite_system().model_dump(mode="json"),
+            "fields": [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}],
+            "ray_sampling": {"samples_per_field": 9, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}},
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload) == {"instrument", "exit_pupil", "angular_mtf", "retinal", "retinal_psf", "retinal_mtf"}
+    assert payload["retinal"]["arrived_count"] > 0

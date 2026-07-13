@@ -183,8 +183,8 @@ def path_segment_slopes_y(path):
 def test_health_and_meta_payloads_advertise_v2_3_capabilities_and_enumerations():
     assert health_payload() == {"status": "ok"}
     meta = meta_payload()
-    assert meta["api_schema_version"] == "2.3.0"
-    assert meta["result_schema_version"] == "2.3.0"
+    assert meta["api_schema_version"] == "2.4.0"
+    assert meta["result_schema_version"] == "2.4.0"
     assert "best_focus_rms" in meta["capabilities"]["image_plane_policy_modes"]
     assert meta["capabilities"]["artifact_store"] is True
     assert meta["capabilities"]["artifacts"]["enabled"] is True
@@ -657,7 +657,7 @@ def test_api_helpers_support_system_id_and_artifact_endpoint():
     paraxial = api.paraxial({"system_id": registered["system_id"]})
     assert paraxial["paraxial_image_position_mm"] == pytest.approx(100.0)
     assert api.health() == {"status": "ok"}
-    assert api.meta()["api_schema_version"] == "2.3.0"
+    assert api.meta()["api_schema_version"] == "2.4.0"
 
     ARTIFACT_STORE.put("json", b"{\"from_api\":true}", content_type="application/json", id="api-unit-test")
     response = api.artifact("json", "api-unit-test")
@@ -673,7 +673,7 @@ def test_http_api_v2_1_smoke_with_artifact_fetch():
     client = TestClient(app)
     assert client.get("/v1/health").json() == {"status": "ok"}
     meta = client.get("/v1/meta").json()
-    assert meta["api_schema_version"] == "2.3.0"
+    assert meta["api_schema_version"] == "2.4.0"
     assert "enumerations" in meta
 
     system_payload = thin_lens_system(focal_length=100.0, sensor_x=95.0).model_dump(mode="json")

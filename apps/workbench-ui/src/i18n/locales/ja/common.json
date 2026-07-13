@@ -72,6 +72,10 @@
         "P012": {
           "name": "Tessar型 50mm F2.8 デモ",
           "summary": "後群にBK7/F2接合ダブレットを持つ4枚3群Tessar型レンズ。"
+        },
+        "V001": {
+          "name": "簡約Gullstrand模型眼コンポジット",
+          "summary": "afocal望遠鏡を無調節の簡約Gullstrand眼と平面網膜へ接続した視覚評価系。"
         }
       }
     },

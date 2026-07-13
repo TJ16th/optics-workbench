@@ -23,7 +23,7 @@ import {
 import { Add, Checkmark, Download, Play, Renew, Save, TrashCan } from '@carbon/icons-react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
+import { defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, runVisualComposite, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
 import { presets, visualFixturePresets } from '../domain/presets'
 import type {
   AnalysisField,
@@ -48,6 +48,7 @@ import type {
   Surface,
   TraceResponse,
   ValidationResult,
+  VisualCompositeResponse,
   WavelengthSample,
 } from '../domain/types'
 import { changeLanguage } from '../i18n'
@@ -953,7 +954,7 @@ function LayoutView({
   let previousLabelX = Number.NEGATIVE_INFINITY
   let labelRow = 0
   surfaceViews.forEach((view) => {
-    labelRow = view.sx - previousLabelX < 18 ? labelRow + 1 : 0
+    labelRow = view.sx - previousLabelX < 72 ? labelRow + 1 : 0
     labelRows.set(view.surface.id, labelRow)
     previousLabelX = view.sx
   })
@@ -2547,6 +2548,8 @@ export function App() {
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [trace, setTrace] = useState<TraceResponse | undefined>()
   const [chartResult, setChartResult] = useState<ChartAnalysisResult | undefined>()
+  const [visualResult, setVisualResult] = useState<VisualCompositeResponse | undefined>()
+  const [visualResultMode, setVisualResultMode] = useState<'instrument' | 'retinal'>('instrument')
   const [evaluationPlane, setEvaluationPlane] = useState<EvaluationPlaneMetadata | undefined>()
   const [focusCurve, setFocusCurve] = useState<FocusCurvePoint[]>([])
   const [focusResult, setFocusResult] = useState<BestFocusResponse | undefined>()
@@ -2646,6 +2649,7 @@ export function App() {
     setValidation(null)
     setTrace(undefined)
     setChartResult(undefined)
+    setVisualResult(undefined)
     setEvaluationPlane(undefined)
     setFocusCurve([])
     setFocusResult(undefined)
@@ -2910,6 +2914,24 @@ export function App() {
     },
   })
 
+  const visualMutation = useMutation({
+    mutationFn: async () => {
+      const id = await ensureRegisteredSystem()
+      const request = makeAnalysisRequest(id)
+      setLastRequest(request)
+      return runVisualComposite(apiBase, request)
+    },
+    onSuccess: (result) => {
+      setVisualResult(result)
+      setLastResponse(result)
+      setAnalysisDirty(false)
+      setActiveTab('analysis')
+    },
+    onError: (error) => {
+      setLastResponse(getApiIssue(error))
+    },
+  })
+
   const focusMutation = useMutation({
     mutationFn: async () => {
       const id = await ensureRegisteredSystem()
@@ -2930,7 +2952,7 @@ export function App() {
     },
   })
 
-  const running = validateMutation.isPending || registerMutation.isPending || previewMutation.isPending || chartsMutation.isPending || focusMutation.isPending
+  const running = validateMutation.isPending || registerMutation.isPending || previewMutation.isPending || chartsMutation.isPending || visualMutation.isPending || focusMutation.isPending
   const engineOnline = health.data?.status === 'ok'
   const apiMajor = meta.data?.api_schema_version?.split('.')[0]
   const versionBlocked = Boolean(apiMajor && apiMajor !== '2')
@@ -3162,14 +3184,47 @@ export function App() {
                     <h2>{t('analysis:analysis.analysis_charts_title')}</h2>
                     <p className="muted">{t('analysis:analysis.analysis_charts_summary')}</p>
                   </div>
-                  <Button size="sm" renderIcon={Play} disabled={!engineOnline || running || versionBlocked} onClick={() => chartsMutation.mutate()}>
-                    {t('analysis:analysis.run_charts')}
-                  </Button>
+                  {system.visual_evaluation?.mode === 'instrument_and_retinal' ? (
+                    <Button size="sm" renderIcon={Play} disabled={!engineOnline || running || versionBlocked} onClick={() => visualMutation.mutate()}>
+                      {t('analysis:analysis.run_visual_composite')}
+                    </Button>
+                  ) : (
+                    <Button size="sm" renderIcon={Play} disabled={!engineOnline || running || versionBlocked} onClick={() => chartsMutation.mutate()}>
+                      {t('analysis:analysis.run_charts')}
+                    </Button>
+                  )}
                   <Button size="sm" kind="secondary" renderIcon={Save} disabled={!trace && !chartResult && !focusResult} onClick={() => void saveSnapshot()}>
                     {t('common.buttons.save_snapshot')}
                   </Button>
                 </div>
               </div>
+              {system.visual_evaluation?.mode === 'instrument_and_retinal' ? (
+                <section className="panel large-panel" data-testid="visual-composite-results">
+                  <div className="panel-heading">
+                    <h2>{t('analysis:analysis.visual_composite_title')}</h2>
+                    <ContentSwitcher selectedIndex={visualResultMode === 'instrument' ? 0 : 1} onChange={({ name }) => setVisualResultMode(name as 'instrument' | 'retinal')}>
+                      <Switch name="instrument" text={t('analysis:analysis.instrument_mode')} />
+                      <Switch name="retinal" text={t('analysis:analysis.retinal_mode')} />
+                    </ContentSwitcher>
+                  </div>
+                  {!visualResult ? <p className="muted">{t('analysis:analysis.visual_composite_empty')}</p> : visualResultMode === 'instrument' ? (
+                    <div className="metric-grid">
+                      <div className="metric-row"><span>{t('analysis:analysis.angular_spot_rms')}</span><strong>{formatFixed((visualResult.instrument.angular_rms_deg ?? 0) * 60, 4)} arcmin</strong></div>
+                      <div className="metric-row"><span>{t('analysis:analysis.exit_pupil_diameter')}</span><strong>{formatFixed(visualResult.exit_pupil.exit_pupil_diameter_mm ?? 0, 4)} mm</strong></div>
+                      <div className="metric-row"><span>{t('analysis:analysis.eye_relief')}</span><strong>{formatFixed(visualResult.exit_pupil.eye_relief_mm ?? 0, 4)} mm</strong></div>
+                      <div className="metric-row"><span>{t('analysis:analysis.psf_samples')}</span><strong>{formatInteger(visualResult.instrument.arrived_count)}</strong></div>
+                      <div className="metric-row"><span>{t('analysis:analysis.mtf_samples')}</span><strong>{formatInteger(visualResult.angular_mtf.points.length)} cycles/degree</strong></div>
+                    </div>
+                  ) : (
+                    <div className="metric-grid">
+                      <div className="metric-row"><span>{t('analysis:analysis.retinal_spot_rms')}</span><strong>{formatFixed((visualResult.retinal.rms_radius_mm ?? 0) * 1000, 4)} µm</strong></div>
+                      <div className="metric-row"><span>{t('analysis:analysis.retinal_centroid_y')}</span><strong>{formatFixed(visualResult.retinal.centroid_y_mm ?? 0, 6)} mm</strong></div>
+                      <div className="metric-row"><span>{t('analysis:analysis.psf_samples')}</span><strong>{formatInteger(visualResult.retinal_psf.total_energy)}</strong></div>
+                      <div className="metric-row"><span>{t('analysis:analysis.mtf_samples')}</span><strong>{formatInteger(visualResult.retinal_mtf.points.length)} lp/mm</strong></div>
+                    </div>
+                  )}
+                </section>
+              ) : null}
               <EvaluationPlanePanel
                 evaluationPlane={evaluationPlane}
                 focusCurve={focusCurve}

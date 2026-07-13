@@ -12,8 +12,8 @@ async function mockEngine(
     await route.fulfill({
       json: {
         engine_version: 'test',
-        api_schema_version: '2.3.0',
-        result_schema_version: '2.3.0',
+        api_schema_version: '2.4.0',
+        result_schema_version: '2.4.0',
         material_catalog_version: 'test',
         preset_version: 'test',
         build_info: { git_commit: 'test-build', git_dirty: false, started_at: '2026-07-10T00:00:00+00:00' },
@@ -270,6 +270,18 @@ async function mockEngine(
       },
     })
   })
+  await page.route('http://127.0.0.1:8000/v1/analysis/visual-composite', async (route) => {
+    await route.fulfill({
+      json: {
+        instrument: { field_id: 'center', arrived_count: 5, centroid_theta_y_deg: 0, centroid_theta_z_deg: 0, angular_rms_deg: 0.001, residual_divergence_diopter: 0.01 },
+        exit_pupil: { angular_magnification: -5, exit_pupil_diameter_mm: 10, eye_relief_mm: 24 },
+        angular_mtf: { points: [{ frequency_cycles_per_degree: 0, mtf: 1 }, { frequency_cycles_per_degree: 10, mtf: 0.9 }] },
+        retinal: { arrived_count: 5, blocked_count: 4, failed_count: 0, centroid_y_mm: -0.14743, centroid_z_mm: 0, rms_radius_mm: 0.022812 },
+        retinal_psf: { total_energy: 5, centroid_y_mm: -0.14743, centroid_z_mm: 0, grid: [[1]] },
+        retinal_mtf: { points: [{ frequency_lp_per_mm: 0, mtf_y: 1, mtf_z: 1, mtf_radial: 1 }] },
+      },
+    })
+  })
 }
 
 async function expectLayoutRayPath(page: import('@playwright/test').Page, pointCount: number) {
@@ -302,6 +314,20 @@ async function selectPresetOption(page: import('@playwright/test').Page, label: 
   await page.getByRole('option', { name: new RegExp(label) }).click()
   await expect(page.getByRole('combobox', { name: 'Preset', exact: true })).toContainText(label)
 }
+
+test('visual composite switches between instrument and retinal results', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await selectPresetOption(page, 'V001 Simplified Gullstrand Eye Composite')
+  await page.getByRole('tab', { name: 'Analysis', exact: true }).click()
+  await page.getByRole('button', { name: 'Run eye evaluation' }).click()
+  const results = page.getByTestId('visual-composite-results')
+  await expect(results.getByText('Angular spot RMS')).toBeVisible()
+  await expect(results.getByText('24.0000 mm')).toBeVisible()
+  await results.getByRole('tab', { name: 'Retinal' }).click()
+  await expect(results.getByText('Retinal spot RMS')).toBeVisible()
+  await expect(results.getByText('22.8120 µm')).toBeVisible()
+})
 
 async function layoutSurfaceBoxes(page: import('@playwright/test').Page) {
   return page.locator('#layout-svg [data-surface-id]').evaluateAll((nodes) =>

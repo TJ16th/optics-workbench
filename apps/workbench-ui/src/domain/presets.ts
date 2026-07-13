@@ -455,7 +455,48 @@ export const presets: Preset[] = [
         ],
       },
     },
-  ]
+  {
+    id: 'V001',
+    name: 'Gullstrand Visual Composite Demo',
+    summary: 'Afocal telescope connected to a relaxed simplified Gullstrand eye with a planar retina.',
+    recommendedAnalysis: ['visual_composite', 'preview'],
+    recommendedFields: [
+      { id: 'center', type: 'angular', theta_y_deg: 0, theta_z_deg: 0 },
+      { id: 'near-y', type: 'angular', theta_y_deg: 0.1, theta_z_deg: 0 },
+    ],
+    system: {
+      name: 'V001 Gullstrand Visual Composite',
+      units: 'mm',
+      optical_axis: '+X',
+      system_type: 'afocal',
+      visual_evaluation: {
+        mode: 'instrument_and_retinal',
+        eye_model: 'gullstrand_simplified_relaxed',
+        wavelength_nm: 587.56,
+        accommodation_diopter: 0,
+        retina_surface: 'plane',
+      },
+      wavelengths_nm: { primary: 587.56, samples: [587.56] },
+      materials: [
+        { id: 'AIR', type: 'constant', n: 1 },
+        { id: 'CORNEA', type: 'constant', n: 1.376 },
+        { id: 'AQUEOUS_VITREOUS', type: 'constant', n: 1.336 },
+        { id: 'LENS_EQ', type: 'constant', n: 1.4085 },
+      ],
+      surfaces: [
+        { id: 'STOP', kind: 'aperture_stop', surface_type: 'plane', semi_diameter_mm: 25, aperture: { shape: 'circle', semi_diameter_mm: 25 } },
+        { id: 'OBJ', kind: 'thin_lens', surface_type: 'plane', focal_length_mm: 100, thickness_after_mm: 120, semi_diameter_mm: 25 },
+        { id: 'EYEPIECE', kind: 'thin_lens', surface_type: 'plane', focal_length_mm: 20, thickness_after_mm: 20, semi_diameter_mm: 10 },
+        { id: 'EYE', kind: 'eye_reference', surface_type: 'plane', eye: { pupil_diameter_mm: 4, position_mode: 'at_exit_pupil' } },
+        { id: 'CORNEA_FRONT', kind: 'refractive', radius_mm: 7.7, thickness_after_mm: 0.5, material_after: 'CORNEA', semi_diameter_mm: 6 },
+        { id: 'CORNEA_BACK', kind: 'refractive', radius_mm: 6.8, thickness_after_mm: 3.1, material_after: 'AQUEOUS_VITREOUS', semi_diameter_mm: 6 },
+        { id: 'LENS_FRONT', kind: 'refractive', radius_mm: 10, thickness_after_mm: 3.6, material_after: 'LENS_EQ', semi_diameter_mm: 5 },
+        { id: 'LENS_BACK', kind: 'refractive', radius_mm: -6, thickness_after_mm: 17.187, material_after: 'AQUEOUS_VITREOUS', semi_diameter_mm: 5 },
+        { id: 'RETINA', kind: 'sensor', surface_type: 'plane', sensor: { width_mm: 24, height_mm: 24 } },
+      ],
+    },
+  },
+]
 
 export const visualFixturePresets: Preset[] = [
   {

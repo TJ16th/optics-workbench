@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 
 ENGINE_VERSION = "0.1.0"
-API_SCHEMA_VERSION = "2.3.0"
-RESULT_SCHEMA_VERSION = "2.3.0"
+API_SCHEMA_VERSION = "2.4.0"
+RESULT_SCHEMA_VERSION = "2.4.0"
 MATERIAL_CATALOG_VERSION = "0.1.0"
 PRESET_VERSION = "0.1.0"
 
@@ -170,6 +170,9 @@ def meta_payload() -> dict[str, Any]:
             "image_plane_policy_modes": IMAGE_PLANE_POLICY_MODES,
             "image_plane_policy_apply_to": ["evaluation_plane", "focus_group", "report_only"],
             "system_types": ["focal", "afocal"],
+            "visual_evaluation_modes": ["instrument_only", "instrument_and_retinal"],
+            "schematic_eye_models": ["gullstrand_simplified_relaxed"],
+            "retina_surface_types": ["plane"],
         },
         "build": {
             "python_version": platform.python_version(),
