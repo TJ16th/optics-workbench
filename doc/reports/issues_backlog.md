@@ -762,3 +762,53 @@ P002の40 deg fieldでは、100000 rays時のthroughput `0.89541`に対し、9 r
 - 放射量サンプリングとcos⁴の扱いが`doc/engine_spec.md` 16.5・21.4節と一致する。
 - response metadataだけで計算の再現条件を取得できる。
 - 同一seed入力はビット同一となり、sampling精度と実行時間の回帰テストがある。
+
+## Issue: 周辺光量とRMS像面探索に適応的収束サンプリングを導入する
+
+ラベル案: `engine`, `performance`, `testing`
+
+### 背景
+
+R74作業2では、周辺光量の誤差がサンプル数に強く依存し、P002 40 degで9 raysが100000 rays基準を`11.68%`過大評価した。現行gridはNごとに点集合を再構成するため誤差が単調減少せず、固定Nだけでは収束済みか判定できない。R74作業1で確認したRMS像面探索も、本来は偏芯・チルト系でサンプリング依存となる。
+
+このIssueは、先行する「周辺光量に解析専用サンプリングと正確な放射量metadataを導入する」と「同軸系の像面湾曲・M/S像面にCoddington方式を実装しmethodを正す」の後段に位置付ける。
+
+### 対応案
+
+- sample indexを継続できるnested・seed付きサンプラを導入し、前段の光線を捨てずにbatchを追加する。
+- 周辺光量では、重み付きfluxと中心field比の標準誤差/信頼区間を計算し、相対・絶対許容誤差を満たすまでNを増やす。
+- 統計仮定を置かない補助条件として、N→2Nの推定値差が閾値以下になることを2段階連続で要求する。
+- 偏芯・チルト系のRMS像面探索では同一ray列を再利用し、M/S焦点位置とRMS幅の両方が連続2段階で安定したとき収束とする。
+- `initial_samples`、`max_samples`、`relative_tolerance`、`absolute_tolerance`、`confidence`、`seed`、`time_budget_ms`をAPIで指定可能にする。
+- response metadataへ`samples_used`、`levels`、`estimated_error`、`confidence_interval`、`converged`、`stop_reason`、`elapsed_ms`を返す。
+- `max_samples`または`time_budget`で未収束終了した場合は、構造化warning `sampling_not_converged`を返し、`/v1/meta` enumerationsへ追加する。
+
+### 受け入れ条件
+
+- 同一seed・同一入力でサンプル列と最終レスポンスがビット同一になる。
+- 追加batchが既存sampleを再計算せず、固定高密度計算より少ない光線数で規定誤差を満たす代表ケースがある。
+- P002 40 deg等のpartial vignettingで、返却した信頼区間または逐次差分が高密度参照誤差を過小評価しない。
+- 収束、最大sample、時間切れの各停止経路が直接テストされる。
+- Run ChartsのP007/P009 E2Eが30秒以内を維持し、未収束時も値とwarningを表示できる。
+- 同軸系のCoddington計算には不要なadaptive RMS samplingを適用しない。
+
+## Issue: ArtifactStoreの短TTLテストを時刻ジッタに強くする
+
+ラベル案: `testing`
+
+### 背景
+
+R74完了監査の`python -m pytest -q`で、`tests/test_engine_v2_3.py::test_artifact_http_lifecycle_content_types_and_expiry`が生成直後のartifact取得に404を返し、1回失敗した。このテストは`ttl_seconds=0.02`（20 ms）を使用するため、artifactを3件生成してTestClientから取得するまでにTTLを超えると、expiry確認前の正常取得まで失敗する。対象テストだけを別processで5回反復すると5/5 passであり、時刻・負荷依存のflakyと判断する。R74の変更は文書のみで、この失敗経路とは無関係である。
+
+### 対応案
+
+- ArtifactStoreへ注入可能なclockを設け、正常取得とexpiryを実時間sleepに依存せず検証する。
+- clock注入を避ける場合は、正常取得用storeと短TTL expiry用storeを分離し、正常取得側には十分長いTTLを使う。
+- full suite負荷下で再現する反復テストを追加し、20 ms未満のscheduler/IOジッタへ依存しない構成にする。
+
+### 受け入れ条件
+
+- artifact生成直後のJSON/PNG/NPY取得が負荷や実行順に依存せず200となる。
+- expiry後の404をfake clockまたは十分な時間差で決定論的に検証できる。
+- 対象テストを100回反復してflaky failureが発生しない。
+- ArtifactStore本体のTTL semanticsとAPI content-type検証を維持する。
