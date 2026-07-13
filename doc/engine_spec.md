@@ -1,6 +1,15 @@
-# 光学シミュレーションエンジン 要求仕様・技術仕様書（v2.3）
+# 光学シミュレーションエンジン 要求仕様・技術仕様書（v2.4）
 
 ## 改訂履歴
+
+### v2.4における主な改訂点（視覚評価コンポジット）
+
+アフォーカル装置の射出光を簡約模型眼へ接続し、従来の装置側角度評価と網膜側位置評価を同一traceから分離して取得するための仕様を追加した。
+
+1. **視覚評価コンポジットを新設**（9.3節・24.9節）。`system_type: afocal`を維持したまま、`visual_evaluation.mode: instrument_and_retinal`により`eye_reference`を装置区間と模型眼区間の境界として扱う。
+2. **結果schemaを`instrument`と`retinal`へ分離**（24.9節）。装置側は角度・cycles/degree、網膜側は長さ・lp/mmを使用し、模型眼面を射出瞳・アイレリーフ・角倍率へ混入させない。
+3. **初期模型眼と制限を固定**（24.9節）。簡約Gullstrand模型眼、587.56 nm単色、4 mm固定瞳、無調節、平面網膜を初期capabilityとする。
+4. **`position_mode: at_exit_pupil`の実配置を必須化**（6.7節・9.3節）。宣言だけでなく、コンパイル済み面位置へ計算済み射出瞳位置を反映する。
 
 ### v2.3における主な改訂点（小改訂）
 
@@ -485,9 +494,11 @@ annulus定義例：
     offset_from_last_surface_mm: null
 ```
 
-* position_mode: at_exit_pupil の場合、エンジンが計算した射出瞳位置に自動配置される
+* position_mode: at_exit_pupil の場合、エンジンが装置区間から計算した射出瞳位置に自動配置し、コンパイル済み面位置へ反映する。入力面列上の見かけの累積X位置をそのまま使用してはならない
+* position_mode: fixed_offset の場合、直前面から `offset_from_last_surface_mm` だけ離れた位置へ配置する。`offset_from_last_surface_mm` は必須である
 * 評価量は「眼基準面を通過する光線の角度分布」となる（24.2節参照）
 * アイボックス評価では、この面をY/Z/X方向へ仮想的に動かして通過率を評価する
+* 通常のafocal系では終端要素である。視覚評価コンポジット（9.3節）では、装置区間と模型眼区間を分ける中間境界となる
 
 ---
 
@@ -679,6 +690,58 @@ afocal系では、1つの物点から出た光線束が eye_reference 通過後�
   "residual_divergence_diopter": -0.12
 }
 ```
+
+### 9.3 視覚評価コンポジット【v2.4新設】
+
+アフォーカル装置の後段へ模型眼を接続し、網膜結像まで評価する場合は、`system_type: afocal`を維持したまま`visual_evaluation.mode: instrument_and_retinal`を指定する。
+
+```yaml
+optical_system:
+  name: binocular_with_schematic_eye
+  system_type: afocal
+  visual_evaluation:
+    mode: instrument_and_retinal
+    eye_model: gullstrand_simplified_relaxed
+    wavelength_nm: 587.56
+    accommodation_diopter: 0.0
+    retina_surface: plane
+  surfaces:
+    - {}   # 装置側の対物・プリズム・接眼・主aperture_stop
+    - id: EYE
+      kind: eye_reference
+      eye:
+        pupil_diameter_mm: 4.0
+        position_mode: at_exit_pupil
+    - {}   # 模型眼の角膜・水晶体（refractive）
+    - id: RETINA
+      kind: sensor
+      sensor:
+        width_mm: 24.0
+        height_mm: 24.0
+```
+
+`visual_evaluation`を省略する場合は従来の`instrument_only`と同義であり、9.2節どおり`eye_reference`が末尾でなければならない。初期版で許可する値は以下とする。
+
+| 項目 | 値 |
+|---|---|
+| mode | `instrument_only` / `instrument_and_retinal` |
+| eye_model | `gullstrand_simplified_relaxed` |
+| wavelength_nm | `587.56` |
+| accommodation_diopter | `0.0` |
+| retina_surface | `plane` |
+
+`instrument_and_retinal`では、面列に`eye_reference`がちょうど1面存在し、その後段に1面以上の`refractive`面、末尾に網膜相当の`sensor`が存在しなければならない。区間は次のように定義する。
+
+| 区間 | 範囲 | 責務 |
+|---|---|---|
+| instrument | 先頭から`eye_reference`まで | ray aiming、射出瞳、アイレリーフ、角倍率、角度spot/PSF/MTF、残存ディオプター |
+| retinal | `eye_reference`直後から末尾`sensor`まで | 模型眼屈折、網膜spot/PSF/MTF |
+
+主`aperture_stop`はinstrument区間にちょうど1面置き、装置側ray aimingの基準とする。`eye_reference`は4 mmの眼瞳クリップおよび接続位置であり、第2の`aperture_stop`として数えない。初期版ではretinal区間に`aperture_stop`を置いてはならない。
+
+`position_mode: at_exit_pupil`はinstrument区間だけから求めた射出瞳位置をコンパイル済み境界位置へ反映する。`fixed_offset`は直前のinstrument面を基準とする。境界位置の解決後、retinal区間の相対厚みを保ったまま後続面位置を再配置する。
+
+`instrument`の近軸量・視覚評価量は`eye_reference`より後のpowered surfaceを参照してはならない。retinal区間の入射媒質はAIRとし、模型眼の最初の角膜面で眼内媒質へ遷移する。これは任意のsystem chainingではなく、単一面列内の1つの視覚評価境界に限定した仕様である。
 
 ---
 
@@ -1862,6 +1925,73 @@ visual_instrument_mode        → system_type: afocal（眼基準評価）
 | 周辺像質 | 視野端の星像（角度spot） |
 | ブラックアウト耐性 | 眼位置ずれへの強さ |
 | 歪曲 | 地上観察・流し見で重要 |
+
+### 24.9 模型眼接続と網膜評価【v2.4新設】
+
+9.3節の視覚評価コンポジットは、1回の共通traceから`eye_reference`で装置側の角度情報を記録し、追跡を継続して末尾`sensor`で網膜側の位置情報を記録する。応答は責務と単位の混同を防ぐため、必ず`instrument`と`retinal`へ分離する。
+
+```json
+{
+  "evaluation_mode": "instrument_and_retinal",
+  "instrument": {
+    "exit_pupil_diameter_mm": 4.0,
+    "eye_relief_mm": 16.5,
+    "angular_spot_rms_arcmin": 1.2,
+    "residual_divergence_diopter": -0.05,
+    "psf": {
+      "coordinate_unit": "arcmin",
+      "artifact_id": "angular-psf-id"
+    },
+    "mtf": {
+      "frequency_unit": "cycles/degree",
+      "points": []
+    }
+  },
+  "retinal": {
+    "spot_rms_um": 8.5,
+    "centroid_y_mm": 0.0,
+    "centroid_z_mm": 0.0,
+    "psf": {
+      "coordinate_unit": "um",
+      "artifact_id": "retinal-psf-id"
+    },
+    "mtf": {
+      "frequency_unit": "lp/mm",
+      "points": []
+    }
+  }
+}
+```
+
+`instrument`は24.2〜24.6節の従来afocal評価であり、計算範囲は`eye_reference`までとする。模型眼の角膜・水晶体をpowered surfaceとして角倍率、射出瞳位置、射出瞳径、アイレリーフへ含めてはならない。
+
+`retinal`は末尾の平面`sensor`上で評価するfocal側の結果である。spot/PSFの座標はmmまたはµm、MTFはlp/mmを用いる。`image_plane_policy`は初期版では適用せず、処方に固定された網膜位置を使う。
+
+初期模型眼は調節休止状態の簡約Gullstrand眼とし、587.56 nmで次の処方を用いる。
+
+| 面 | radius_mm | thickness_after_mm | material_after / n |
+|---|---:|---:|---|
+| 角膜前面 | +7.70 | 0.50 | CORNEA / 1.376 |
+| 角膜後面 | +6.80 | 3.10 | AQUEOUS_VITREOUS / 1.336 |
+| 水晶体前面 | +10.0 | 3.60 | LENS_EQ / 1.4085 |
+| 水晶体後面 | -6.00 | 17.187 | AQUEOUS_VITREOUS / 1.336 |
+| 網膜 | plane | 0.0 | sensor |
+
+初期capabilityは単色587.56 nm、瞳径4.0 mm、`accommodation_diopter: 0.0`、平面網膜に限定する。Gullstrand処方の網膜曲率`R=-17.2 mm`、眼の分散、GRIN水晶体、調節、個人差、眼球の偏心・傾斜は未対応であり、capabilitiesへ列挙してはならない。
+
+`GET /v1/meta`で本機能を公開する場合は、実装完了後に限り次を返す。
+
+```json
+{
+  "capabilities": {
+    "visual_evaluation_modes": ["instrument_only", "instrument_and_retinal"],
+    "schematic_eye_models": ["gullstrand_simplified_relaxed"],
+    "retina_surface_types": ["plane"]
+  }
+}
+```
+
+`instrument_and_retinal`を列挙する条件は、境界位置解決、instrument/retinal結果分離、模型眼trace、既存afocal回帰テストがすべて動作していることである。
 
 ---
 
