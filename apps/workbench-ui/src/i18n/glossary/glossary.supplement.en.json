@@ -36,6 +36,11 @@
       "label": "Score",
       "en_term": "Score",
       "short": "Scalar merit value used for quick comparison."
+    },
+    "ray_fan_error": {
+      "label": "Ray Fan Error",
+      "en_term": "Ray Fan Error",
+      "short": "RMS transverse ray error from the orthogonal pupil fans, in mm."
     }
   },
   "errors": {

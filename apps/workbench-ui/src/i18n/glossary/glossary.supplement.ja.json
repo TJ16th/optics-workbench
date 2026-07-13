@@ -36,6 +36,11 @@
       "label": "スコア",
       "en_term": "Score",
       "short": "簡易比較に使うスカラーmerit値。"
+    },
+    "ray_fan_error": {
+      "label": "Ray Fan横収差",
+      "en_term": "Ray Fan Error",
+      "short": "直交する瞳fanの横収差をRMS集約した値。単位はmm。"
     }
   },
   "errors": {

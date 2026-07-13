@@ -28,6 +28,8 @@ METRIC_CODES = [
     "rms_spot_radius",
     "spot_diagram",
     "ray_fan",
+    "ray_fan_error",
+    "longitudinal_aberration",
     "distortion",
     "field_curvature",
     "axial_color",

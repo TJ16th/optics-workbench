@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from typing import Any
 
 import numpy as np
 
+from .aberrations import analyze_longitudinal_aberration, analyze_ray_fan
 from .analysis import analyze_spot
 from .configuration import validate_configuration
 from .models import OpticalSystem
@@ -22,12 +23,25 @@ class MeritResult:
 
 
 @dataclass(frozen=True)
+class OperandResult:
+    metric: str
+    value: float | None
+    target: float
+    tolerance: float
+    weight: float
+    residual: float | None
+    field_id: str | None = None
+    wavelength_nm: float | None = None
+
+
+@dataclass(frozen=True)
 class EvaluateResult:
     status: str
     merit: MeritResult | None
     metrics: dict[str, Any]
     violations: list[dict[str, Any]]
     metadata: dict[str, Any]
+    operands: list[OperandResult] = dataclass_field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -56,6 +70,8 @@ PRESETS: dict[str, dict[str, Any]] = {
         "ray_sampling": {"samples_per_field": 21, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}},
     },
 }
+
+ABERRATION_OPERAND_METRICS = {"ray_fan_error", "longitudinal_aberration"}
 
 
 def _copy_system(system: OpticalSystem) -> OpticalSystem:
@@ -120,7 +136,12 @@ def _resolve_evaluation(evaluation: dict[str, Any] | None, ray_sampling: dict[st
     evaluation = dict(evaluation or {})
     preset = evaluation.get("preset")
     preset_data = PRESETS.get(preset, {}) if preset else {}
-    metrics = list(evaluation.get("metrics", preset_data.get("metrics", ["rms_spot_radius"])))
+    operand_metrics = [
+        str(operand.get("metric"))
+        for operand in evaluation.get("operands", [])
+        if operand.get("metric") in ABERRATION_OPERAND_METRICS
+    ]
+    metrics = list(evaluation.get("metrics", operand_metrics or preset_data.get("metrics", ["rms_spot_radius"])))
     weights = dict(preset_data.get("weights", {}))
     weights.update(evaluation.get("weights", {}))
     sampling = dict(preset_data.get("ray_sampling", {"samples_per_field": 21, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}}))
@@ -134,6 +155,87 @@ def _constraint_penalty(violations: list[dict[str, Any]]) -> float:
     for violation in violations:
         penalty += 1000.0 if violation.get("severity") == "error" else 10.0
     return penalty
+
+
+def _rms_finite(values: list[float | None]) -> float | None:
+    finite = np.asarray([float(value) for value in values if value is not None and np.isfinite(value)], dtype=float)
+    if finite.size == 0:
+        return None
+    return float(np.sqrt(np.mean(np.square(finite))))
+
+
+def _aberration_metric_value(
+    compiled: CompiledSystem,
+    metric: str,
+    fields: list[dict[str, Any]],
+    sampling: dict[str, Any],
+    wavelengths: list[float],
+    options: dict[str, Any],
+) -> float | None:
+    if metric == "ray_fan_error":
+        fan_y = analyze_ray_fan(compiled, fields, {**sampling, "pupil_distribution": "fan_y"}, wavelengths, options)
+        fan_z = analyze_ray_fan(compiled, fields, {**sampling, "pupil_distribution": "fan_z"}, wavelengths, options)
+        return _rms_finite(
+            [point.transverse_error_y_mm for point in fan_y.points if point.status == "alive"]
+            + [point.transverse_error_z_mm for point in fan_z.points if point.status == "alive"]
+        )
+    if metric == "longitudinal_aberration":
+        longitudinal = analyze_longitudinal_aberration(
+            compiled,
+            fields,
+            {**sampling, "pupil_distribution": "fan_y"},
+            wavelengths,
+            options,
+        )
+        return _rms_finite(
+            [point.longitudinal_error_y_mm for point in longitudinal.points if point.status == "alive"]
+        )
+    return None
+
+
+def _evaluate_aberration_operands(
+    compiled: CompiledSystem,
+    operands: list[dict[str, Any]],
+    fields: list[dict[str, Any]],
+    sampling: dict[str, Any],
+    wavelengths: list[float],
+    options: dict[str, Any],
+) -> tuple[list[OperandResult], MeritResult]:
+    results: list[OperandResult] = []
+    natural_values: dict[str, float | None] = {}
+    score = 0.0
+    weights: dict[str, float] = {}
+    for operand in operands:
+        metric = str(operand.get("metric", ""))
+        if metric not in ABERRATION_OPERAND_METRICS:
+            continue
+        field_id = str(operand["field_id"]) if operand.get("field_id") is not None else None
+        wavelength_nm = float(operand["wavelength_nm"]) if operand.get("wavelength_nm") is not None else None
+        operand_fields = fields if field_id is None else [field for field in fields if str(field.get("id")) == field_id]
+        operand_wavelengths = wavelengths if wavelength_nm is None else [value for value in wavelengths if abs(value - wavelength_nm) <= 1.0e-9]
+        value = _aberration_metric_value(compiled, metric, operand_fields, sampling, operand_wavelengths, options) if operand_fields and operand_wavelengths else None
+        target = float(operand.get("target", 0.0))
+        tolerance = float(operand.get("tolerance", 1.0))
+        weight = float(operand.get("weight", 1.0))
+        residual = None if value is None else weight * (value - target) / tolerance
+        if residual is not None:
+            score += residual * residual
+        natural_values[metric] = value
+        weights[metric] = weight
+        results.append(
+            OperandResult(
+                metric=metric,
+                value=value,
+                target=target,
+                tolerance=tolerance,
+                weight=weight,
+                residual=residual,
+                field_id=field_id,
+                wavelength_nm=wavelength_nm,
+            )
+        )
+    natural_values["score"] = score
+    return results, MeritResult(score=score, metrics=natural_values, weights=weights)
 
 
 def _compute_merit(metric_values: dict[str, Any], weights: dict[str, float]) -> MeritResult:
@@ -155,6 +257,11 @@ def _compute_merit(metric_values: dict[str, Any], weights: dict[str, float]) -> 
         loss = max(0.0, 1.0 - value)
         flat["geometric_mtf_loss"] = loss
         score += weights.get("geometric_mtf_loss", 0.0) * loss
+    for metric in ("ray_fan_error", "longitudinal_aberration"):
+        value = metric_values.get(metric)
+        if value is not None:
+            flat[metric] = float(value)
+            score += weights.get(metric, 1.0) * float(value)
     flat["score"] = score
     return MeritResult(score=score, metrics=flat, weights=weights)
 
@@ -186,22 +293,81 @@ def evaluate_system(
     metrics, weights, sampling, frequencies = _resolve_evaluation(evaluation, ray_sampling)
     fields = _fields_from_evaluation(evaluation)
     wavelengths = _wavelengths_from_evaluation(compiled, evaluation)
-    trace = trace_forward(compiled, fields, sampling, wavelengths, {"configuration": configuration or {}})
+    requested_operands = [
+        operand
+        for operand in (evaluation or {}).get("operands", [])
+        if operand.get("metric") in ABERRATION_OPERAND_METRICS
+    ]
+    invalid_tolerances = [
+        (index, operand)
+        for index, operand in enumerate(requested_operands)
+        if float(operand.get("tolerance", 1.0)) <= 0.0
+    ]
+    if invalid_tolerances:
+        violations = [
+            {
+                "severity": "error",
+                "code": "optics_value_error",
+                "params": {
+                    "operand_index": index,
+                    "metric": str(operand.get("metric")),
+                    "tolerance": float(operand.get("tolerance", 1.0)),
+                    "constraint": "tolerance > 0",
+                },
+                "message_en": "Operand tolerance must be positive.",
+            }
+            for index, operand in invalid_tolerances
+        ]
+        penalty = _constraint_penalty(violations)
+        return EvaluateResult(
+            status="infeasible",
+            merit=MeritResult(score=penalty, metrics={"constraint_penalty": penalty}, weights={}),
+            metrics={},
+            violations=violations,
+            metadata={"stage": "operand_validation", "system_hash": compiled.system_hash},
+        )
+    trace = None
+    if any(metric in metrics for metric in ("rms_spot_radius", "geometric_mtf")):
+        trace = trace_forward(compiled, fields, sampling, wavelengths, {"configuration": configuration or {}})
     metric_values: dict[str, Any] = {}
     if "rms_spot_radius" in metrics:
+        assert trace is not None
         metric_values["rms_spot_radius"] = analyze_spot(trace).rms_radius_mm
     if "relative_illumination" in metrics:
         metric_values["relative_illumination"] = analyze_relative_illumination(compiled, fields, sampling, wavelengths, {"configuration": configuration or {}})
     if "geometric_mtf" in metrics:
+        assert trace is not None
         metric_values["geometric_mtf"] = analyze_geometric_mtf(trace, frequencies)
+    analysis_options = {"configuration": configuration or {}}
+    if "ray_fan_error" in metrics and not requested_operands:
+        metric_values["ray_fan_error"] = _aberration_metric_value(
+            compiled, "ray_fan_error", fields, sampling, wavelengths, analysis_options
+        )
+    if "longitudinal_aberration" in metrics and not requested_operands:
+        metric_values["longitudinal_aberration"] = _aberration_metric_value(
+            compiled, "longitudinal_aberration", fields, sampling, wavelengths, analysis_options
+        )
 
-    merit = _compute_merit(metric_values, weights)
+    if requested_operands:
+        operand_results, merit = _evaluate_aberration_operands(
+            compiled,
+            requested_operands,
+            fields,
+            sampling,
+            wavelengths,
+            analysis_options,
+        )
+        metric_values.update({operand.metric: operand.value for operand in operand_results})
+    else:
+        operand_results = []
+        merit = _compute_merit(metric_values, weights)
     return EvaluateResult(
         status="ok",
         merit=merit,
         metrics=metric_values,
         violations=[],
         metadata={"stage": "evaluation", "system_hash": compiled.system_hash, "metrics": metrics},
+        operands=operand_results,
     )
 
 
