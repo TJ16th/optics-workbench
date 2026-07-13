@@ -23,14 +23,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
+      - name: Install engine API
+        run: python -m pip install -e ".[api]"
       - name: Install
         run: npm ci
       - name: Install Playwright browsers
         run: npx playwright install --with-deps msedge
+      - name: Start engine API
+        run: |
+          python -m uvicorn optics_engine.api.main:app --host 127.0.0.1 --port 8000 > /tmp/optics-api.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/v1/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/optics-api.log
+          exit 1
       - name: UI CI
         run: npm run ci
       - name: Pseudo-locale build
