@@ -406,13 +406,29 @@ def distortion(payload: dict):
 @app.post("/v1/analysis/field-curvature")
 def field_curvature(payload: dict):
     compiled = _compiled_from_payload(payload)
-    return _jsonable(analyze_field_curvature(compiled, payload.get("fields", []), payload.get("configuration")))
+    return _jsonable(
+        analyze_field_curvature(
+            compiled,
+            payload.get("fields", []),
+            payload.get("configuration"),
+            search_mm=float(payload.get("search_range_mm", 5.0)),
+            method=payload.get("method"),
+        )
+    )
 
 
 @app.post("/v1/analysis/ms-image-surface")
 def ms_image_surface(payload: dict):
     compiled = _compiled_from_payload(payload)
-    return _jsonable(analyze_ms_image_surface(compiled, payload.get("fields", []), payload.get("configuration")))
+    return _jsonable(
+        analyze_ms_image_surface(
+            compiled,
+            payload.get("fields", []),
+            payload.get("configuration"),
+            search_mm=float(payload.get("search_range_mm", 5.0)),
+            method=payload.get("method"),
+        )
+    )
 
 
 def _analysis_context(payload: dict):

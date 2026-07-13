@@ -91,4 +91,5 @@ def test_field_curvature_and_ms_image_surface_return_focus_rows():
     assert len(ms.rows) == 1
     assert ms.rows[0].tangential_focus_shift_mm is not None
     assert ms.rows[0].sagittal_focus_shift_mm is not None
-    assert ms.rows[0].method == "coddington_rms_consistent"
+    assert ms.rows[0].method == "coddington"
+    assert ms.metadata["method"] == "coddington"

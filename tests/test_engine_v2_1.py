@@ -6,6 +6,8 @@ import numpy as np
 import pytest
 
 from optics_engine import (
+    analyze_field_curvature,
+    analyze_ms_image_surface,
     analyze_paraxial,
     analyze_distortion,
     analyze_longitudinal_aberration,
@@ -635,6 +637,134 @@ def test_longitudinal_aberration_uses_wavelength_paraxial_focus_for_axial_sample
         chromatic_spans[preset_id] = max(centers) - min(centers)
 
     assert chromatic_spans["P003"] < chromatic_spans["P002"]
+
+
+def test_coddington_single_surface_matches_analytic_image_distance():
+    system = load_system(
+        {
+            "name": "single spherical refraction",
+            "materials": [
+                {"id": "AIR", "type": "constant", "n": 1.0},
+                {"id": "GLASS", "type": "constant", "n": 1.5},
+            ],
+            "surfaces": [
+                {
+                    "id": "STOP",
+                    "kind": "aperture_stop",
+                    "thickness_after_mm": 0.0,
+                    "aperture": {"shape": "circle", "semi_diameter_mm": 5.0},
+                },
+                {
+                    "id": "S1",
+                    "kind": "refractive",
+                    "radius_mm": 50.0,
+                    "material_after": "GLASS",
+                    "thickness_after_mm": 150.0,
+                    "semi_diameter_mm": 10.0,
+                },
+                {"id": "IMG", "kind": "sensor", "sensor": {"width_mm": 20.0, "height_mm": 20.0}},
+            ],
+        }
+    )
+    result = analyze_ms_image_surface(
+        compile_system(system, use_cache=False),
+        [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}],
+    )
+
+    assert result.metadata == {
+        "method": "coddington",
+        "wavelength_nm": 587.56,
+        "ray_sampling_independent": True,
+        "chief_rays_per_field": 1,
+        "ray_aiming_mode": "full",
+        "ray_aiming_strategy": "exact",
+        "equations": "coddington_tangential_sagittal_recurrence",
+    }
+    assert result.rows[0].method == "coddington"
+    assert result.rows[0].tangential_focus_shift_mm == pytest.approx(0.0, abs=1.0e-10)
+    assert result.rows[0].sagittal_focus_shift_mm == pytest.approx(0.0, abs=1.0e-10)
+
+
+@pytest.mark.parametrize(
+    ("system_factory", "edge_deg"),
+    [(p002_singlet_system, 14.0), (p003_achromat_system, 10.0)],
+    ids=["P002", "P003"],
+)
+def test_p002_p003_coddington_is_default_and_agrees_with_rms_search(system_factory, edge_deg):
+    compiled = compile_system(system_factory(), use_cache=False)
+    fields = [
+        {"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0},
+        {"id": "edge", "type": "angular", "theta_y_deg": edge_deg, "theta_z_deg": 0.0},
+    ]
+    coddington = analyze_ms_image_surface(compiled, fields)
+    rms = analyze_ms_image_surface(compiled, fields, search_mm=10.0, method="rms_search")
+
+    assert coddington.metadata["method"] == "coddington"
+    assert coddington.metadata["chief_rays_per_field"] == 1
+    assert coddington.metadata["ray_sampling_independent"] is True
+    assert rms.metadata["method"] == "rms_search"
+    for coddington_row, rms_row in zip(coddington.rows, rms.rows):
+        assert coddington_row.method == "coddington"
+        assert rms_row.method == "rms_search"
+        assert coddington_row.tangential_focus_shift_mm == pytest.approx(
+            rms_row.tangential_focus_shift_mm, abs=1.2
+        )
+        assert coddington_row.sagittal_focus_shift_mm == pytest.approx(
+            rms_row.sagittal_focus_shift_mm, abs=1.2
+        )
+
+
+def test_p003_rms_search_boundary_returns_structured_nonconvergence_warning():
+    compiled = compile_system(p003_achromat_system(), use_cache=False)
+    fields = [{"id": "edge", "type": "angular", "theta_y_deg": 10.0, "theta_z_deg": 0.0}]
+    result = analyze_ms_image_surface(compiled, fields, method="rms_search", search_mm=5.0)
+
+    assert result.rows[0].method == "rms_search"
+    assert result.metadata["method"] == "rms_search"
+    assert result.metadata["samples_per_field"] == 21
+    assert result.metadata["pupil_distribution"] == "grid"
+    assert result.metadata["ray_aiming_mode"] == "paraxial"
+    assert result.metadata["search_steps"] == 11
+    assert result.metadata["warnings"]
+    for warning in result.metadata["warnings"]:
+        assert warning["severity"] == "warning"
+        assert warning["code"] == "solve_not_converged"
+        assert warning["params"]["field_id"] == "edge"
+        assert warning["params"]["boundary"] == "lower"
+        assert warning["params"]["search_min_mm"] == -5.0
+        assert warning["params"]["search_max_mm"] == 5.0
+        assert warning["message_en"]
+
+
+@pytest.mark.parametrize(
+    ("system_factory", "edge_deg"),
+    [(p002_singlet_system, 14.0), (p003_achromat_system, 10.0)],
+    ids=["P002-api", "P003-api"],
+)
+def test_coddington_api_metadata_and_results_ignore_external_ray_sampling(system_factory, edge_deg):
+    from fastapi.testclient import TestClient
+
+    from optics_engine.api.main import app
+
+    client = TestClient(app)
+    registered = client.post("/v1/systems/register", json=system_factory().model_dump(mode="json"))
+    assert registered.status_code == 200
+    base = {
+        "system_id": registered.json()["system_id"],
+        "fields": [{"id": "edge", "type": "angular", "theta_y_deg": edge_deg, "theta_z_deg": 0.0}],
+    }
+    preview_sampling = {"samples_per_field": 3, "pupil_distribution": "fan_y", "ray_aiming": {"mode": "off"}}
+    dense_sampling = {"samples_per_field": 1001, "pupil_distribution": "grid", "ray_aiming": {"mode": "full"}}
+
+    for endpoint in ("field-curvature", "ms-image-surface"):
+        preview = client.post(f"/v1/analysis/{endpoint}", json={**base, "ray_sampling": preview_sampling})
+        dense = client.post(f"/v1/analysis/{endpoint}", json={**base, "ray_sampling": dense_sampling})
+        assert preview.status_code == 200
+        assert dense.status_code == 200
+        assert preview.json() == dense.json()
+        assert preview.json()["metadata"]["method"] == "coddington"
+        assert preview.json()["metadata"]["chief_rays_per_field"] == 1
+        assert preview.json()["rows"][0]["method"] == "coddington"
 
 
 def test_reverse_trace_runs_from_sensor_to_object_side():

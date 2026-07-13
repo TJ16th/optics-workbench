@@ -283,6 +283,7 @@ export type FieldCurvatureRow = {
   rms_radius_mm?: number | null
   tangential_focus_shift_mm?: number | null
   sagittal_focus_shift_mm?: number | null
+  method?: 'coddington' | 'rms_search'
 }
 
 export type RelativeIlluminationRow = {
