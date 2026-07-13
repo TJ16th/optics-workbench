@@ -1,0 +1,63 @@
+{
+  "task": "R75 Task 2",
+  "name": "P002 relative illumination sampling accuracy and latency",
+  "measured_at_jst": "2026-07-13T23:25:44+09:00",
+  "source_commit": "66f2ef3b3c71d9c2604f3550276b255f47289760",
+  "api_base": "http://127.0.0.1:8000",
+  "system": "P002 N-BK7 Biconvex Singlet",
+  "field": {
+    "id": "partial-40",
+    "theta_y_deg": 40.0,
+    "theta_z_deg": 0.0
+  },
+  "wavelengths_nm": [
+    587.56
+  ],
+  "sampling": {
+    "pupil_distribution": "grid",
+    "ray_aiming_mode": "paraxial"
+  },
+  "results": [
+    {
+      "samples_per_field": 9,
+      "throughput": 1.0,
+      "relative_illumination": 0.3443625112352266,
+      "relative_error_vs_10000_percent": 11.6819,
+      "http_ms": 6.4002
+    },
+    {
+      "samples_per_field": 1000,
+      "throughput": 0.9,
+      "relative_illumination": 0.30992626011170393,
+      "relative_error_vs_10000_percent": 0.5137,
+      "http_ms_default_cold": 59.6107,
+      "http_ms_explicit_warm": 34.2767
+    },
+    {
+      "samples_per_field": 10000,
+      "throughput": 0.8954,
+      "relative_illumination": 0.3083421925600219,
+      "relative_error_vs_10000_percent": 0.0,
+      "http_ms": 130.2399
+    }
+  ],
+  "recommended_field_check": {
+    "samples_compared": [
+      9,
+      1000
+    ],
+    "values_identical": true,
+    "relative_illumination": {
+      "center": 1.0,
+      "mid-y": 0.9417534841504308,
+      "edge-y": 0.8863729093633073
+    }
+  },
+  "ui_run_charts": {
+    "field_count": 16,
+    "wavelength_count": 3,
+    "samples_per_field": 1000,
+    "elapsed_ms": 1700.8484,
+    "response_row_count": 16
+  }
+}
