@@ -3213,14 +3213,14 @@ export function App() {
                       <div className="metric-row"><span>{t('analysis:analysis.exit_pupil_diameter')}</span><strong>{formatFixed(visualResult.exit_pupil.exit_pupil_diameter_mm ?? 0, 4)} mm</strong></div>
                       <div className="metric-row"><span>{t('analysis:analysis.eye_relief')}</span><strong>{formatFixed(visualResult.exit_pupil.eye_relief_mm ?? 0, 4)} mm</strong></div>
                       <div className="metric-row"><span>{t('analysis:analysis.psf_samples')}</span><strong>{formatInteger(visualResult.instrument.arrived_count)}</strong></div>
-                      <div className="metric-row"><span>{t('analysis:analysis.mtf_samples')}</span><strong>{formatInteger(visualResult.angular_mtf.points.length)} cycles/degree</strong></div>
+                      <div className="metric-row"><span>{t('analysis:analysis.angular_mtf_10')}</span><strong>{formatFixed(visualResult.angular_mtf.points.find((point) => point.frequency_cycles_per_degree === 10)?.mtf ?? 0, 4)}</strong></div>
                     </div>
                   ) : (
                     <div className="metric-grid">
                       <div className="metric-row"><span>{t('analysis:analysis.retinal_spot_rms')}</span><strong>{formatFixed((visualResult.retinal.rms_radius_mm ?? 0) * 1000, 4)} µm</strong></div>
                       <div className="metric-row"><span>{t('analysis:analysis.retinal_centroid_y')}</span><strong>{formatFixed(visualResult.retinal.centroid_y_mm ?? 0, 6)} mm</strong></div>
                       <div className="metric-row"><span>{t('analysis:analysis.psf_samples')}</span><strong>{formatInteger(visualResult.retinal_psf.total_energy)}</strong></div>
-                      <div className="metric-row"><span>{t('analysis:analysis.mtf_samples')}</span><strong>{formatInteger(visualResult.retinal_mtf.points.length)} lp/mm</strong></div>
+                      <div className="metric-row"><span>{t('analysis:analysis.retinal_mtf_10')}</span><strong>{formatFixed(visualResult.retinal_mtf.points.find((point) => point.frequency_lp_per_mm === 10)?.mtf_radial ?? 0, 4)}</strong></div>
                     </div>
                   )}
                 </section>

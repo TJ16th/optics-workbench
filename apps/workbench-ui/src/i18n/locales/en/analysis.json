@@ -59,6 +59,7 @@
     "retinal_spot_rms": "Retinal spot RMS",
     "retinal_centroid_y": "Retinal centroid Y",
     "psf_samples": "PSF arrived rays",
-    "mtf_samples": "MTF samples"
+    "angular_mtf_10": "Angular MTF at 10 cycles/degree",
+    "retinal_mtf_10": "Retinal MTF at 10 lp/mm"
   }
 }

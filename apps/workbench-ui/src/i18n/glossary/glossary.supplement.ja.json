@@ -69,6 +69,11 @@
       "message": "Tilt範囲が不正です。",
       "action": "tiltのfrom_surfaceがto_surfaceより前になるようにしてください。"
     },
+    "invalid_visual_composite_boundary": {
+      "label": "視覚評価境界が不正",
+      "message": "instrument_and_retinalにはeye_referenceが1面必要です。",
+      "action": "装置区間と模型眼区間の境界にeye_referenceを1面だけ置いてください。"
+    },
     "material_not_found": {
       "label": "硝材が見つからない",
       "message": "硝材 {material_id} が見つかりません。",
@@ -89,6 +94,11 @@
       "message": "Eye reference面 {surface_id} にeye設定がありません。",
       "action": "eye設定を追加するか、面種別を変更してください。"
     },
+    "missing_eye_reference_offset": {
+      "label": "Eye reference offset不足",
+      "message": "固定位置のeye_reference {surface_id}にはoffsetが必要です。",
+      "action": "offset_from_last_surface_mmを指定してください。"
+    },
     "missing_focal_length": {
       "label": "焦点距離不足",
       "message": "薄レンズ {surface_id} にはfocal_length_mmが必要です。",
@@ -99,6 +109,11 @@
       "message": "センサー面 {surface_id} にはセンサー寸法が必要です。",
       "action": "センサー幅と高さを入力してください。"
     },
+    "missing_schematic_eye_surfaces": {
+      "label": "模型眼面不足",
+      "message": "eye_referenceの後段に模型眼の屈折面がありません。",
+      "action": "角膜・水晶体のrefractive面を追加してください。"
+    },
     "missing_terminal_eye_reference": {
       "label": "終端Eye reference不足",
       "message": "Afocal系はeye_reference面で終端する必要があります。",
@@ -108,6 +123,21 @@
       "label": "終端センサー不足",
       "message": "Focal系はセンサー面で終端する必要があります。",
       "action": "末尾にセンサー面を追加してください。"
+    },
+    "missing_terminal_retina_sensor": {
+      "label": "網膜センサー不足",
+      "message": "視覚評価コンポジットは網膜sensorで終端する必要があります。",
+      "action": "模型眼面の末尾に平面sensorを追加してください。"
+    },
+    "retinal_aperture_stop_not_supported": {
+      "label": "模型眼内絞りは未対応",
+      "message": "初期版はeye_reference後段のaperture_stopに対応していません。",
+      "action": "眼瞳にはeye_referenceを使用し、模型眼内のaperture_stopを削除してください。"
+    },
+    "visual_composite_requires_afocal": {
+      "label": "Afocal系が必要",
+      "message": "instrument_and_retinal視覚評価にはafocal系が必要です。",
+      "action": "system_typeをafocalにしてください。"
     },
     "multiple_aperture_stops": {
       "label": "開口絞りが複数",

@@ -69,6 +69,11 @@
       "message": "The tilt range is invalid.",
       "action": "Make the tilt from_surface precede to_surface."
     },
+    "invalid_visual_composite_boundary": {
+      "label": "Invalid visual boundary",
+      "message": "instrument_and_retinal requires exactly one eye_reference.",
+      "action": "Place one eye_reference between the instrument and schematic-eye sections."
+    },
     "material_not_found": {
       "label": "Material not found",
       "message": "Material {material_id} was not found.",
@@ -89,6 +94,11 @@
       "message": "Eye reference surface {surface_id} has no eye settings.",
       "action": "Add eye settings or change the surface kind."
     },
+    "missing_eye_reference_offset": {
+      "label": "Eye reference offset missing",
+      "message": "Fixed eye_reference {surface_id} requires an offset.",
+      "action": "Set offset_from_last_surface_mm."
+    },
     "missing_focal_length": {
       "label": "Missing focal length",
       "message": "Thin lens {surface_id} requires focal_length_mm.",
@@ -99,6 +109,11 @@
       "message": "Sensor surface {surface_id} requires sensor dimensions.",
       "action": "Enter sensor width and height."
     },
+    "missing_schematic_eye_surfaces": {
+      "label": "Schematic-eye surfaces missing",
+      "message": "No refractive schematic-eye surfaces follow eye_reference.",
+      "action": "Add refractive cornea and crystalline-lens surfaces."
+    },
     "missing_terminal_eye_reference": {
       "label": "Missing terminal eye reference",
       "message": "Afocal systems must end with an eye_reference surface.",
@@ -108,6 +123,21 @@
       "label": "Missing terminal sensor",
       "message": "Focal systems must end with a sensor surface.",
       "action": "Add a sensor surface at the end."
+    },
+    "missing_terminal_retina_sensor": {
+      "label": "Retina sensor missing",
+      "message": "A visual composite must terminate at a retina sensor.",
+      "action": "Add a plane sensor after the schematic-eye surfaces."
+    },
+    "retinal_aperture_stop_not_supported": {
+      "label": "Retinal aperture stop unsupported",
+      "message": "The initial visual composite does not support aperture_stop after eye_reference.",
+      "action": "Use eye_reference for the eye pupil and remove retinal-section aperture stops."
+    },
+    "visual_composite_requires_afocal": {
+      "label": "Afocal system required",
+      "message": "instrument_and_retinal visual evaluation requires an afocal system.",
+      "action": "Set system_type to afocal."
     },
     "multiple_aperture_stops": {
       "label": "Multiple aperture stops",

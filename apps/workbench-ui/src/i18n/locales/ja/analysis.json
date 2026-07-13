@@ -59,6 +59,7 @@
     "retinal_spot_rms": "網膜spot RMS",
     "retinal_centroid_y": "網膜重心Y",
     "psf_samples": "PSF到達光線",
-    "mtf_samples": "MTFサンプル"
+    "angular_mtf_10": "角度MTF 10 cycles/degree",
+    "retinal_mtf_10": "網膜MTF 10 lp/mm"
   }
 }
