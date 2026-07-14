@@ -1,0 +1,36 @@
+{
+  "task": "R92",
+  "measured_at": "2026-07-14T23:35:58+09:00",
+  "source_commit": "4cc3c89",
+  "git_dirty": true,
+  "workload": {
+    "preset": "P002",
+    "fields": ["center", "mid-y", "edge-y"],
+    "wavelengths_nm": [486.13, 587.56, 656.27],
+    "frequencies_lp_per_mm": [10.0, 30.0],
+    "defocus_points": 21,
+    "samples_per_field": 4096,
+    "pupil_distribution": "grid",
+    "ray_aiming": "paraxial"
+  },
+  "result": {
+    "elapsed_seconds": 0.58110690000467,
+    "traced_ray_count": 36864,
+    "arrived_count": 36864,
+    "response_point_count": 126,
+    "defocus_range_mm": 1.0806862298363367,
+    "diffraction_depth_of_focus_mm": 0.011117361638480979,
+    "paraxial_focus_offset_mm": 1.0362167832824127,
+    "target_seconds": 30.0,
+    "target_met": true
+  },
+  "p002_center_10_lpmm": {
+    "mtf_at_zero": 0.1725521625690048,
+    "peak_defocus_mm": 0.4322744919345347,
+    "peak_mtf": 0.25867676637365067
+  },
+  "comparison": {
+    "previous_r92_baseline": null,
+    "note": "Initial R92 baseline; compared with the 30 second work-order target."
+  }
+}
