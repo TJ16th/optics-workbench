@@ -814,3 +814,25 @@ R74完了監査の`python -m pytest -q`で、`tests/test_engine_v2_3.py::test_ar
 - expiry後の404をfake clockまたは十分な時間差で決定論的に検証できる。
 - 対象テストを100回反復してflaky failureが発生しない。
 - ArtifactStore本体のTTL semanticsとAPI content-type検証を維持する。
+
+## Issue: P011の周辺fieldでfull aiming収束失敗を解消する
+
+ラベル案: `engine`, `testing`
+
+### 背景
+
+R67で追加したP011 Planar/Xenon型50 mm F1.4を、3 fields × 3 wavelengths × 25 rays、`hexapolar`、`full` aimingで追跡すると、225本中`alive 213`、`aiming_failed 12`となる。R80でも現行HEAD `1031997`（機能コミット`b655a3a`）の実APIで同値を再現した。`blocked 0`であるため開口遮光ではなく、周辺fieldの主光線aimingが収束せず像面へ到達しない既知問題である。また、既存のP011直接回帰は中心81-ray spot RMSの期待値`0.4654229601 mm`に対して`0.4654474966 mm`を決定論的に返して失敗する。到達数の既知値は一致しているが、このRMS差も原因切り分けが必要である。
+
+### 対応案
+
+- 失敗12本のfield、wavelength、pupil座標、反復履歴を構造化して特定する。
+- affine seed、Jacobian更新、収束判定、iteration上限のどこで失敗するかをLevel 0リファレンス実装と比較する。
+- P011固有の処方問題と汎用full aimingアルゴリズムの問題を切り分け、必要ならfallback aimingを設計する。
+- 修正時はP011だけでなくP007等の高速系プリセットでも到達率と決定論を回帰テストする。
+
+### 受け入れ条件
+
+- P011の同条件で`aiming_failed 0`となり、225本が像面へ到達する、または物理的に到達不能な光線が別の正しいstatusへ分類される。
+- `blocked`と`aiming_failed`を混同せず、原因をmetadataまたは構造化warningから判別できる。
+- 中心81-ray spot RMSの正しい基準値をLevel 0との比較で確定し、`tests/test_preset_api_smoke.py::test_p011_planar_double_gauss_has_six_positive_thickness_elements`がグリーンになる。
+- Level 0/Level 1の代表光線が許容差内で一致し、既存のaiming Golden Testがグリーンを維持する。
