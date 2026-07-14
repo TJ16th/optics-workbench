@@ -16,4 +16,5 @@ SUPPORTED_EVALUATE_METRICS = (
     "back_focal_length",
     "effective_focal_length",
     "f_number",
+    "ray_loss_ratio",
 )

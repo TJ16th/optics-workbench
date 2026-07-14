@@ -163,7 +163,8 @@ def test_p002_ray_fan_and_longitudinal_merit_metrics_match_reference_trace_value
     assert result.merit is not None
     assert result.merit.metrics["ray_fan_error"] == pytest.approx(result.metrics["ray_fan_error"])
     assert result.merit.metrics["longitudinal_aberration"] == pytest.approx(result.metrics["longitudinal_aberration"])
-    assert [operand.metric for operand in result.operands] == ["ray_fan_error", "longitudinal_aberration"]
+    assert [operand.metric for operand in result.operands[:2]] == ["ray_fan_error", "longitudinal_aberration"]
+    assert all(operand.metric == "ray_loss_ratio" for operand in result.operands[2:])
     assert result.operands[0].value == pytest.approx(0.08744014142832597, abs=1.0e-12)
     expected_ray_fan_residual = 2.0 * (0.08744014142832597 - 0.05) / 0.02
     assert result.operands[0].residual == pytest.approx(expected_ray_fan_residual, abs=1.0e-12)

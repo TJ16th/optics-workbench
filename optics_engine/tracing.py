@@ -71,7 +71,7 @@ class ReverseTraceResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-def _unit_disk_samples(count: int, distribution: str = "hexapolar") -> np.ndarray:
+def _unit_disk_samples(count: int, distribution: str = "hexapolar", seed: int | None = None) -> np.ndarray:
     if count <= 1:
         return np.array([[0.0, 0.0]], dtype=float)
     if distribution == "fan_y":
@@ -79,7 +79,24 @@ def _unit_disk_samples(count: int, distribution: str = "hexapolar") -> np.ndarra
     if distribution == "fan_z":
         return np.column_stack([np.zeros(count), np.linspace(-1.0, 1.0, count)])
     if distribution == "random":
-        rng = np.random.default_rng(0)
+        if seed is None:
+            raise StructuredOpticsError(
+                "optics_value_error",
+                "A seed is required for random pupil sampling.",
+                params={"pupil_distribution": distribution, "required_parameter": "seed"},
+            )
+        rng = np.random.default_rng(seed)
+        radius = np.sqrt(rng.random(count))
+        angle = 2.0 * np.pi * rng.random(count)
+        return np.column_stack([radius * np.cos(angle), radius * np.sin(angle)])
+    if distribution == "sobol":
+        if seed is None:
+            raise StructuredOpticsError(
+                "optics_value_error",
+                "A seed is required for sobol pupil sampling.",
+                params={"pupil_distribution": distribution, "required_parameter": "seed"},
+            )
+        rng = np.random.default_rng(seed)
         radius = np.sqrt(rng.random(count))
         angle = 2.0 * np.pi * rng.random(count)
         return np.column_stack([radius * np.cos(angle), radius * np.sin(angle)])
@@ -915,7 +932,8 @@ def trace_forward(
     max_iterations = int(aiming.get("max_iterations", 20))
     store_path = bool(options.get("store_path", False))
 
-    samples = _unit_disk_samples(samples_per_field, distribution)
+    seed = int(sampling["seed"]) if "seed" in sampling else None
+    samples = _unit_disk_samples(samples_per_field, distribution, seed)
     targets = _target_points_for_stop_with_layout(compiled, samples, centers_mm, rotations, configuration)
     first_x = centers_mm[0, 0]
     stop_idx, stop_outer, stop_inner = _aperture_radius(compiled, configuration)
@@ -1006,6 +1024,7 @@ def trace_forward(
             "affine_seed_count": int(affine_seed_count),
             "aiming_exact_solved_count": int(aiming_exact_solved_count),
             "samples_per_field": samples_per_field,
+            "sampling_seed": seed,
         }
     )
     nominal_stop_radius = None

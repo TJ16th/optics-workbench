@@ -242,7 +242,62 @@ def _metric_scalar_value(
             "effective_focal_length": result.effective_focal_length_mm,
             "f_number": result.f_number,
         }[metric]
+    if metric == "ray_loss_ratio":
+        trace = trace_forward(compiled, fields, sampling, wavelengths, options)
+        loss_statuses = set(evaluation.get("ray_loss_statuses", ["total_internal_reflection", "missed", "aiming_failed"]))
+        return float(np.mean(np.isin(trace.status, sorted(loss_statuses)))) if trace.status.size else None
     raise AssertionError(f"unhandled evaluate metric: {metric}")
+
+
+def _ray_loss_operands(
+    compiled: CompiledSystem,
+    fields: list[dict[str, Any]],
+    sampling: dict[str, Any],
+    wavelengths: list[float],
+    options: dict[str, Any],
+    evaluation: dict[str, Any],
+) -> list[OperandResult]:
+    tolerance = float(evaluation.get("ray_loss_tolerance", 0.1))
+    if tolerance <= 0.0:
+        raise StructuredOpticsError(
+            "optics_value_error",
+            "ray_loss_tolerance must be positive.",
+            params={"ray_loss_tolerance": tolerance, "constraint": "value > 0"},
+        )
+    requested = set(evaluation.get("ray_loss_statuses", ["total_internal_reflection", "missed_surface", "aiming_failed", "numerical_error"]))
+    aliases = {"missed_surface": "missed"}
+    supported = {"total_internal_reflection", "missed", "missed_surface", "aiming_failed", "blocked", "numerical_error"}
+    unknown = sorted(requested - supported)
+    if unknown:
+        raise StructuredOpticsError(
+            "optics_value_error",
+            "Unknown ray loss status.",
+            params={"ray_loss_statuses": unknown, "supported_statuses": sorted(supported)},
+        )
+    statuses = {aliases.get(status, status) for status in requested}
+    trace = trace_forward(compiled, fields, sampling, wavelengths, options)
+    results: list[OperandResult] = []
+    for field in fields:
+        field_id = str(field.get("id", "field"))
+        for wavelength in wavelengths:
+            mask = np.asarray(
+                [trace.field_ids[index] == field_id and abs(float(trace.wavelengths_nm[index]) - wavelength) <= 1.0e-9 for index in range(trace.status.size)],
+                dtype=bool,
+            )
+            value = 0.0 if not np.any(mask) else float(np.mean(np.isin(trace.status[mask], sorted(statuses))))
+            results.append(
+                OperandResult(
+                    metric="ray_loss_ratio",
+                    value=value,
+                    target=0.0,
+                    tolerance=tolerance,
+                    weight=1.0,
+                    residual=value / tolerance,
+                    field_id=field_id,
+                    wavelength_nm=float(wavelength),
+                )
+            )
+    return results
 
 
 def _evaluate_operands(
@@ -434,6 +489,14 @@ def evaluate_system(
     else:
         operand_results = []
         merit = _compute_merit(metric_values, weights)
+    loss_operands = _ray_loss_operands(compiled, fields, sampling, wavelengths, analysis_options, evaluation_data)
+    operand_results.extend(loss_operands)
+    loss_penalty = sum(float(operand.residual or 0.0) ** 2 for operand in loss_operands)
+    if merit is not None:
+        merit_metrics = dict(merit.metrics)
+        merit_metrics["ray_loss_penalty"] = loss_penalty
+        merit_metrics["score"] = merit.score + loss_penalty
+        merit = MeritResult(score=merit.score + loss_penalty, metrics=merit_metrics, weights=dict(merit.weights))
     return EvaluateResult(
         status="ok",
         merit=merit,
