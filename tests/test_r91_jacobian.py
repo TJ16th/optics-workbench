@@ -98,7 +98,9 @@ def test_jacobian_api_returns_required_shape_and_all_variable_kinds():
     assert result.jacobian.matrix_shape == [len(result.operands), 5]
     assert isinstance(result.jacobian.matrix, list)
     assert all(column.scheme_used == "central" for column in result.jacobian.columns)
-    assert result.jacobian.metadata["strategy"] == "request_local_warm_refinement"
+    assert result.jacobian.metadata["strategy"] == "candidate_axis_batch"
+    assert result.jacobian.metadata["candidate_batch_trace_calls"] > 0
+    assert result.jacobian.metadata["candidate_batch_fallback_calls"] == 0
     assert result.jacobian.metadata["global_cache_write"] is False
     assert result.jacobian.steps_used["S1_A4"] >= 1.0e-12
 
@@ -125,6 +127,8 @@ def test_warm_refinement_matches_independent_exact_oracle_and_does_not_fill_glob
     )
 
     assert len(_AIMING_AFFINE_CACHE) == 0
+    assert warm.jacobian.metadata["strategy"] == "candidate_axis_batch"
+    assert oracle.jacobian.metadata["strategy"] == "independent_exact"
     assert warm.jacobian.metadata["warm_seeded_solves"] > 0
     assert warm.jacobian.residuals == pytest.approx(oracle.jacobian.residuals, abs=1.0e-6, rel=1.0e-8)
     assert np.asarray(warm.jacobian.matrix) == pytest.approx(

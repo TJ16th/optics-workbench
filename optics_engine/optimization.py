@@ -22,7 +22,7 @@ from .paraxial import analyze_paraxial
 from .psf_mtf import analyze_geometric_mtf, analyze_relative_illumination, analyze_white_mtf
 from .solves import resolve_configuration_solves
 from .system import CompiledSystem, compile_system
-from .tracing import trace_forward
+from .tracing import CandidateTraceCoordinator, trace_forward
 from .variables import apply_variable_bindings, resolve_variable_binding, variable_value
 
 
@@ -843,37 +843,132 @@ def _evaluate_with_jacobian(
     matrix: list[list[float | None]] = [[None for _ in variable_keys] for _ in base_residuals]
     columns: list[JacobianColumnResult] = []
     candidate_count = 0
+    batch_calls = 0
+    batch_fallback_calls = 0
 
-    def candidate(key: str, value: float, candidate_id: str) -> tuple[list[float] | None, list[dict[str, Any]]]:
-        nonlocal candidate_count
-        candidate_count += 1
-        candidate_variables = {**(variables or {}), key: value}
-        try:
-            result = evaluate_system(
-                base_system,
-                evaluation,
-                configuration=configuration,
-                variables=candidate_variables,
-                ray_sampling=_jacobian_sampling(ray_sampling, workspace, "candidate", candidate_id),
-            )
-        except (StructuredOpticsError, ValueError, TypeError) as exc:
-            return None, _candidate_violation(exc)
-        residuals = _residual_vector(result)
-        if residuals is None or len(residuals) != len(base_residuals):
-            return None, list(result.violations) or [
-                {
-                    "severity": "error",
-                    "code": "infeasible",
-                    "params": {"candidate_id": candidate_id},
-                    "message_en": "Jacobian candidate did not produce the base residual layout.",
-                }
-            ]
-        return residuals, []
+    def candidate_batch(
+        requests: list[tuple[str, str, float]],
+    ) -> dict[str, tuple[list[float] | None, list[dict[str, Any]]]]:
+        nonlocal candidate_count, batch_calls, batch_fallback_calls
+        candidate_count += len(requests)
+        answers: dict[str, tuple[list[float] | None, list[dict[str, Any]]]] = {}
+        if not warm_refinement:
+            for candidate_id, key, value in requests:
+                try:
+                    result = evaluate_system(
+                        base_system,
+                        evaluation,
+                        configuration=configuration,
+                        variables={**(variables or {}), key: value},
+                        ray_sampling=_jacobian_sampling(ray_sampling, None, "candidate", candidate_id),
+                    )
+                except (StructuredOpticsError, ValueError, TypeError) as exc:
+                    answers[candidate_id] = (None, _candidate_violation(exc))
+                    continue
+                residuals = _residual_vector(result)
+                violations = list(result.violations) or [
+                    {
+                        "severity": "error",
+                        "code": "infeasible",
+                        "params": {"candidate_id": candidate_id},
+                        "message_en": "Jacobian candidate did not produce the base residual layout.",
+                    }
+                ]
+                answers[candidate_id] = (
+                    residuals if residuals is not None and len(residuals) == len(base_residuals) else None,
+                    [] if residuals is not None and len(residuals) == len(base_residuals) else violations,
+                )
+            return answers
+        prepared: list[tuple[str, OpticalSystem, dict[str, Any]]] = []
+        constraints = dict((evaluation or {}).get("constraints", {}))
+        for candidate_id, key, value in requests:
+            candidate_variables = {**(variables or {}), key: value}
+            try:
+                application = apply_variable_bindings(base_system, candidate_variables, configuration)
+                candidate_system, candidate_configuration, _ = resolve_configuration_solves(
+                    application.system, application.configuration
+                )
+                candidate_compiled = compile_system(candidate_system)
+                validation = validate_configuration(
+                    candidate_compiled,
+                    candidate_configuration,
+                    min_air_gap_mm=float(constraints.get("min_air_gap_mm", 0.0)),
+                    min_edge_thickness_mm=float(constraints.get("min_edge_thickness_mm", 0.0)),
+                )
+                if not validation.ok:
+                    answers[candidate_id] = (
+                        None,
+                        [issue.model_dump(mode="json") for issue in validation.issues],
+                    )
+                    continue
+                prepared.append((candidate_id, candidate_system, candidate_configuration))
+            except (StructuredOpticsError, ValueError, TypeError) as exc:
+                answers[candidate_id] = (None, _candidate_violation(exc))
+
+        if not prepared:
+            return answers
+        coordinator = CandidateTraceCoordinator(len(prepared))
+
+        def run(index_and_candidate: tuple[int, tuple[str, OpticalSystem, dict[str, Any]]]):
+            index, (candidate_id, candidate_system, candidate_configuration) = index_and_candidate
+            sampling = _jacobian_sampling(ray_sampling, workspace, "candidate", candidate_id)
+            aiming = dict(sampling.get("ray_aiming", {}))
+            aiming["_candidate_trace_coordinator"] = coordinator
+            aiming["_candidate_index"] = index
+            sampling["ray_aiming"] = aiming
+            try:
+                result = evaluate_system(
+                    candidate_system,
+                    evaluation,
+                    configuration=candidate_configuration,
+                    ray_sampling=sampling,
+                )
+            except (StructuredOpticsError, ValueError, TypeError) as exc:
+                return candidate_id, None, _candidate_violation(exc)
+            residuals = _residual_vector(result)
+            if residuals is None or len(residuals) != len(base_residuals):
+                violations = list(result.violations) or [
+                    {
+                        "severity": "error",
+                        "code": "infeasible",
+                        "params": {"candidate_id": candidate_id},
+                        "message_en": "Jacobian candidate did not produce the base residual layout.",
+                    }
+                ]
+                return candidate_id, None, violations
+            return candidate_id, residuals, []
+
+        with ThreadPoolExecutor(max_workers=len(prepared)) as pool:
+            rows = list(pool.map(run, enumerate(prepared)))
+        for candidate_id, residuals, violations in rows:
+            answers[candidate_id] = (residuals, violations)
+        batch_calls += coordinator.batch_calls
+        batch_fallback_calls += coordinator.fallback_calls
+        return answers
+
+    plus_requests = [
+        (f"{key}:+", key, base_values[key] + steps_used[key])
+        for key in variable_keys
+    ]
+    plus_answers = candidate_batch(plus_requests)
+    minus_answers: dict[str, tuple[list[float] | None, list[dict[str, Any]]]] = {}
+    if mode == "central_diff":
+        minus_answers = candidate_batch(
+            [(f"{key}:-", key, base_values[key] - steps_used[key]) for key in variable_keys]
+        )
+    else:
+        fallback_requests = [
+            (f"{key}:-fallback", key, base_values[key] - steps_used[key])
+            for key in variable_keys
+            if plus_answers[f"{key}:+"][0] is None
+        ]
+        if fallback_requests:
+            minus_answers = candidate_batch(fallback_requests)
 
     for column_index, key in enumerate(variable_keys):
         base_value = base_values[key]
         step = steps_used[key]
-        plus, plus_violations = candidate(key, base_value + step, f"{key}:+")
+        plus, plus_violations = plus_answers[f"{key}:+"]
         minus = None
         minus_violations: list[dict[str, Any]] = []
         scheme = "failed"
@@ -884,14 +979,14 @@ def _evaluate_with_jacobian(
                 values = [(plus[row] - base_residuals[row]) / step for row in range(len(base_residuals))]
                 scheme = "forward"
             else:
-                minus, minus_violations = candidate(key, base_value - step, f"{key}:-fallback")
+                minus, minus_violations = minus_answers[f"{key}:-fallback"]
                 if minus is not None:
                     values = [(base_residuals[row] - minus[row]) / step for row in range(len(base_residuals))]
                     scheme = "backward_fallback"
                 else:
                     violations = plus_violations + minus_violations
         else:
-            minus, minus_violations = candidate(key, base_value - step, f"{key}:-")
+            minus, minus_violations = minus_answers[f"{key}:-"]
             if plus is not None and minus is not None:
                 values = [(plus[row] - minus[row]) / (2.0 * step) for row in range(len(base_residuals))]
                 scheme = "central"
@@ -937,8 +1032,10 @@ def _evaluate_with_jacobian(
         steps_used=steps_used,
         columns=columns,
         metadata={
-            "strategy": "request_local_warm_refinement" if warm_refinement else "independent_exact",
+            "strategy": "candidate_axis_batch" if warm_refinement else "independent_exact",
             "candidate_evaluations": candidate_count,
+            "candidate_batch_trace_calls": batch_calls,
+            "candidate_batch_fallback_calls": batch_fallback_calls,
             "warm_seeded_solves": warm_seeded,
             "cold_fallbacks": cold_fallbacks,
             "global_cache_write": False,

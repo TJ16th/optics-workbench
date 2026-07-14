@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import hashlib
 import json
+import threading
 import time
 from typing import Any
 
@@ -90,6 +91,99 @@ class CandidateTraceResult:
             eye_theta_y_deg=None if self.eye_theta_y_deg is None else self.eye_theta_y_deg[index],
             eye_theta_z_deg=None if self.eye_theta_z_deg is None else self.eye_theta_z_deg[index],
         )
+
+
+class CandidateTraceCoordinator:
+    """Synchronize matching trace calls made by Jacobian candidate workers."""
+
+    def __init__(self, candidate_count: int, *, candidate_chunk_size: int | None = None) -> None:
+        if candidate_count <= 0:
+            raise ValueError("candidate_count must be positive")
+        self.candidate_count = candidate_count
+        self.candidate_chunk_size = candidate_chunk_size
+        self._condition = threading.Condition()
+        self._call_counts = [0] * candidate_count
+        self._submissions: dict[int, dict[int, dict[str, Any]]] = {}
+        self._results: dict[int, list[TraceResult]] = {}
+        self._consumed: dict[int, int] = {}
+        self.batch_calls = 0
+        self.fallback_calls = 0
+
+    def trace(
+        self,
+        candidate_index: int,
+        compiled: CompiledSystem,
+        origins: np.ndarray,
+        directions: np.ndarray,
+        wavelengths_nm: np.ndarray,
+        *,
+        field_ids: list[str],
+        store_path: bool,
+        configuration: dict[str, Any] | None,
+    ) -> TraceResult:
+        with self._condition:
+            call_index = self._call_counts[candidate_index]
+            self._call_counts[candidate_index] += 1
+            submissions = self._submissions.setdefault(call_index, {})
+            submissions[candidate_index] = {
+                "compiled": compiled,
+                "origins": origins,
+                "directions": directions,
+                "wavelengths_nm": wavelengths_nm,
+                "field_ids": field_ids,
+                "store_path": store_path,
+                "configuration": configuration,
+            }
+            if len(submissions) == self.candidate_count:
+                ordered = [submissions[index] for index in range(self.candidate_count)]
+                same_shape = len({row["origins"].shape for row in ordered}) == 1
+                same_store_path = len({row["store_path"] for row in ordered}) == 1
+                if same_shape and same_store_path:
+                    batch = _trace_raw_candidates(
+                        [row["compiled"] for row in ordered],
+                        np.stack([row["origins"] for row in ordered]),
+                        np.stack([row["directions"] for row in ordered]),
+                        np.stack([row["wavelengths_nm"] for row in ordered]),
+                        field_ids=[row["field_ids"] for row in ordered],
+                        store_path=bool(ordered[0]["store_path"]),
+                        configurations=[row["configuration"] for row in ordered],
+                        candidate_chunk_size=self.candidate_chunk_size,
+                    )
+                    results = [batch.candidate(index) for index in range(self.candidate_count)]
+                    self.batch_calls += int(batch.metadata["batch_eligible"])
+                    self.fallback_calls += int(batch.metadata["fallback_used"])
+                else:
+                    results = []
+                    for row in ordered:
+                        layout = runtime_layout(row["compiled"], row["configuration"])
+                        results.append(
+                            _trace_raw(
+                                row["compiled"],
+                                row["origins"],
+                                row["directions"],
+                                row["wavelengths_nm"],
+                                field_ids=row["field_ids"],
+                                store_path=row["store_path"],
+                                centers_mm=layout.centers_mm,
+                                rotations=layout.rotations,
+                                configuration=row["configuration"],
+                            )
+                        )
+                    self.fallback_calls += 1
+                self._results[call_index] = results
+                self._condition.notify_all()
+            else:
+                ready = self._condition.wait_for(lambda: call_index in self._results, timeout=120.0)
+                if not ready:
+                    raise RuntimeError("candidate trace synchronization timed out")
+
+            result = self._results[call_index][candidate_index]
+            self._consumed[call_index] = self._consumed.get(call_index, 0) + 1
+            if self._consumed[call_index] == self.candidate_count:
+                self._submissions.pop(call_index, None)
+                self._results.pop(call_index, None)
+                self._consumed.pop(call_index, None)
+            return result
 
 
 @dataclass
@@ -1442,17 +1536,30 @@ def trace_forward(
                 aiming_iterations.append(iterations)
     t_generation = time.perf_counter()
 
-    result = _trace_raw(
-        compiled,
-        np.array(origins, dtype=float),
-        np.array(directions, dtype=float),
-        np.array(ray_wavelengths, dtype=float),
-        field_ids=field_ids,
-        store_path=store_path,
-        centers_mm=centers_mm,
-        rotations=rotations,
-        configuration=configuration,
-    )
+    candidate_coordinator = aiming.get("_candidate_trace_coordinator")
+    if candidate_coordinator is not None:
+        result = candidate_coordinator.trace(
+            int(aiming["_candidate_index"]),
+            compiled,
+            np.array(origins, dtype=float),
+            np.array(directions, dtype=float),
+            np.array(ray_wavelengths, dtype=float),
+            field_ids=field_ids,
+            store_path=store_path,
+            configuration=configuration,
+        )
+    else:
+        result = _trace_raw(
+            compiled,
+            np.array(origins, dtype=float),
+            np.array(directions, dtype=float),
+            np.array(ray_wavelengths, dtype=float),
+            field_ids=field_ids,
+            store_path=store_path,
+            centers_mm=centers_mm,
+            rotations=rotations,
+            configuration=configuration,
+        )
     t_trace = time.perf_counter()
     aiming_ok_array = np.array(aiming_ok, dtype=bool)
     result.status[~aiming_ok_array] = STATUS_AIMING_FAILED
