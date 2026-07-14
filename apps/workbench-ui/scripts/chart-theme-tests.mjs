@@ -18,7 +18,7 @@ await build({
   logLevel: 'silent',
 })
 
-const { wavelengthBand, wavelengthColor, wavelengthPalette } = await import(`${pathToFileURL(outFile).href}?t=${Date.now()}`)
+const { chartPalettes, wavelengthBand, wavelengthColor, wavelengthPalette } = await import(`${pathToFileURL(outFile).href}?t=${Date.now()}`)
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
@@ -32,5 +32,7 @@ assert(wavelengthBand(610) === 'custom', 'custom wavelengths should use neutral 
 assert(wavelengthColor(486.13) === wavelengthPalette.F, 'F line color mismatch')
 assert(wavelengthColor(656.27) === wavelengthPalette.C, 'C line color mismatch')
 assert(new Set(['F', 'd', 'e', 'C'].map((band) => wavelengthPalette[band])).size === 4, 'standard line colors must be distinct')
+assert(chartPalettes.light.F !== chartPalettes.dark.F, 'light and dark chart palettes should use different contrast values')
+assert(new Set(['F', 'd', 'e', 'C'].map((band) => chartPalettes.dark[band])).size === 4, 'dark standard line colors must remain distinct')
 
 console.log('chart-theme:test ok')

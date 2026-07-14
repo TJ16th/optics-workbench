@@ -1,6 +1,7 @@
 {
   "settings": {
     "api": "API",
+    "runtime_controls": "Runtime controls",
     "base_url": "Base URL",
     "connection": "Connection",
     "version": "Version",

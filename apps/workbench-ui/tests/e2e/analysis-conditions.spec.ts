@@ -360,7 +360,12 @@ async function layoutSurfaceVertexX(page: import('@playwright/test').Page, surfa
 async function selectPresetOption(page: import('@playwright/test').Page, label: string) {
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByRole('option', { name: new RegExp(label) }).click()
-  await expect(page.getByRole('combobox', { name: 'Preset', exact: true })).toContainText(label)
+  await expect(page.getByTestId('preset-selected-name')).toContainText(label)
+}
+
+async function openRuntimeControls(page: import('@playwright/test').Page) {
+  const toggle = page.getByRole('button', { name: 'Runtime controls' })
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
 }
 
 test('visual composite switches between instrument and retinal results', async ({ page }) => {
@@ -391,15 +396,116 @@ async function layoutSurfaceBoxes(page: import('@playwright/test').Page) {
   )
 }
 
-test('preset selector lists shipped presets in natural id order', async ({ page }) => {
+test('preset selector groups shipped presets by catalog metadata and id', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en')
 
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   const optionTexts = await page.getByRole('option').allTextContents()
   const presetIds = optionTexts.map((text) => /P\d{3}/.exec(text)?.[0]).filter((id): id is string => Boolean(id))
-  expect(presetIds).toEqual(['P001', 'P002', 'P003', 'P004', 'P006', 'P007', 'P008', 'P009', 'P010', 'P011', 'P012', 'P013'])
+  expect(presetIds).toEqual(['P004', 'P007', 'P011', 'P012', 'P013', 'P001', 'P002', 'P003', 'P009', 'P010', 'P006', 'P008'])
   expect(optionTexts.join(' ')).not.toContain('P005')
+})
+
+test('preset ComboBox searches metadata, exposes categories, and supports keyboard selection', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+
+  const combo = page.getByRole('combobox', { name: 'Preset', exact: true })
+  await combo.fill('両凸単レンズ')
+  await expect(page.getByRole('option', { name: /P002/ })).toBeVisible()
+  await combo.press('Escape')
+
+  await combo.fill('focus group')
+  await expect(page.getByRole('option', { name: /P013/ })).toBeVisible()
+  await expect(page.getByText('Photographic', { exact: true })).toBeVisible()
+  await combo.press('ArrowDown')
+  await combo.press('Enter')
+  await expect(page.getByTestId('preset-selected-name')).toContainText('P013')
+  await combo.press('Escape')
+  await expect(page.getByRole('option').first()).toBeHidden()
+})
+
+test('preset full name remains readable in English, Japanese, and pseudo locales', async ({ page }) => {
+  await mockEngine(page)
+  for (const language of ['en', 'ja', 'pseudo']) {
+    await page.goto(`/?lng=${language}`)
+    const combo = page.locator('#preset')
+    await combo.fill('P013')
+    await page.getByRole('option', { name: /P013/ }).click()
+    const size = await page.getByTestId('preset-selected-name').evaluate((node) => ({
+      clientWidth: node.clientWidth,
+      scrollWidth: node.scrollWidth,
+      text: node.textContent ?? '',
+    }))
+    expect(size.text).toContain('P013')
+    expect(size.scrollWidth).toBeLessThanOrEqual(size.clientWidth + 1)
+  }
+})
+
+test('right pane context reduces R99 scroll excess on every workbench screen', async ({ page }) => {
+  await mockEngine(page)
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await page.goto('/?lng=en')
+  const r99Baseline: Record<string, number> = { System: 2379, Preview: 2387, Analysis: 2387, Compare: 2387, Debug: 2387 }
+
+  const measured: Record<string, number> = {}
+  for (const screen of Object.keys(r99Baseline)) {
+    await page.getByRole('tab', { name: screen, exact: true }).click()
+    const excess = await page.locator('.right-pane').evaluate((node) => node.scrollHeight - node.clientHeight)
+    measured[screen] = excess
+    expect(excess, `${screen} right-pane excess`).toBeLessThan(r99Baseline[screen])
+  }
+  console.info('R100 right-pane scroll excess', measured)
+  await test.info().attach('r100-right-pane-scroll.json', { body: JSON.stringify({ r99Baseline, measured }, null, 2), contentType: 'application/json' })
+})
+
+test('theme follows explicit selection, keeps contrast and wavelength identity, and persists', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+
+  const contrastReport = async () => page.evaluate(() => {
+    const root = document.querySelector('.app-theme') as HTMLElement
+    const style = getComputedStyle(root)
+    const parse = (value: string) => {
+      const match = value.match(/#([0-9a-f]{6})/i)
+      if (match) return [0, 2, 4].map((offset) => Number.parseInt(match[1].slice(offset, offset + 2), 16))
+      return (value.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number)
+    }
+    const luminance = (rgb: number[]) => {
+      const linear = rgb.map((component) => {
+        const value = component / 255
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    }
+    const contrast = (left: string, right: string) => {
+      const values = [luminance(parse(left)), luminance(parse(right))].sort((a, b) => b - a)
+      return (values[0] + 0.05) / (values[1] + 0.05)
+    }
+    const bg = style.getPropertyValue('--ow-panel').trim()
+    const text = style.getPropertyValue('--ow-text').trim()
+    const waves = ['--ow-wave-f', '--ow-wave-d', '--ow-wave-e', '--ow-wave-c'].map((token) => style.getPropertyValue(token).trim())
+    return { textContrast: contrast(text, bg), waveContrast: waves.map((color) => contrast(color, bg)), waves: waves.map(parse) }
+  })
+
+  await page.locator('#theme-preference').selectOption('dark')
+  await expect(page.locator('html')).toHaveAttribute('data-color-scheme', 'dark')
+  const dark = await contrastReport()
+  expect(dark.textContrast).toBeGreaterThanOrEqual(4.5)
+  dark.waveContrast.forEach((value) => expect(value).toBeGreaterThanOrEqual(3))
+  expect(dark.waves[0][2]).toBeGreaterThan(dark.waves[0][0])
+  expect(dark.waves[1][0]).toBeGreaterThan(dark.waves[1][2])
+  expect(dark.waves[2][1]).toBeGreaterThan(dark.waves[2][0])
+  expect(dark.waves[3][0]).toBeGreaterThan(dark.waves[3][1])
+
+  await page.reload()
+  await expect(page.locator('#theme-preference')).toHaveValue('dark')
+  await expect(page.locator('html')).toHaveAttribute('data-color-scheme', 'dark')
+  await page.locator('#theme-preference').selectOption('light')
+  const light = await contrastReport()
+  expect(light.textContrast).toBeGreaterThanOrEqual(4.5)
+  light.waveContrast.forEach((value) => expect(value).toBeGreaterThanOrEqual(3))
 })
 
 test('shipped preset selection resets fields to recommended values', async ({ page }) => {
@@ -574,7 +680,7 @@ test('layout view legend explains ray, wavelength, element, and marker styles', 
   await expect(legend.locator('.legend-annulus')).toHaveCount(0)
   await expect(legend).toContainText('IMG')
   await expect(legend.locator('.legend-line.ray-f')).toHaveCSS('border-top-color', 'rgb(15, 98, 254)')
-  await expect(legend.locator('.legend-line.ray-d')).toHaveCSS('border-top-color', 'rgb(36, 161, 72)')
+  await expect(legend.locator('.legend-line.ray-d')).toHaveCSS('border-top-color', 'rgb(25, 128, 56)')
   await expect(legend.locator('.legend-line.ray-c')).toHaveCSS('border-top-color', 'rgb(218, 30, 40)')
 
   await selectPresetOption(page, 'P005 Coaxial Cassegrain Telescope Demo')
@@ -1065,6 +1171,7 @@ test('group motion sliders send runtime configuration through debounced preview'
   await page.goto('/?lng=en')
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByText('P003 Achromat Doublet 100mm Demo').click()
+  await openRuntimeControls(page)
 
   await expect(page.getByText('Group Motion')).toBeVisible()
   await expect(page.locator('#focus-group')).toHaveValue('FOCUS_G')
@@ -1103,6 +1210,7 @@ test('aperture slider updates stop radius through debounced preview', async ({ p
   await page.goto('/?lng=en')
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByText('P003 Achromat Doublet 100mm Demo').click()
+  await openRuntimeControls(page)
 
   await page.getByRole('button', { name: 'Run Preview' }).click()
   await expect.poll(() => registerRequests.length, { timeout: 3_000 }).toBe(1)
@@ -1154,6 +1262,7 @@ test('decenter tilt sliders send configuration and expose evaluated symmetric fi
   await page.goto('/?lng=en')
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByText('P003 Achromat Doublet 100mm Demo').click()
+  await openRuntimeControls(page)
 
   await expect(page.locator('#decenter-tilt-group')).toHaveValue('OIS_G')
   await page.locator('#shift-y-slider').evaluate((node) => {
@@ -1416,6 +1525,7 @@ test('image-plane policy solves focus, writes back sensor, and disables for afoc
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByText('P002 N-BK7 Biconvex Singlet 50mm Demo').click()
   await expect(page.getByText('P002 N-BK7 Biconvex Singlet').first()).toBeVisible()
+  await page.getByRole('tab', { name: 'Analysis' }).click()
   await page.locator('#image-plane-policy-mode').selectOption('best_focus_rms')
   await expect(page.locator('#image-plane-policy-mode')).toHaveValue('best_focus_rms')
   await page.getByRole('button', { name: 'Solve Image Plane' }).click()
@@ -1433,6 +1543,7 @@ test('image-plane policy solves focus, writes back sensor, and disables for afoc
 
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByText('P006 Keplerian Afocal Telescope Demo').click()
+  await page.getByRole('tab', { name: 'Analysis' }).click()
   await expect(page.locator('#image-plane-policy-mode')).toBeDisabled()
   await expect(page.getByTestId('image-plane-policy-panel')).toContainText('Image-plane policy applies only to focal systems with a sensor.')
 })

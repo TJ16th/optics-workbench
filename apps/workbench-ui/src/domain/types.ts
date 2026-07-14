@@ -161,6 +161,11 @@ export type Preset = {
   visible?: boolean
   recommendedAnalysis: string[]
   recommendedFields?: AnalysisField[]
+  catalog: {
+    category: 'photographic' | 'simple_educational' | 'telescope_afocal' | 'visual' | 'fixtures'
+    efl_mm?: number
+    f_number?: number
+  }
   system: OpticalSystem
 }
 

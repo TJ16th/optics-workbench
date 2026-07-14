@@ -34,8 +34,27 @@
       "en": "English",
       "pseudo": "Pseudo"
     },
+    "theme": {
+      "label": "Theme",
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
     "preset": {
       "label": "Preset",
+      "search_placeholder": "Search presets",
+      "categories": {
+        "photographic": "Photographic",
+        "simple_educational": "Simple & Educational",
+        "telescope_afocal": "Telescope & Afocal",
+        "visual": "Visual",
+        "fixtures": "Fixtures"
+      },
+      "attributes": {
+        "elements": "{{count}} elements",
+        "asphere": "asphere",
+        "focus": "focus group"
+      },
       "items": {
         "P001": {
           "name": "Ideal Thin Lens 50mm F4",

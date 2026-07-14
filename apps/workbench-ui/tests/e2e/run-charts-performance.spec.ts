@@ -24,10 +24,10 @@ async function selectCatalogPreset(page: Page, presetId: 'P007' | 'P009' | 'P011
   if (!preset) throw new Error(`Missing preset catalog entry: ${presetId}`)
 
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
-  const option = page.getByRole('option', { name: new RegExp(`^${presetId}\\s`) })
-  await expect(option).toHaveText(`${preset.id} ${preset.name}`)
+  const option = page.getByRole('option', { name: new RegExp(`${presetId}\\s`) })
+  await expect(option).toContainText(`${preset.id} ${preset.name}`)
   await option.click()
-  await expect(page.getByRole('combobox', { name: 'Preset', exact: true })).toContainText(`${preset.id} ${preset.name}`)
+  await expect(page.getByTestId('preset-selected-name')).toHaveText(`${preset.id} ${preset.name}`)
 }
 
 test('P011 Preview distinguishes aiming_failed baseline rays against the real API', async ({ page }) => {
@@ -49,7 +49,7 @@ test('P011 Preview distinguishes aiming_failed baseline rays against the real AP
     const computed = getComputedStyle(node)
     return { stroke: computed.stroke, dash: computed.strokeDasharray }
   })
-  expect(style.stroke).toBe('rgb(255, 131, 43)')
+  expect(style.stroke).toBe('rgb(186, 78, 0)')
   expect(style.dash).not.toBe('3px, 2px')
 })
 

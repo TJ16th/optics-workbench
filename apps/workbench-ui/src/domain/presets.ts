@@ -1,5 +1,26 @@
 import type { Preset } from './types'
 
+type PresetDefinition = Omit<Preset, 'catalog'>
+
+const catalogMetadata: Record<string, Preset['catalog']> = {
+  P001: { category: 'simple_educational', efl_mm: 50, f_number: 4 },
+  P002: { category: 'simple_educational', efl_mm: 50 },
+  P003: { category: 'simple_educational', efl_mm: 100 },
+  P004: { category: 'photographic', efl_mm: 50, f_number: 1.4 },
+  P005: { category: 'telescope_afocal', efl_mm: 3000, f_number: 15 },
+  P006: { category: 'telescope_afocal' },
+  P007: { category: 'photographic', efl_mm: 50, f_number: 1.8 },
+  P008: { category: 'telescope_afocal' },
+  P009: { category: 'simple_educational', efl_mm: 50 },
+  P010: { category: 'simple_educational' },
+  P011: { category: 'photographic', efl_mm: 50, f_number: 1.4 },
+  P012: { category: 'photographic', efl_mm: 50, f_number: 2.8 },
+  P013: { category: 'photographic', efl_mm: 50, f_number: 1.4 },
+  V001: { category: 'visual' },
+  F_ASPHERE: { category: 'fixtures' },
+  F_EDGE_CASE: { category: 'fixtures' },
+}
+
 const commonMaterials = [
   { id: 'AIR', type: 'constant' as const, n: 1.0 },
   {
@@ -19,7 +40,7 @@ const commonMaterials = [
 // Shipped presets use their centered, rotationally symmetric baseline. They
 // sample the meridional theta_y direction; P003 decenter/tilt cases require
 // user-supplied signed Y/Z fields for their asymmetric evaluation.
-export const presets: Preset[] = [
+const presetDefinitions: PresetDefinition[] = [
   {
     id: 'P001',
     name: 'Ideal Thin Lens 50mm F4',
@@ -544,7 +565,12 @@ export const presets: Preset[] = [
   },
 ]
 
-export const visualFixturePresets: Preset[] = [
+export const presets: Preset[] = presetDefinitions.map((preset) => ({
+  ...preset,
+  catalog: catalogMetadata[preset.id],
+}))
+
+const visualFixtureDefinitions: PresetDefinition[] = [
   {
     id: 'F_ASPHERE',
     name: 'Asphere Layout Visual Fixture',
@@ -612,3 +638,8 @@ export const visualFixturePresets: Preset[] = [
     },
   },
 ]
+
+export const visualFixturePresets: Preset[] = visualFixtureDefinitions.map((preset) => ({
+  ...preset,
+  catalog: catalogMetadata[preset.id],
+}))

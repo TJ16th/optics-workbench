@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Accordion,
   AccordionItem,
@@ -6,7 +6,7 @@ import {
   Checkbox,
   CodeSnippet,
   ContentSwitcher,
-  Dropdown,
+  ComboBox,
   Header,
   HeaderName,
   InlineNotification,
@@ -19,6 +19,7 @@ import {
   Toggletip,
   ToggletipButton,
   ToggletipContent,
+  Theme,
 } from '@carbon/react'
 import { Add, Checkmark, Download, Play, Renew, Save, TrashCan } from '@carbon/icons-react'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -43,6 +44,7 @@ import type {
   MtfMode,
   OpticalGroup,
   OpticalSystem,
+  Preset,
   RayFanPoint,
   RelativeIlluminationRow,
   RuntimeConfiguration,
@@ -57,11 +59,15 @@ import { changeLanguage } from '../i18n'
 import { displayIsoDate, formatFixed, formatInteger, isoNow } from '../i18n/format'
 import { getTerm, renderEngineIssue, termLabel } from '../i18n/glossary'
 import type { SupportedLanguage } from '../i18n/resources'
-import { wavelengthColor } from './chartTheme'
+import { seriesPalette, wavelengthColor } from './chartTheme'
 import { makeExportSvg, type ExportChart } from './exportSvg'
 
 type TabKey = 'system' | 'preview' | 'analysis' | 'compare' | 'debug'
 type AnalysisViewKey = 'standard' | 'through_focus'
+type ThemePreference = 'system' | 'light' | 'dark'
+
+const themeStorageKey = 'optics-workbench-theme'
+const presetCategoryOrder: Preset['catalog']['category'][] = ['photographic', 'simple_educational', 'telescope_afocal', 'visual', 'fixtures']
 
 type Snapshot = {
   id: string
@@ -551,8 +557,29 @@ function presetSummary(id: string, fallback: string, t: (key: string, options?: 
   return t(`common.preset.items.${id}.summary`, { defaultValue: fallback })
 }
 
-function sortPresetsById(items: typeof presets) {
-  return [...items].sort((left, right) => presetIdCollator.compare(left.id, right.id))
+function sortPresetsByCategory(items: Preset[]) {
+  return [...items].sort((left, right) => {
+    const categoryDelta = presetCategoryOrder.indexOf(left.catalog.category) - presetCategoryOrder.indexOf(right.catalog.category)
+    return categoryDelta || presetIdCollator.compare(left.id, right.id)
+  })
+}
+
+function presetElementCount(preset: Preset) {
+  return preset.system.surfaces.filter((surface) =>
+    surface.kind === 'thin_lens'
+    || surface.kind === 'mirror'
+    || (surface.kind === 'refractive' && Boolean(surface.material_after) && surface.material_after !== 'AIR'),
+  ).length
+}
+
+function presetAttributeLabels(preset: Preset, t: (key: string, options?: Record<string, unknown>) => string) {
+  const attributes: string[] = [preset.system.system_type ?? 'focal']
+  if (preset.catalog.efl_mm != null) attributes.push(`EFL ${preset.catalog.efl_mm} mm`)
+  if (preset.catalog.f_number != null) attributes.push(`F/${preset.catalog.f_number}`)
+  attributes.push(t('common.preset.attributes.elements', { count: presetElementCount(preset) }))
+  if (preset.system.surfaces.some((surface) => surface.surface_type === 'aspherical_even')) attributes.push(t('common.preset.attributes.asphere'))
+  if ((preset.system.groups ?? []).some((group) => /focus/i.test(group.id) || /focus/i.test(group.name ?? ''))) attributes.push(t('common.preset.attributes.focus'))
+  return attributes
 }
 
 function getApiIssue(error: unknown): EngineIssue | undefined {
@@ -2031,7 +2058,7 @@ function seriesFromDistortion(rows: DistortionRow[] | undefined): ChartSeries[] 
   return [
     {
       id: 'distortion',
-      color: '#0f62fe',
+      color: seriesPalette[0],
       points: (rows ?? [])
         .filter((row) => finitePoint(fieldAngle(row), row.distortion_percent))
         .map((row) => ({ x: fieldAngle(row), y: row.distortion_percent as number })),
@@ -2043,7 +2070,7 @@ function seriesFromDistortionStandard(rows: DistortionRow[] | undefined): ChartS
   return [
     {
       id: 'distortion',
-      color: '#0f62fe',
+      color: seriesPalette[0],
       points: (rows ?? [])
         .filter((row) => finitePoint(row.distortion_percent, fieldAngle(row)))
         .map((row) => ({ x: row.distortion_percent as number, y: fieldAngle(row) })),
@@ -2056,14 +2083,14 @@ function seriesFromFieldCurvature(rows: FieldCurvatureRow[] | undefined): ChartS
   return [
     {
       id: 'M',
-      color: '#0f62fe',
+      color: seriesPalette[0],
       points: safeRows
         .filter((row) => finitePoint(fieldAngle(row), row.tangential_focus_shift_mm ?? row.best_focus_shift_mm))
         .map((row) => ({ x: fieldAngle(row), y: (row.tangential_focus_shift_mm ?? row.best_focus_shift_mm) as number })),
     },
     {
       id: 'S',
-      color: '#da1e28',
+      color: seriesPalette[1],
       points: safeRows
         .filter((row) => finitePoint(fieldAngle(row), row.sagittal_focus_shift_mm ?? row.best_focus_shift_mm))
         .map((row) => ({ x: fieldAngle(row), y: (row.sagittal_focus_shift_mm ?? row.best_focus_shift_mm) as number })),
@@ -2076,14 +2103,14 @@ function seriesFromFieldCurvatureStandard(rows: FieldCurvatureRow[] | undefined)
   return [
     {
       id: 'M',
-      color: '#0f62fe',
+      color: seriesPalette[0],
       points: safeRows
         .filter((row) => finitePoint(row.tangential_focus_shift_mm ?? row.best_focus_shift_mm, fieldAngle(row)))
         .map((row) => ({ x: (row.tangential_focus_shift_mm ?? row.best_focus_shift_mm) as number, y: fieldAngle(row) })),
     },
     {
       id: 'S',
-      color: '#da1e28',
+      color: seriesPalette[1],
       points: safeRows
         .filter((row) => finitePoint(row.sagittal_focus_shift_mm ?? row.best_focus_shift_mm, fieldAngle(row)))
         .map((row) => ({ x: (row.sagittal_focus_shift_mm ?? row.best_focus_shift_mm) as number, y: fieldAngle(row) })),
@@ -2095,7 +2122,7 @@ function seriesFromRelativeIllumination(rows: RelativeIlluminationRow[] | undefi
   return [
     {
       id: 'RI',
-      color: '#24a148',
+      color: seriesPalette[2],
       points: (rows ?? []).map((row) => ({ x: fieldAngle(row), y: row.relative_illumination * 100 })),
     },
   ]
@@ -2107,7 +2134,7 @@ function seriesFromMtf(points: MtfPoint[] | undefined, mode: MtfMode = 'monochro
     const fieldId = point.field_id ?? ''
     groups.set(fieldId, [...(groups.get(fieldId) ?? []), point])
   }
-  const colors = ['#0f62fe', '#da1e28', '#24a148', '#8a3ffc', '#ff832b', '#007d79']
+  const colors = seriesPalette
   return [...groups.entries()].flatMap(([fieldId, fieldPoints], index) => {
     const modePrefix = mode === 'white' ? 'white ' : ''
     const prefix = fieldId ? `${modePrefix}${fieldId} ` : modePrefix
@@ -2126,7 +2153,7 @@ function mtfFrequencyDomain(points: MtfPoint[] | undefined): readonly [number, n
 
 function throughFocusSeries(points: ThroughFocusMtfPoint[]): ChartSeries[] {
   const frequencies = [...new Set(points.map((point) => point.frequency_lp_per_mm))].sort((left, right) => left - right)
-  const colors = ['#0f62fe', '#da1e28', '#24a148', '#8a3ffc']
+  const colors = seriesPalette
   return frequencies.flatMap((frequency, index) => {
     const frequencyPoints = points.filter((point) => point.frequency_lp_per_mm === frequency)
     return [
@@ -2187,8 +2214,8 @@ function seriesFromFocusCurve(points: FocusCurvePoint[] | undefined, bestOffset?
     .map((point) => ({ x: point.offset_from_sensor_mm, y: point.metric }))
   const best = Number.isFinite(bestOffset) ? curve.filter((point) => Math.abs(point.x - (bestOffset as number)) < 1.0e-9) : []
   return [
-    { id: 'focus curve', color: '#0f62fe', points: curve },
-    { id: 'best focus', color: '#da1e28', points: best },
+    { id: 'focus curve', color: seriesPalette[0], points: curve },
+    { id: 'best focus', color: seriesPalette[1], points: best },
   ]
 }
 
@@ -2694,13 +2721,18 @@ export function App() {
   const { t, i18n } = useTranslation(['common', 'settings', 'analysis', 'layoutView'])
   const fixtureMode = new URLSearchParams(window.location.search).get('fixture')
   const visiblePresets = presets.filter((item) => item.visible !== false)
-  const availablePresets = sortPresetsById(
+  const availablePresets = sortPresetsByCategory(
     fixtureMode === 'all-presets'
       ? presets
       : fixtureMode === 'asphere-layout'
         ? [...visiblePresets, ...visualFixturePresets]
         : visiblePresets,
   )
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
+    const saved = window.localStorage.getItem(themeStorageKey)
+    return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system'
+  })
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const [apiBase, setApiBase] = useState(defaultApiBase)
   const [selectedPresetId, setSelectedPresetId] = useState('P001')
   const [activeTab, setActiveTab] = useState<TabKey>('preview')
@@ -2748,7 +2780,43 @@ export function App() {
   const [compareRightId, setCompareRightId] = useState('')
   const [exportLanguage, setExportLanguage] = useState<SupportedLanguage>('ja')
 
+  useEffect(() => {
+    window.localStorage.setItem(themeStorageKey, themePreference)
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const updateSystemTheme = () => setSystemDark(media.matches)
+    updateSystemTheme()
+    if (themePreference === 'system') media.addEventListener('change', updateSystemTheme)
+    return () => media.removeEventListener('change', updateSystemTheme)
+  }, [themePreference])
+
+  const resolvedTheme = themePreference === 'system' ? (systemDark ? 'dark' : 'light') : themePreference
+
+  useEffect(() => {
+    document.documentElement.dataset.colorScheme = resolvedTheme
+    document.documentElement.style.colorScheme = resolvedTheme
+  }, [resolvedTheme])
+
   const preset = availablePresets.find((item) => item.id === selectedPresetId) ?? availablePresets[0]
+  const fixedJa = i18n.getFixedT('ja')
+  const fixedEn = i18n.getFixedT('en')
+  const presetCategoryLabels: Record<Preset['catalog']['category'], string> = {
+    photographic: t('common.preset.categories.photographic'),
+    simple_educational: t('common.preset.categories.simple_educational'),
+    telescope_afocal: t('common.preset.categories.telescope_afocal'),
+    visual: t('common.preset.categories.visual'),
+    fixtures: t('common.preset.categories.fixtures'),
+  }
+  const presetSearchText = (item: Preset) => [
+    item.id,
+    item.name,
+    item.summary,
+    presetLabel(item.id, item.name, fixedJa),
+    presetSummary(item.id, item.summary, fixedJa),
+    presetLabel(item.id, item.name, fixedEn),
+    presetSummary(item.id, item.summary, fixedEn),
+    item.catalog.category,
+    ...presetAttributeLabels(item, t),
+  ].join(' ').toLocaleLowerCase()
   const policyDisabled = system.system_type === 'afocal'
 
   const health = useQuery({ queryKey: ['health', apiBase], queryFn: () => getHealth(apiBase), retry: false })
@@ -3240,12 +3308,25 @@ export function App() {
   }
 
   return (
+    <Theme theme={resolvedTheme === 'dark' ? 'g100' : 'g10'} className={`app-theme app-theme--${resolvedTheme}`}>
     <div className="app-shell">
       <Header aria-label={t('common.app.aria')}>
         <HeaderName href="#" prefix={t('common.app.prefix')}>
           {t('common.app.name')}
         </HeaderName>
         <div className="header-status">
+          <Select
+            id="theme-preference"
+            className="header-theme-select"
+            hideLabel
+            labelText={t('common.theme.label')}
+            value={themePreference}
+            onChange={(event) => setThemePreference(event.target.value as ThemePreference)}
+          >
+            <SelectItem value="system" text={t('common.theme.system')} />
+            <SelectItem value="light" text={t('common.theme.light')} />
+            <SelectItem value="dark" text={t('common.theme.dark')} />
+          </Select>
           <Tag type={engineOnline ? 'green' : 'red'}>{engineOnline ? t('common.status.engine_ok') : t('common.status.engine_offline')}</Tag>
           <Tag type={versionBlocked ? 'red' : 'blue'}>{t('common.status.api', { version: meta.data?.api_schema_version ?? t('common.status.unknown') })}</Tag>
           <Tag type={statusTone(validation?.status)}>{validation?.status ?? t('common.status.not_validated')}</Tag>
@@ -3256,12 +3337,23 @@ export function App() {
       <main className="workbench-grid">
         <aside className="left-pane">
           <section className="panel">
-            <Dropdown
+            <ComboBox
               id="preset"
               titleText={t('common.preset.label')}
-              label={t('common.preset.label')}
+              placeholder={t('common.preset.search_placeholder')}
               items={availablePresets}
               itemToString={(item) => (item ? `${item.id} ${presetLabel(item.id, item.name, t)}` : '')}
+              itemToElement={(item) => (
+                <div className="preset-option" data-preset-category={item.catalog.category}>
+                  <span className="preset-category-heading">{presetCategoryLabels[item.catalog.category]}</span>
+                  <strong>{item.id} {presetLabel(item.id, item.name, t)}</strong>
+                  <span className="preset-option-attributes">{presetAttributeLabels(item, t).join(' · ')}</span>
+                </div>
+              )}
+              shouldFilterItem={({ item, inputValue }) => {
+                const selectedText = `${preset.id} ${presetLabel(preset.id, preset.name, t)}`
+                return !inputValue || inputValue === selectedText || presetSearchText(item).includes(inputValue.toLocaleLowerCase())
+              }}
               selectedItem={preset}
               onChange={({ selectedItem }) => {
                 if (selectedItem) {
@@ -3289,6 +3381,7 @@ export function App() {
                 }
               }}
             />
+            <p className="preset-selected-name" data-testid="preset-selected-name">{preset.id} {presetLabel(preset.id, preset.name, t)}</p>
             <p className="muted">{presetSummary(preset.id, preset.summary, t)}</p>
             <div className="button-row">
               <Button size="sm" kind="secondary" renderIcon={Checkmark} disabled={!engineOnline || running || versionBlocked} onClick={() => validateMutation.mutate()}>
@@ -3559,7 +3652,7 @@ export function App() {
             </AccordionItem>
           </Accordion>
 
-          <AnalysisConditionPanel
+          {activeTab === 'preview' || activeTab === 'analysis' ? <AnalysisConditionPanel
             fields={analysisFields}
             wavelengths={wavelengths}
             samplesPerField={samplesPerField}
@@ -3579,16 +3672,20 @@ export function App() {
             onSetPupilDistribution={updatePupilDistribution}
             onSetAimingMode={updateAimingMode}
             onSetMtfMode={updateMtfMode}
-          />
+          /> : null}
 
-          <ImagePlanePolicyPanel
+          {activeTab === 'analysis' ? <ImagePlanePolicyPanel
             policy={imagePlanePolicy}
             disabled={policyDisabled}
             isSolving={focusMutation.isPending}
             onUpdatePolicy={updateImagePlanePolicy}
             onSolve={() => focusMutation.mutate()}
-          />
+          /> : null}
 
+          {activeTab === 'preview' ? (
+          <Accordion className="right-panel-accordion right-context-accordion" align="start">
+            <AccordionItem title={t('settings:settings.runtime_controls')}>
+              <div className="right-context-body">
           <GroupMotionPanel
             system={system}
             zoomPositionId={zoomPositionId}
@@ -3621,6 +3718,10 @@ export function App() {
             onCommit={commitDecenterTilt}
             onOpenHelp={setHelpTermId}
           />
+              </div>
+            </AccordionItem>
+          </Accordion>
+          ) : null}
 
           <Accordion className="right-panel-accordion" align="start">
             <AccordionItem title={t('settings:settings.validation')}>
@@ -3671,5 +3772,6 @@ export function App() {
 
       <HelpDrawer termId={helpTermId} onClose={() => setHelpTermId(null)} onNavigate={setHelpTermId} />
     </div>
+    </Theme>
   )
 }

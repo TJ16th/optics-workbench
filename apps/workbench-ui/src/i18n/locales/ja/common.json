@@ -34,8 +34,27 @@
       "en": "English",
       "pseudo": "Pseudo"
     },
+    "theme": {
+      "label": "テーマ",
+      "system": "システム",
+      "light": "ライト",
+      "dark": "ダーク"
+    },
     "preset": {
       "label": "プリセット",
+      "search_placeholder": "プリセットを検索",
+      "categories": {
+        "photographic": "写真レンズ",
+        "simple_educational": "シンプル・教育用",
+        "telescope_afocal": "望遠鏡・アフォーカル",
+        "visual": "視覚系",
+        "fixtures": "テスト用"
+      },
+      "attributes": {
+        "elements": "{{count}}枚",
+        "asphere": "非球面",
+        "focus": "フォーカス群"
+      },
       "items": {
         "P001": {
           "name": "理想薄レンズ 50mm F4",
