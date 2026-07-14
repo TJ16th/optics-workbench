@@ -63,3 +63,7 @@
 ## 実環境反映
 
 R102実装コミット直後にエンジンAPIとUI開発サーバーを再起動し、`GET /v1/meta`の`build_info.git_commit=dd6dcbe`と確認対象HEAD`dd6dcbe`の一致を確認した。その後、並行R103が`9c0e02c`としてコミットされHEADが進んだため、再度API/UIを再起動した。最終確認は`build_info.git_commit=9c0e02c`、HEAD`9c0e02c`で一致し、このHEADはR102の`dd6dcbe`を含む。`build_info.git_dirty=true`は指示書、benchmark JSON、報告書によるものである。UIの`http://127.0.0.1:5173`はHTTP `200`を確認した。
+
+## R104履歴修復後の注記
+
+R104で未push履歴をタスク境界ごとに修復したため、上記の旧R103コミット`9c0e02c`は新R103実装コミット`017af59`へ置き換わった。R102エンジン実装コミット`dd6dcbe`と、それ以前の履歴には変更がない。R102完了資料は新コミット`9d32483`へ分離された。
