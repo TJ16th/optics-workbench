@@ -1,6 +1,11 @@
 import { expect, test } from '@playwright/test'
 
 const expectedMtfFrequencies = Array.from({ length: 33 }, (_, index) => index * 2.5)
+const expectedMtfSampling = {
+  samples_per_field: 4096,
+  pupil_distribution: 'grid',
+  ray_aiming: { mode: 'paraxial' },
+}
 
 async function mockEngine(
   page: import('@playwright/test').Page,
@@ -1270,6 +1275,7 @@ test('curve analyses keep dense fields separate from ray fan and MTF frequency s
   for (const request of mtfRequests) {
     expect(request.body.fields).toHaveLength(1)
     expect(request.body.frequencies_lp_per_mm).toEqual(expectedMtfFrequencies)
+    expect(request.body.ray_sampling).toEqual(expectedMtfSampling)
   }
 })
 
@@ -1299,6 +1305,7 @@ test('MTF mode switches between monochromatic and weighted white-light endpoints
   expect(whiteRequests).toHaveLength(3)
   expect(Array.isArray(whiteRequests[0].body.wavelength_weights)).toBe(false)
   expect(whiteRequests[0].body.wavelength_weights).toEqual({ '486.13': 0.5, '587.56': 1, '656.27': 0.5 })
+  for (const request of whiteRequests) expect(request.body.ray_sampling).toEqual(expectedMtfSampling)
   expect(whiteRequests.every((request) => JSON.stringify(request.body.frequencies_lp_per_mm) === JSON.stringify(expectedMtfFrequencies))).toBe(true)
   await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-point-count', '198')
   await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-x-domain-min', '0')
@@ -1318,6 +1325,7 @@ test('MTF mode switches between monochromatic and weighted white-light endpoints
   await expect(page.getByTestId('mtf-chart').locator('.plot-tick')).toHaveText(['0.00', '80.00', '0.00', '1.00'])
   const monochromaticRequests = mtfRequests.filter((request) => request.url.endsWith('/v1/analysis/mtf'))
   expect(monochromaticRequests).toHaveLength(3)
+  for (const request of monochromaticRequests) expect(request.body.ray_sampling).toEqual(expectedMtfSampling)
   expect(monochromaticRequests.every((request) => JSON.stringify(request.body.frequencies_lp_per_mm) === JSON.stringify(expectedMtfFrequencies))).toBe(true)
   await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-point-count', '198')
 })

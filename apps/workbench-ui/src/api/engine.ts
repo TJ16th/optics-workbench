@@ -149,6 +149,11 @@ const DEFAULT_RELATIVE_ILLUMINATION_SAMPLING: PreviewRequest['ray_sampling'] = {
   pupil_distribution: 'grid',
   ray_aiming: { mode: 'paraxial' },
 }
+const DEFAULT_MTF_SAMPLING: PreviewRequest['ray_sampling'] = {
+  samples_per_field: 4096,
+  pupil_distribution: 'grid',
+  ray_aiming: { mode: 'paraxial' },
+}
 
 function fieldCoordinateKey(field: Pick<AnalysisField, 'theta_y_deg' | 'theta_z_deg'>) {
   return `${field.theta_y_deg.toFixed(12)}:${field.theta_z_deg.toFixed(12)}`
@@ -223,6 +228,7 @@ export async function runChartAnalyses(apiBase: string, request: AnalysisRequest
           ...request,
           ...(field ? { fields: [field] } : {}),
           ...(mtfMode === 'white' ? { wavelength_weights: wavelengthWeights } : {}),
+          ray_sampling: DEFAULT_MTF_SAMPLING,
           frequencies_lp_per_mm: request.frequencies_lp_per_mm ?? [...DEFAULT_MTF_FREQUENCIES_LP_PER_MM],
         }),
       ),

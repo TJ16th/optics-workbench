@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -45,6 +45,7 @@ class MTFPoint:
 @dataclass(frozen=True)
 class GeometricMTFResult:
     points: list[MTFPoint]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,7 @@ class WhitePSFResult:
 class WhiteMTFResult:
     mtf: GeometricMTFResult
     wavelength_weights: dict[float, float]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 def _arrived_points(trace_result: TraceResult) -> tuple[np.ndarray, np.ndarray]:
@@ -135,8 +137,22 @@ def analyze_geometric_mtf(
     frequencies_lp_per_mm: list[float],
 ) -> GeometricMTFResult:
     y, z = _arrived_points(trace_result)
+    metadata = {
+        "method": "empirical_characteristic_function",
+        "psf_representation": "geometric_ray_hit_point_cloud",
+        "psf_grid_size": None,
+        "samples_per_field": trace_result.metadata.get("samples_per_field"),
+        "pupil_distribution": trace_result.metadata.get("pupil_distribution"),
+        "ray_aiming_mode": trace_result.metadata.get("ray_aiming_mode"),
+        "traced_ray_count": int(trace_result.metadata.get("traced_ray_count", trace_result.status.size)),
+        "arrived_count": int(trace_result.metadata.get("arrived_count", y.size)),
+        "wavelength_count": int(trace_result.metadata.get("wavelength_count", np.unique(trace_result.wavelengths_nm).size)),
+        "diffraction_included": False,
+    }
+    if "combined_weighted_point_count" in trace_result.metadata:
+        metadata["combined_weighted_point_count"] = int(trace_result.metadata["combined_weighted_point_count"])
     if y.size == 0:
-        return GeometricMTFResult([MTFPoint(float(freq), 0.0, 0.0, 0.0) for freq in frequencies_lp_per_mm])
+        return GeometricMTFResult([MTFPoint(float(freq), 0.0, 0.0, 0.0) for freq in frequencies_lp_per_mm], metadata)
     y = y - np.mean(y)
     z = z - np.mean(z)
     radial = np.sqrt(y * y + z * z)
@@ -149,7 +165,7 @@ def analyze_geometric_mtf(
         mtf_z = float(abs(np.mean(phase_z)))
         mtf_r = float(abs(np.mean(phase_r)))
         points.append(MTFPoint(float(freq), mtf_y, mtf_z, mtf_r))
-    return GeometricMTFResult(points)
+    return GeometricMTFResult(points, metadata)
 
 
 def analyze_relative_illumination(
@@ -227,6 +243,16 @@ def _combine_traces(trace_results: list[TraceResult], weights: list[float]) -> T
         directions.extend([trace.directions] * repeat)
         origins.extend([trace.origins] * repeat)
         field_ids.extend(trace.field_ids * repeat)
+    metadata = dict(trace_results[0].metadata)
+    metadata.update(
+        {
+            "combined": "white",
+            "wavelength_count": len(trace_results),
+            "traced_ray_count": int(sum(trace.status.size for trace in trace_results)),
+            "arrived_count": int(sum(np.sum(trace.arrived_mask) for trace in trace_results)),
+            "combined_weighted_point_count": int(sum(array.size for array in statuses)),
+        }
+    )
     return TraceResult(
         origins=np.concatenate(origins),
         directions=np.concatenate(directions),
@@ -236,7 +262,7 @@ def _combine_traces(trace_results: list[TraceResult], weights: list[float]) -> T
         sensor_y_mm=np.concatenate(y_values),
         sensor_z_mm=np.concatenate(z_values),
         paths=[],
-        metadata={"combined": "white"},
+        metadata=metadata,
     )
 
 
@@ -266,4 +292,5 @@ def analyze_white_mtf(
     normalized = {float(wl): float(weight) / total for wl, weight in wavelength_weights.items()}
     traces = [trace_forward(compiled, fields, sampling, [wl], options) for wl in normalized]
     combined = _combine_traces(traces, list(normalized.values()))
-    return WhiteMTFResult(analyze_geometric_mtf(combined, frequencies_lp_per_mm), normalized)
+    mtf = analyze_geometric_mtf(combined, frequencies_lp_per_mm)
+    return WhiteMTFResult(mtf, normalized, dict(mtf.metadata))

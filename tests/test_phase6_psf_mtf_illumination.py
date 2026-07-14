@@ -115,6 +115,30 @@ def test_geometric_mtf_has_unity_zero_frequency_and_rolls_off_for_blur():
     assert mtf.points[1].mtf_radial < 1.0
 
 
+def test_geometric_mtf_dense_pupil_sampling_suppresses_coarse_recurrence():
+    compiled = compile_system(p002_singlet_system())
+    fields = [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}]
+    frequencies = [index * 2.5 for index in range(33)]
+    sampling = {"samples_per_field": 9, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}}
+
+    coarse = analyze_geometric_mtf(trace_forward(compiled, fields, sampling, [587.56]), frequencies)
+    dense_sampling = {**sampling, "samples_per_field": 4096}
+    dense = analyze_geometric_mtf(trace_forward(compiled, fields, dense_sampling, [587.56]), frequencies)
+    reference_sampling = {**sampling, "samples_per_field": 10000}
+    reference = analyze_geometric_mtf(trace_forward(compiled, fields, reference_sampling, [587.56]), frequencies)
+
+    coarse_high = max(point.mtf_radial for point in coarse.points if point.frequency_lp_per_mm >= 20.0)
+    dense_high = max(point.mtf_radial for point in dense.points if point.frequency_lp_per_mm >= 20.0)
+    max_dense_reference_error = max(abs(point.mtf_radial - reference.points[index].mtf_radial) for index, point in enumerate(dense.points))
+    assert coarse_high > 0.7
+    assert dense_high < 0.25
+    assert max_dense_reference_error < 0.03
+    assert dense.metadata["method"] == "empirical_characteristic_function"
+    assert dense.metadata["psf_grid_size"] is None
+    assert dense.metadata["samples_per_field"] == 4096
+    assert dense.metadata["arrived_count"] == 4096
+
+
 def test_relative_illumination_matches_cos4_for_unvignetted_thin_lens():
     compiled = compile_system(phase6_thin_lens(sensor_x=100.0, aperture=10.0))
     fields = [
@@ -192,6 +216,55 @@ def test_relative_illumination_api_uses_default_sampling_and_reports_metadata():
     assert payload["metadata"]["ray_aiming_mode"] == "paraxial"
     assert payload["metadata"]["weighting_method"] == "equal_pupil_samples_times_field_cos4"
     assert payload["rows"][1]["relative_illumination"] == pytest.approx(0.3099262601)
+
+
+def test_mtf_apis_report_geometric_ray_sampling_metadata():
+    from fastapi.testclient import TestClient
+
+    from optics_engine.api.main import app
+
+    client = TestClient(app)
+    system_id = client.post("/v1/systems/register", json=p002_singlet_system().model_dump(mode="json")).json()["system_id"]
+    request = {
+        "system_id": system_id,
+        "fields": [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}],
+        "ray_sampling": {"samples_per_field": 25, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}},
+        "wavelengths_nm": [587.56],
+        "frequencies_lp_per_mm": [0.0, 10.0],
+    }
+
+    mono_response = client.post("/v1/analysis/mtf", json=request)
+    assert mono_response.status_code == 200
+    mono_metadata = mono_response.json()["metadata"]
+    assert mono_metadata == {
+        "method": "empirical_characteristic_function",
+        "psf_representation": "geometric_ray_hit_point_cloud",
+        "psf_grid_size": None,
+        "samples_per_field": 25,
+        "pupil_distribution": "grid",
+        "ray_aiming_mode": "paraxial",
+        "traced_ray_count": 25,
+        "arrived_count": 25,
+        "wavelength_count": 1,
+        "diffraction_included": False,
+    }
+
+    white_response = client.post(
+        "/v1/analysis/white-mtf",
+        json={**request, "wavelength_weights": {"486.13": 1.0, "656.27": 1.0}},
+    )
+    assert white_response.status_code == 200
+    white_payload = white_response.json()
+    white_metadata = white_payload["metadata"]
+    assert white_metadata["method"] == "empirical_characteristic_function"
+    assert white_metadata["psf_grid_size"] is None
+    assert white_metadata["samples_per_field"] == 25
+    assert white_metadata["pupil_distribution"] == "grid"
+    assert white_metadata["traced_ray_count"] == 50
+    assert white_metadata["arrived_count"] == 50
+    assert white_metadata["wavelength_count"] == 2
+    assert white_metadata["combined_weighted_point_count"] == 2500
+    assert white_payload["mtf"]["metadata"] == white_metadata
 
 
 def test_white_psf_and_white_mtf_normalize_wavelength_weights():
