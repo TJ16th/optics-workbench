@@ -73,6 +73,10 @@
           "name": "Tessar-Type 50mm F2.8 Demo",
           "summary": "Four-element, three-group Tessar topology with a cemented BK7/F2 rear doublet."
         },
+        "P013": {
+          "name": "7-Element Modified Double Gauss 50mm F1.4 Focus Demo",
+          "summary": "Independent asymmetric seven-element Double Gauss derivative with unit focusing from infinity to 0.5m."
+        },
         "V001": {
           "name": "Simplified Gullstrand Eye Composite",
           "summary": "Visual evaluation system connecting an afocal telescope to a relaxed simplified Gullstrand eye and planar retina."

@@ -11,7 +11,9 @@ import pytest
 import numpy as np
 
 from optics_engine import analyze_afocal, analyze_angular_mtf, analyze_exit_pupil, analyze_paraxial, analyze_spot, compile_system, load_system, trace_forward
+from optics_engine.configuration import runtime_layout
 from optics_engine.core import asphere_sag_and_slope, reflect, surface_normals_for_surface
+from optics_engine.tracing import _trace_raw, _trace_to_surface_point
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -217,6 +219,7 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
         "P010": {"alive": 81},
         "P011": {"alive": 81},
         "P012": {"alive": 81},
+        "P013": {"alive": 81},
     }
     expected_paraxial = {
         "P001": (50.0, 50.0, 4.0),
@@ -231,6 +234,7 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
         "P010": (49.21298867869991, 47.53621678328241, 3.0758117924187443),
         "P011": (49.98319335121228, 35.36298255546046, 1.4079772774989374),
         "P012": (49.9824925346071, 40.22239204035907, 2.8001396377931145),
+        "P013": (50.966258210916834, 32.81807179554631, 1.404029151815891),
     }
     fields = [
         {"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0},
@@ -430,6 +434,130 @@ def test_p012_tessar_meets_f28_target_with_four_positive_thickness_elements():
     )
     assert center_trace.status.tolist() == ["alive"] * 81
     assert analyze_spot(center_trace).rms_radius_mm == pytest.approx(0.036968052965618795)
+
+
+def test_p013_modified_double_gauss_focus_positions_are_clear_and_focus_at_half_meter():
+    preset = next(item for item in _shipped_presets() if item["id"] == "P013")
+    system = preset["system"]
+    compiled = compile_system(load_system(system), use_cache=False)
+    paraxial = analyze_paraxial(compiled)
+    assert paraxial.effective_focal_length_mm == pytest.approx(50.966258210916834)
+    assert paraxial.back_focal_length_mm == pytest.approx(32.81807179554631)
+    assert paraxial.f_number == pytest.approx(1.404029151815891)
+
+    assert system["groups"] == [{"id": "FOCUS_G", "name": "Unit focus group", "from_surface": "S1", "to_surface": "F2"}]
+    assert [position["id"] for position in system["zoom_positions"]] == ["infinity", "close_focus_0_5m"]
+    assert not any(group["id"].startswith("OIS") for group in system["groups"])
+
+    surfaces = {surface["id"]: surface for surface in system["surfaces"]}
+
+    def sag(radius: float, height: float) -> float:
+        return radius - math.copysign(math.sqrt(radius * radius - height * height), radius)
+
+    pairs = (("S1", "S2"), ("A1", "A2"), ("S3", "S4"), ("S5", "C1"), ("C1", "S6"), ("A3", "A4"), ("F1", "F2"))
+    edge_thicknesses = []
+    for first_id, second_id in pairs:
+        first = surfaces[first_id]
+        second = surfaces[second_id]
+        height = min(float(first["semi_diameter_mm"]), float(second["semi_diameter_mm"]))
+        edge_thicknesses.append(
+            float(first["thickness_after_mm"])
+            + sag(float(second["radius_mm"]), height)
+            - sag(float(first["radius_mm"]), height)
+        )
+    assert edge_thicknesses == pytest.approx(
+        [0.9405288904, 2.5, 1.2681938747, 0.8896725161, 1.2623854968, 2.5, 3.0],
+        abs=1.0e-9,
+    )
+    assert min(edge_thicknesses) > 0.8
+
+    sampling = {"samples_per_field": 25, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}}
+    paraxial_positions = {}
+    for focus_position in ("infinity", "close_focus_0_5m"):
+        configuration = {"zoom_position": focus_position}
+        trace = trace_forward(
+            compiled,
+            preset["recommendedFields"],
+            sampling,
+            system["wavelengths_nm"]["samples"],
+            {"configuration": configuration},
+        )
+        assert trace.status.tolist() == ["alive"] * 225
+        assert trace.metadata["aiming_failed_count"] == 0
+        paraxial_positions[focus_position] = analyze_paraxial(compiled, configuration).paraxial_image_position_mm
+    assert paraxial_positions["infinity"] - paraxial_positions["close_focus_0_5m"] == pytest.approx(9.18)
+
+    infinity_trace = trace_forward(
+        compiled,
+        [preset["recommendedFields"][0]],
+        {"samples_per_field": 81, "pupil_distribution": "grid", "ray_aiming": {"mode": "full"}},
+        [587.56],
+        {"configuration": {"zoom_position": "infinity"}},
+    )
+    assert analyze_spot(infinity_trace).rms_radius_mm == pytest.approx(0.33692389372465137)
+
+    def finite_object_rms(focus_position: str) -> float:
+        configuration = {"zoom_position": focus_position}
+        layout = runtime_layout(compiled, configuration)
+        stop_center = layout.centers_mm[compiled.aperture_stop_index]
+        origin = np.array([-500.0, 0.0, 0.0])
+        pupil_points = ((0.0, 0.0), (1.815, 0.0), (-1.815, 0.0), (0.0, 1.815), (0.0, -1.815))
+        directions = []
+        for pupil_y, pupil_z in pupil_points:
+            target = stop_center + np.array([0.0, pupil_y, pupil_z])
+            slopes = np.array([pupil_y, pupil_z]) / (stop_center[0] - origin[0])
+            for _ in range(20):
+                hit = _trace_to_surface_point(
+                    compiled,
+                    origin,
+                    np.array([1.0, slopes[0], slopes[1]]),
+                    587.56,
+                    compiled.aperture_stop_index,
+                    layout.centers_mm,
+                    layout.rotations,
+                    configuration,
+                )
+                assert hit is not None
+                residual = hit[1:3] - target[1:3]
+                if np.linalg.norm(residual) < 1.0e-10:
+                    break
+                jacobian = np.zeros((2, 2))
+                step = 1.0e-6
+                for axis in range(2):
+                    shifted = slopes.copy()
+                    shifted[axis] += step
+                    shifted_hit = _trace_to_surface_point(
+                        compiled,
+                        origin,
+                        np.array([1.0, shifted[0], shifted[1]]),
+                        587.56,
+                        compiled.aperture_stop_index,
+                        layout.centers_mm,
+                        layout.rotations,
+                        configuration,
+                    )
+                    assert shifted_hit is not None
+                    jacobian[:, axis] = (shifted_hit[1:3] - hit[1:3]) / step
+                slopes -= np.linalg.solve(jacobian, residual)
+            directions.append([1.0, slopes[0], slopes[1]])
+
+        trace = _trace_raw(
+            compiled,
+            np.tile(origin, (len(directions), 1)),
+            np.asarray(directions),
+            np.full(len(directions), 587.56),
+            centers_mm=layout.centers_mm,
+            rotations=layout.rotations,
+            configuration=configuration,
+        )
+        assert trace.status.tolist() == ["alive"] * len(directions)
+        return float(np.sqrt(np.mean(trace.sensor_y_mm**2 + trace.sensor_z_mm**2)))
+
+    infinity_rms = finite_object_rms("infinity")
+    close_rms = finite_object_rms("close_focus_0_5m")
+    assert infinity_rms == pytest.approx(0.28962965540011143)
+    assert close_rms == pytest.approx(5.690397516130479e-05)
+    assert close_rms < infinity_rms / 1000.0
 
 
 def test_p007_fast_meniscus_preserves_bright_paraxial_target_and_positive_edge_thickness():

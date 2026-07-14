@@ -536,7 +536,7 @@ UI側でrequest/response型を手書きしない。
 
 ## 9.1 プリセットの目的
 
-初期版では、代表的な光学系を12個内蔵する。このうち通常のUIプリセット一覧には11個を表示し、反射系検証用のP005は定義・テストカバレッジを維持したまま非表示とする。
+初期版では、代表的な光学系を13個内蔵する。このうち通常のUIプリセット一覧には12個を表示し、反射系検証用のP005は定義・テストカバレッジを維持したまま非表示とする。
 
 目的は以下。
 
@@ -890,6 +890,40 @@ EFL = 3000 mm, F/15
 - 4枚のedge thicknessは約3.911 / 2.602 / 2.632 / 3.317 mmで、すべて正
 - 3 field × 3 wavelength × 9 / 25 / 81 samplesはいずれも全光線alive、blocked 0
 - Layout Viewで4枚、1接合面、3群の構成を確認できる
+
+### P013: 7-Element Modified Double Gauss 50mm F1.4 Focus Demo
+
+目的：中央STOPを挟む非対称7枚ダブルガウス派生構成で、高速写真レンズの解析と、独立した`FOCUS_G`による無限遠・0.5 m全群フォーカスを確認する。
+
+| No | id | kind | surface_type | R | D | N | semiD | aperture |
+|---:|---|---|---|---:|---:|---|---:|---|
+| 1 | S1 | refractive | spherical | 92.0 | 5.0 | N-BK7 | 24.0 | - |
+| 2 | S2 | refractive | spherical | -330.0 | 1.5 | AIR | 24.0 | - |
+| 3 | A1 | refractive | spherical | 500.0 | 2.5 | N-BK7 | 24.0 | - |
+| 4 | A2 | refractive | spherical | 500.0 | 1.5 | AIR | 24.0 | - |
+| 5 | S3 | refractive | spherical | -255.0 | 3.0 | N-F2 | 24.0 | - |
+| 6 | S4 | refractive | spherical | -102.0 | 4.0 | AIR | 24.0 | - |
+| 7 | STOP | aperture_stop | plane | 0 | 4.0 | AIR | 18.15 | circle 18.15 |
+| 8 | S5 | refractive | spherical | 98.0 | 3.0 | N-F2 | 24.0 | - |
+| 9 | C1 | refractive | spherical | 330.0 | 5.0 | N-BK7 | 24.0 | cemented |
+| 10 | S6 | refractive | spherical | -102.0 | 1.5 | AIR | 24.0 | - |
+| 11 | A3 | refractive | spherical | -500.0 | 2.5 | N-F2 | 24.0 | - |
+| 12 | A4 | refractive | spherical | -500.0 | 1.5 | AIR | 24.0 | - |
+| 13 | F1 | refractive | spherical | 500.0 | 3.0 | N-BK7 | 24.0 | - |
+| 14 | F2 | refractive | spherical | 500.0 | 29.318071795546302 | AIR | 24.0 | - |
+| 15 | IMG | sensor | plane | 0 | 0.0 | - | - | 36×24 |
+
+推奨fieldはcenter `0 deg`、70%像高 `7.036366 deg`、edge-y `10 deg`とする。
+
+期待値（主波長587.56nm）：
+
+- EFL ≒ 50.966 mm、BFL ≒ 32.818 mm、F number ≒ 1.404
+- 軸上best-focus相当の最終空気間隔は29.318071795546302 mm、center 81-ray spot RMS ≒ 0.336924 mm
+- 7枚のedge thicknessは約0.941 / 2.500 / 1.268 / 0.890 / 1.262 / 2.500 / 3.000 mmで、すべて正
+- `FOCUS_G`はS1からF2までのレンズ全体を含み、`infinity`は`shift_x_mm: 0`、`close_focus_0_5m`は`shift_x_mm: -9.18`
+- 0.5 m軸上有限物点の近軸域実光線RMSは、`infinity`位置の約0.289630 mmから`close_focus_0_5m`位置の約0.000057 mmへ低下する
+- 両focus positionで3 field × 3 wavelength × 25 samplesの実光線225本がすべてalive、aiming_failed 0、blocked 0
+- `FOCUS_G`と重複するOIS群は定義しない
 
 ---
 
