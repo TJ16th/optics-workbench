@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Accordion,
   AccordionItem,
@@ -22,7 +22,7 @@ import {
   Theme,
 } from '@carbon/react'
 import { Add, Checkmark, Download, Play, Renew, Save, TrashCan } from '@carbon/icons-react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { DEFAULT_MTF_FREQUENCIES_LP_PER_MM, defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, runThroughFocusMtf, runVisualComposite, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
 import { presets, visualFixturePresets } from '../domain/presets'
@@ -61,10 +61,9 @@ import { getTerm, renderEngineIssue, termLabel } from '../i18n/glossary'
 import type { SupportedLanguage } from '../i18n/resources'
 import { seriesPalette, wavelengthColor } from './chartTheme'
 import { makeExportSvg, type ExportChart } from './exportSvg'
+import { useWorkbenchControllerState, useWorkbenchMutations, type AnalysisViewKey, type ThemePreference, type WorkbenchViewKey } from './useWorkbenchController'
 
-type TabKey = 'system' | 'preview' | 'analysis' | 'compare' | 'debug'
-type AnalysisViewKey = 'standard' | 'through_focus'
-type ThemePreference = 'system' | 'light' | 'dark'
+type TabKey = WorkbenchViewKey
 
 const themeStorageKey = 'optics-workbench-theme'
 const presetCategoryOrder: Preset['catalog']['category'][] = ['photographic', 'simple_educational', 'telescope_afocal', 'visual', 'fixtures']
@@ -2728,57 +2727,39 @@ export function App() {
         ? [...visiblePresets, ...visualFixturePresets]
         : visiblePresets,
   )
-  const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
+  const initialThemePreference: ThemePreference = (() => {
     const saved = window.localStorage.getItem(themeStorageKey)
     return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system'
+  })()
+  const {
+    themePreference, setThemePreference, systemDark, setSystemDark, apiBase, setApiBase,
+    selectedPresetId, setSelectedPresetId, activeTab, setActiveTab, analysisView, setAnalysisView,
+    samplesPerField, setSamplesPerField, analysisFields, setAnalysisFields, wavelengths, setWavelengths,
+    pupilDistribution, setPupilDistribution, aimingMode, setAimingMode, mtfMode, setMtfMode,
+    showDensityRays, setShowDensityRays, imagePlanePolicy, setImagePlanePolicy, imagePlanePolicyRef,
+    zoomPositionId, setZoomPositionId, focusGroupId, setFocusGroupId, focusShiftMm, setFocusShiftMm,
+    decenterTiltDraft, setDecenterTiltDraft, decenterTiltDraftRef, runtimeConfiguration,
+    setRuntimeConfiguration, runtimeConfigurationRef, irisRadiusMm, setIrisRadiusMm, irisMaxRadiusMm,
+    setIrisMaxRadiusMm, irisRadiusRef, sliderPreviewTimerRef, motionPreviewSequenceRef,
+    sliderPreviewPending, setSliderPreviewPending, analysisDirty, setAnalysisDirty, systemDirty,
+    setSystemDirty, system, setSystem, systemId, setSystemId, systemHash, setSystemHash,
+    validation, setValidation, trace, setTrace, chartResult, setChartResult, visualResult,
+    setVisualResult, visualResultMode, setVisualResultMode, evaluationPlane, setEvaluationPlane,
+    focusCurve, setFocusCurve, focusResult, setFocusResult, lastRequest, setLastRequest,
+    lastResponse, setLastResponse, helpTermId, setHelpTermId, snapshots, setSnapshots,
+    compareLeftId, setCompareLeftId, compareRightId, setCompareRightId, exportLanguage, setExportLanguage,
+  } = useWorkbenchControllerState<Snapshot, ImagePlanePolicyDraft, DecenterTiltDraft>({
+    apiBase: defaultApiBase,
+    system: cloneSystem(presets[0].system),
+    fields: presetFields(presets[0]),
+    wavelengths: initialWavelengths(presets[0].system),
+    imagePlanePolicy: { ...defaultImagePlanePolicy },
+    decenterTiltDraft: { ...defaultDecenterTiltDraft },
+    irisRadiusMm: apertureStopRadius(presets[0].system) ?? 1,
+    helpTermId: new URLSearchParams(window.location.search).get('help'),
+    themePreference: initialThemePreference,
+    systemDark: window.matchMedia('(prefers-color-scheme: dark)').matches,
   })
-  const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
-  const [apiBase, setApiBase] = useState(defaultApiBase)
-  const [selectedPresetId, setSelectedPresetId] = useState('P001')
-  const [activeTab, setActiveTab] = useState<TabKey>('preview')
-  const [analysisView, setAnalysisView] = useState<AnalysisViewKey>('standard')
-  const [samplesPerField, setSamplesPerField] = useState(9)
-  const [analysisFields, setAnalysisFields] = useState<AnalysisField[]>(() => presetFields(presets[0]))
-  const [wavelengths, setWavelengths] = useState<WavelengthSample[]>(() => initialWavelengths(presets[0].system))
-  const [pupilDistribution, setPupilDistribution] = useState('grid')
-  const [aimingMode, setAimingMode] = useState('paraxial')
-  const [mtfMode, setMtfMode] = useState<MtfMode>('monochromatic')
-  const [showDensityRays, setShowDensityRays] = useState(true)
-  const [imagePlanePolicy, setImagePlanePolicy] = useState<ImagePlanePolicyDraft>(() => ({ ...defaultImagePlanePolicy }))
-  const imagePlanePolicyRef = useRef<ImagePlanePolicyDraft>(imagePlanePolicy)
-  const [zoomPositionId, setZoomPositionId] = useState('')
-  const [focusGroupId, setFocusGroupId] = useState('')
-  const [focusShiftMm, setFocusShiftMm] = useState(0)
-  const [decenterTiltDraft, setDecenterTiltDraft] = useState<DecenterTiltDraft>(() => ({ ...defaultDecenterTiltDraft }))
-  const decenterTiltDraftRef = useRef<DecenterTiltDraft>({ ...defaultDecenterTiltDraft })
-  const [runtimeConfiguration, setRuntimeConfiguration] = useState<RuntimeConfiguration>({})
-  const runtimeConfigurationRef = useRef<RuntimeConfiguration>({})
-  const [irisRadiusMm, setIrisRadiusMm] = useState(() => apertureStopRadius(presets[0].system) ?? 1)
-  const [irisMaxRadiusMm, setIrisMaxRadiusMm] = useState(() => apertureStopRadius(presets[0].system) ?? 1)
-  const irisRadiusRef = useRef(irisRadiusMm)
-  const sliderPreviewTimerRef = useRef<number | undefined>()
-  const motionPreviewSequenceRef = useRef(0)
-  const [sliderPreviewPending, setSliderPreviewPending] = useState(false)
-  const [analysisDirty, setAnalysisDirty] = useState(false)
-  const [systemDirty, setSystemDirty] = useState(false)
-  const [system, setSystem] = useState<OpticalSystem>(() => cloneSystem(presets[0].system))
-  const [systemId, setSystemId] = useState<string | null>(null)
-  const [systemHash, setSystemHash] = useState<string | null>(null)
-  const [validation, setValidation] = useState<ValidationResult | null>(null)
-  const [trace, setTrace] = useState<TraceResponse | undefined>()
-  const [chartResult, setChartResult] = useState<ChartAnalysisResult | undefined>()
-  const [visualResult, setVisualResult] = useState<VisualCompositeResponse | undefined>()
-  const [visualResultMode, setVisualResultMode] = useState<'instrument' | 'retinal'>('instrument')
-  const [evaluationPlane, setEvaluationPlane] = useState<EvaluationPlaneMetadata | undefined>()
-  const [focusCurve, setFocusCurve] = useState<FocusCurvePoint[]>([])
-  const [focusResult, setFocusResult] = useState<BestFocusResponse | undefined>()
-  const [lastRequest, setLastRequest] = useState<unknown>(null)
-  const [lastResponse, setLastResponse] = useState<unknown>(null)
-  const [helpTermId, setHelpTermId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('help'))
-  const [snapshots, setSnapshots] = useState<Snapshot[]>([])
-  const [compareLeftId, setCompareLeftId] = useState('')
-  const [compareRightId, setCompareRightId] = useState('')
-  const [exportLanguage, setExportLanguage] = useState<SupportedLanguage>('ja')
 
   useEffect(() => {
     window.localStorage.setItem(themeStorageKey, themePreference)
@@ -3106,7 +3087,8 @@ export function App() {
     void runMotionPreview(runtimeConfigurationRef.current, false)
   }
 
-  const validateMutation = useMutation({
+  const { validateMutation, registerMutation, previewMutation, chartsMutation, throughFocusMutation, visualMutation, focusMutation } = useWorkbenchMutations({
+    validate: {
     mutationFn: async () => validateSystem(apiBase, system),
     onSuccess: (result) => {
       setValidation(result)
@@ -3116,9 +3098,9 @@ export function App() {
     onError: (error) => {
       setLastResponse(getApiIssue(error))
     },
-  })
+    },
 
-  const registerMutation = useMutation({
+    register: {
     mutationFn: async () => {
       const validationResult = await validateSystem(apiBase, system)
       setValidation(validationResult)
@@ -3135,9 +3117,9 @@ export function App() {
     onError: (error) => {
       setLastResponse(getApiIssue(error))
     },
-  })
+    },
 
-  const previewMutation = useMutation({
+    preview: {
     mutationFn: async () => {
       const id = await ensureRegisteredSystem()
       const request = makeAnalysisRequest(id)
@@ -3150,9 +3132,9 @@ export function App() {
     onError: (error) => {
       setLastResponse(getApiIssue(error))
     },
-  })
+    },
 
-  const chartsMutation = useMutation({
+    charts: {
     mutationFn: async () => {
       const id = await ensureRegisteredSystem()
       const request = makeAnalysisRequest(id)
@@ -3172,9 +3154,9 @@ export function App() {
     onError: (error) => {
       setLastResponse(getApiIssue(error))
     },
-  })
+    },
 
-  const throughFocusMutation = useMutation({
+    throughFocus: {
     mutationFn: async () => {
       const id = await ensureRegisteredSystem()
       const request = makeAnalysisRequest(id)
@@ -3190,9 +3172,9 @@ export function App() {
     onError: (error) => {
       setLastResponse(getApiIssue(error))
     },
-  })
+    },
 
-  const visualMutation = useMutation({
+    visual: {
     mutationFn: async () => {
       const id = await ensureRegisteredSystem()
       const request = makeAnalysisRequest(id)
@@ -3208,9 +3190,9 @@ export function App() {
     onError: (error) => {
       setLastResponse(getApiIssue(error))
     },
-  })
+    },
 
-  const focusMutation = useMutation({
+    focus: {
     mutationFn: async () => {
       const id = await ensureRegisteredSystem()
       const request = makeAnalysisRequest(id)
@@ -3227,6 +3209,7 @@ export function App() {
     },
     onError: (error) => {
       setLastResponse(getApiIssue(error))
+    },
     },
   })
 
