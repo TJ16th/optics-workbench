@@ -52,6 +52,37 @@ def _assert_json_finite_or_null(value: Any) -> None:
             _assert_json_finite_or_null(item)
 
 
+@pytest.mark.parametrize("preset_id", ["P009", "P010"])
+def test_r87_aspheric_preset_variables_are_accepted_by_evaluate_api(preset_id: str):
+    from fastapi.testclient import TestClient
+
+    from optics_engine.api.main import app
+
+    preset = next(item for item in _shipped_presets() if item["id"] == preset_id)
+    variables = {
+        "ASP1_curvature": 1.0 / 52.0,
+        "ASP1_conic": -0.9,
+        "ASP1_A4": -2.0e-6,
+        "ASP1_A6": 1.0e-9,
+        "ASP1_A8": -1.0e-12,
+        "ASP1_A10": 1.0e-15,
+        "iris_radius_mm": 7.5,
+    }
+    payload = {
+        **preset["system"],
+        "variables": variables,
+        "evaluation": {
+            "metrics": ["rms_spot_radius"],
+            "fields": [preset["recommendedFields"][0]],
+            "wavelengths": [587.56],
+        },
+        "ray_sampling": {"samples_per_field": 9, "ray_aiming": {"mode": "paraxial"}},
+    }
+    response = TestClient(app).post("/v1/optics/evaluate", json=payload)
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "ok"
+
+
 def test_r69_keeps_p006_p008_afocal_metrics_bit_identical():
     expected = {
         "P006": (-5.0, 10.0, 20.0, 5, 3.722743809616492e-15, 6.497413668604473e-14, 1.0),

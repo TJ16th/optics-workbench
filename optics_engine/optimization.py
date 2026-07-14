@@ -6,13 +6,18 @@ from typing import Any
 
 import numpy as np
 
-from .aberrations import analyze_longitudinal_aberration, analyze_ray_fan
+from .aberrations import analyze_distortion, analyze_longitudinal_aberration, analyze_ray_fan
 from .analysis import analyze_spot
+from .chromatic import analyze_chromatic_aberration
 from .configuration import validate_configuration
-from .models import OpticalSystem
-from .psf_mtf import analyze_geometric_mtf, analyze_relative_illumination
+from .evaluation_metrics import SUPPORTED_EVALUATE_METRICS
+from .field_curvature import analyze_field_curvature, analyze_ms_image_surface
+from .models import OpticalSystem, StructuredOpticsError
+from .paraxial import analyze_paraxial
+from .psf_mtf import analyze_geometric_mtf, analyze_relative_illumination, analyze_white_mtf
 from .system import CompiledSystem, compile_system
 from .tracing import trace_forward
+from .variables import apply_variable_bindings
 
 
 @dataclass(frozen=True)
@@ -71,41 +76,8 @@ PRESETS: dict[str, dict[str, Any]] = {
     },
 }
 
-ABERRATION_OPERAND_METRICS = {"ray_fan_error", "longitudinal_aberration"}
-
-
-def _copy_system(system: OpticalSystem) -> OpticalSystem:
-    return OpticalSystem.model_validate(system.model_dump(mode="json"))
-
-
 def apply_variables(system: OpticalSystem, variables: dict[str, Any] | None) -> OpticalSystem:
-    if not variables:
-        return system
-    updated = _copy_system(system)
-    by_id = {surface.id: surface for surface in updated.surfaces}
-    stop = next((surface for surface in updated.surfaces if surface.kind == "aperture_stop"), None)
-    for key, raw_value in variables.items():
-        value = float(raw_value)
-        if key == "iris_radius_mm" and stop is not None:
-            if stop.aperture is not None:
-                stop.aperture.semi_diameter_mm = value
-                if stop.aperture.outer_semi_diameter_mm is not None:
-                    stop.aperture.outer_semi_diameter_mm = value
-            else:
-                stop.semi_diameter_mm = value
-            continue
-        for suffix, attr in {
-            "_radius_mm": "radius_mm",
-            "_thickness_after_mm": "thickness_after_mm",
-            "_focal_length_mm": "focal_length_mm",
-            "_semi_diameter_mm": "semi_diameter_mm",
-        }.items():
-            if key.endswith(suffix):
-                surface_id = key[: -len(suffix)]
-                if surface_id in by_id:
-                    setattr(by_id[surface_id], attr, value)
-                break
-    return updated
+    return apply_variable_bindings(system, variables).system
 
 
 def _fields_from_evaluation(evaluation: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -136,11 +108,7 @@ def _resolve_evaluation(evaluation: dict[str, Any] | None, ray_sampling: dict[st
     evaluation = dict(evaluation or {})
     preset = evaluation.get("preset")
     preset_data = PRESETS.get(preset, {}) if preset else {}
-    operand_metrics = [
-        str(operand.get("metric"))
-        for operand in evaluation.get("operands", [])
-        if operand.get("metric") in ABERRATION_OPERAND_METRICS
-    ]
+    operand_metrics = [str(operand.get("metric", "")) for operand in evaluation.get("operands", [])]
     metrics = list(evaluation.get("metrics", operand_metrics or preset_data.get("metrics", ["rms_spot_radius"])))
     weights = dict(preset_data.get("weights", {}))
     weights.update(evaluation.get("weights", {}))
@@ -164,14 +132,51 @@ def _rms_finite(values: list[float | None]) -> float | None:
     return float(np.sqrt(np.mean(np.square(finite))))
 
 
-def _aberration_metric_value(
+def _representative_value(values: list[float | None]) -> float | None:
+    finite = [float(value) for value in values if value is not None and np.isfinite(value)]
+    if not finite:
+        return None
+    if len(finite) == 1:
+        return finite[0]
+    return _rms_finite(finite)
+
+
+def _validate_metric_names(metrics: list[str], operands: list[dict[str, Any]]) -> None:
+    supported = set(SUPPORTED_EVALUATE_METRICS)
+    for location, names in (
+        ("evaluation.metrics", metrics),
+        ("evaluation.operands", [str(operand.get("metric", "")) for operand in operands]),
+    ):
+        for metric in names:
+            if metric not in supported:
+                raise StructuredOpticsError(
+                    "optics_value_error",
+                    "Unsupported evaluate metric.",
+                    params={"metric": metric, "location": location, "supported_metrics": list(SUPPORTED_EVALUATE_METRICS)},
+                )
+
+
+def _metric_scalar_value(
     compiled: CompiledSystem,
     metric: str,
     fields: list[dict[str, Any]],
     sampling: dict[str, Any],
     wavelengths: list[float],
     options: dict[str, Any],
+    frequencies: list[float],
+    evaluation: dict[str, Any],
 ) -> float | None:
+    configuration = options.get("configuration", {})
+    if metric == "rms_spot_radius":
+        trace = trace_forward(compiled, fields, sampling, wavelengths, options)
+        return analyze_spot(trace).rms_radius_mm
+    if metric == "relative_illumination":
+        result = analyze_relative_illumination(compiled, fields, sampling, wavelengths, options)
+        return min((row.relative_illumination for row in result.rows), default=None)
+    if metric == "geometric_mtf":
+        trace = trace_forward(compiled, fields, sampling, wavelengths, options)
+        result = analyze_geometric_mtf(trace, frequencies)
+        return None if not result.points else result.points[-1].mtf_radial
     if metric == "ray_fan_error":
         fan_y = analyze_ray_fan(compiled, fields, {**sampling, "pupil_distribution": "fan_y"}, wavelengths, options)
         fan_z = analyze_ray_fan(compiled, fields, {**sampling, "pupil_distribution": "fan_z"}, wavelengths, options)
@@ -190,16 +195,65 @@ def _aberration_metric_value(
         return _rms_finite(
             [point.longitudinal_error_y_mm for point in longitudinal.points if point.status == "alive"]
         )
-    return None
+    if metric == "distortion":
+        result = analyze_distortion(compiled, fields, wavelengths, options)
+        return _representative_value([row.distortion_percent for row in result.rows])
+    if metric == "field_curvature":
+        result = analyze_field_curvature(
+            compiled,
+            fields,
+            configuration,
+            search_mm=float(evaluation.get("field_curvature_search_mm", 5.0)),
+            method=evaluation.get("field_curvature_method"),
+        )
+        return _representative_value([row.best_focus_shift_mm for row in result.rows])
+    if metric == "astigmatism":
+        result = analyze_ms_image_surface(
+            compiled,
+            fields,
+            configuration,
+            search_mm=float(evaluation.get("field_curvature_search_mm", 5.0)),
+            method=evaluation.get("field_curvature_method"),
+        )
+        return _representative_value(
+            [row.tangential_focus_shift_mm - row.sagittal_focus_shift_mm for row in result.rows]
+        )
+    if metric in {"lateral_color", "axial_color"}:
+        result = analyze_chromatic_aberration(compiled, wavelengths, fields)
+        if metric == "axial_color":
+            return result.axial_color_span_mm
+        return _rms_finite(
+            [row.get("max_lateral_shift_mm") for row in result.lateral_color_by_field.values()]
+        )
+    if metric == "white_mtf":
+        configured_weights = evaluation.get("wavelength_weights")
+        weights = (
+            {float(wavelength): float(weight) for wavelength, weight in configured_weights.items()}
+            if configured_weights
+            else {float(wavelength): 1.0 for wavelength in wavelengths}
+        )
+        result = analyze_white_mtf(compiled, fields, sampling, weights, frequencies, options)
+        return None if not result.mtf.points else result.mtf.points[-1].mtf_radial
+    if metric in {"back_focal_length", "effective_focal_length", "f_number"}:
+        wavelength = wavelengths[0] if wavelengths else None
+        result = analyze_paraxial(compiled, configuration, wavelength_nm=wavelength)
+        return {
+            "back_focal_length": result.back_focal_length_mm,
+            "effective_focal_length": result.effective_focal_length_mm,
+            "f_number": result.f_number,
+        }[metric]
+    raise AssertionError(f"unhandled evaluate metric: {metric}")
 
 
-def _evaluate_aberration_operands(
+def _evaluate_operands(
     compiled: CompiledSystem,
     operands: list[dict[str, Any]],
     fields: list[dict[str, Any]],
     sampling: dict[str, Any],
     wavelengths: list[float],
     options: dict[str, Any],
+    frequencies: list[float],
+    evaluation: dict[str, Any],
 ) -> tuple[list[OperandResult], MeritResult]:
     results: list[OperandResult] = []
     natural_values: dict[str, float | None] = {}
@@ -207,13 +261,24 @@ def _evaluate_aberration_operands(
     weights: dict[str, float] = {}
     for operand in operands:
         metric = str(operand.get("metric", ""))
-        if metric not in ABERRATION_OPERAND_METRICS:
-            continue
         field_id = str(operand["field_id"]) if operand.get("field_id") is not None else None
         wavelength_nm = float(operand["wavelength_nm"]) if operand.get("wavelength_nm") is not None else None
         operand_fields = fields if field_id is None else [field for field in fields if str(field.get("id")) == field_id]
         operand_wavelengths = wavelengths if wavelength_nm is None else [value for value in wavelengths if abs(value - wavelength_nm) <= 1.0e-9]
-        value = _aberration_metric_value(compiled, metric, operand_fields, sampling, operand_wavelengths, options) if operand_fields and operand_wavelengths else None
+        value = (
+            _metric_scalar_value(
+                compiled,
+                metric,
+                operand_fields,
+                sampling,
+                operand_wavelengths,
+                options,
+                frequencies,
+                evaluation,
+            )
+            if operand_fields and operand_wavelengths
+            else None
+        )
         target = float(operand.get("target", 0.0))
         tolerance = float(operand.get("tolerance", 1.0))
         weight = float(operand.get("weight", 1.0))
@@ -257,7 +322,9 @@ def _compute_merit(metric_values: dict[str, Any], weights: dict[str, float]) -> 
         loss = max(0.0, 1.0 - value)
         flat["geometric_mtf_loss"] = loss
         score += weights.get("geometric_mtf_loss", 0.0) * loss
-    for metric in ("ray_fan_error", "longitudinal_aberration"):
+    for metric in SUPPORTED_EVALUATE_METRICS:
+        if metric in {"rms_spot_radius", "relative_illumination", "geometric_mtf"}:
+            continue
         value = metric_values.get(metric)
         if value is not None:
             flat[metric] = float(value)
@@ -274,10 +341,10 @@ def evaluate_system(
     variables: dict[str, Any] | None = None,
     ray_sampling: dict[str, Any] | None = None,
 ) -> EvaluateResult:
-    if isinstance(system_or_compiled, CompiledSystem):
-        system = apply_variables(system_or_compiled.system, variables)
-    else:
-        system = apply_variables(system_or_compiled, variables)
+    base_system = system_or_compiled.system if isinstance(system_or_compiled, CompiledSystem) else system_or_compiled
+    variable_application = apply_variable_bindings(base_system, variables, configuration)
+    system = variable_application.system
+    configuration = variable_application.configuration
     compiled = compile_system(system)
     config_validation = validate_configuration(compiled, configuration)
     if not config_validation.ok:
@@ -293,11 +360,9 @@ def evaluate_system(
     metrics, weights, sampling, frequencies = _resolve_evaluation(evaluation, ray_sampling)
     fields = _fields_from_evaluation(evaluation)
     wavelengths = _wavelengths_from_evaluation(compiled, evaluation)
-    requested_operands = [
-        operand
-        for operand in (evaluation or {}).get("operands", [])
-        if operand.get("metric") in ABERRATION_OPERAND_METRICS
-    ]
+    evaluation_data = dict(evaluation or {})
+    requested_operands = list(evaluation_data.get("operands", []))
+    _validate_metric_names(metrics, requested_operands)
     invalid_tolerances = [
         (index, operand)
         for index, operand in enumerate(requested_operands)
@@ -327,35 +392,43 @@ def evaluate_system(
             metadata={"stage": "operand_validation", "system_hash": compiled.system_hash},
         )
     trace = None
-    if any(metric in metrics for metric in ("rms_spot_radius", "geometric_mtf")):
-        trace = trace_forward(compiled, fields, sampling, wavelengths, {"configuration": configuration or {}})
+    if not requested_operands and any(metric in metrics for metric in ("rms_spot_radius", "geometric_mtf")):
+        trace = trace_forward(compiled, fields, sampling, wavelengths, {"configuration": configuration})
     metric_values: dict[str, Any] = {}
-    if "rms_spot_radius" in metrics:
+    if "rms_spot_radius" in metrics and not requested_operands:
         assert trace is not None
         metric_values["rms_spot_radius"] = analyze_spot(trace).rms_radius_mm
-    if "relative_illumination" in metrics:
-        metric_values["relative_illumination"] = analyze_relative_illumination(compiled, fields, sampling, wavelengths, {"configuration": configuration or {}})
-    if "geometric_mtf" in metrics:
+    if "relative_illumination" in metrics and not requested_operands:
+        metric_values["relative_illumination"] = analyze_relative_illumination(compiled, fields, sampling, wavelengths, {"configuration": configuration})
+    if "geometric_mtf" in metrics and not requested_operands:
         assert trace is not None
         metric_values["geometric_mtf"] = analyze_geometric_mtf(trace, frequencies)
-    analysis_options = {"configuration": configuration or {}}
-    if "ray_fan_error" in metrics and not requested_operands:
-        metric_values["ray_fan_error"] = _aberration_metric_value(
-            compiled, "ray_fan_error", fields, sampling, wavelengths, analysis_options
-        )
-    if "longitudinal_aberration" in metrics and not requested_operands:
-        metric_values["longitudinal_aberration"] = _aberration_metric_value(
-            compiled, "longitudinal_aberration", fields, sampling, wavelengths, analysis_options
-        )
+    analysis_options = {"configuration": configuration}
+    if not requested_operands:
+        for metric in metrics:
+            if metric in {"rms_spot_radius", "relative_illumination", "geometric_mtf"}:
+                continue
+            metric_values[metric] = _metric_scalar_value(
+                compiled,
+                metric,
+                fields,
+                sampling,
+                wavelengths,
+                analysis_options,
+                frequencies,
+                evaluation_data,
+            )
 
     if requested_operands:
-        operand_results, merit = _evaluate_aberration_operands(
+        operand_results, merit = _evaluate_operands(
             compiled,
             requested_operands,
             fields,
             sampling,
             wavelengths,
             analysis_options,
+            frequencies,
+            evaluation_data,
         )
         metric_values.update({operand.metric: operand.value for operand in operand_results})
     else:
@@ -366,7 +439,12 @@ def evaluate_system(
         merit=merit,
         metrics=metric_values,
         violations=[],
-        metadata={"stage": "evaluation", "system_hash": compiled.system_hash, "metrics": metrics},
+        metadata={
+            "stage": "evaluation",
+            "system_hash": compiled.system_hash,
+            "metrics": metrics,
+            **({"warnings": variable_application.warnings} if variable_application.warnings else {}),
+        },
         operands=operand_results,
     )
 

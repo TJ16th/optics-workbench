@@ -8,6 +8,9 @@ from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any
 
+from .evaluation_metrics import SUPPORTED_EVALUATE_METRICS
+from .variables import variable_key_patterns
+
 ENGINE_VERSION = "0.1.0"
 API_SCHEMA_VERSION = "2.4.0"
 RESULT_SCHEMA_VERSION = "2.4.0"
@@ -24,23 +27,7 @@ IMAGE_PLANE_POLICY_MODES = [
     "sweep",
 ]
 
-METRIC_CODES = [
-    "rms_spot_radius",
-    "spot_diagram",
-    "ray_fan",
-    "ray_fan_error",
-    "longitudinal_aberration",
-    "distortion",
-    "field_curvature",
-    "axial_color",
-    "lateral_color",
-    "relative_illumination",
-    "psf",
-    "mtf",
-    "angular_mtf",
-    "edge_thickness",
-    "merit",
-]
+METRIC_CODES = list(SUPPORTED_EVALUATE_METRICS)
 
 ERROR_CODES = [
     "artifact_expired",
@@ -98,17 +85,7 @@ RAY_STATUS_CODES = [
     "aiming_failed",
 ]
 
-VARIABLE_KEY_PATTERNS = [
-    "iris_radius_mm",
-    "{surface_id}_radius_mm",
-    "{surface_id}_curvature",
-    "{surface_id}_thickness_after_mm",
-    "{surface_id}_focal_length_mm",
-    "{surface_id}_semi_diameter_mm",
-    "{group_id}_shift_x_mm",
-    "{group_id}_shift_y_mm",
-    "{group_id}_shift_z_mm",
-]
+VARIABLE_KEY_PATTERNS = variable_key_patterns()
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _STARTED_AT = datetime.now(timezone.utc).isoformat()
