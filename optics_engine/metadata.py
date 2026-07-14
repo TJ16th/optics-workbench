@@ -12,8 +12,8 @@ from .evaluation_metrics import SUPPORTED_EVALUATE_METRICS
 from .variables import variable_key_patterns
 
 ENGINE_VERSION = "0.1.0"
-API_SCHEMA_VERSION = "2.4.0"
-RESULT_SCHEMA_VERSION = "2.4.0"
+API_SCHEMA_VERSION = "2.5.0"
+RESULT_SCHEMA_VERSION = "2.5.0"
 MATERIAL_CATALOG_VERSION = "0.1.0"
 PRESET_VERSION = "0.1.0"
 

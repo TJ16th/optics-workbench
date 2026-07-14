@@ -83,8 +83,8 @@ def test_validate_system_issues_are_code_based_with_structured_params():
 
 def test_meta_v2_3_enumerations_cover_stable_engine_identifiers():
     meta = meta_payload()
-    assert meta["api_schema_version"] == "2.4.0"
-    assert meta["result_schema_version"] == "2.4.0"
+    assert meta["api_schema_version"] == "2.5.0"
+    assert meta["result_schema_version"] == "2.5.0"
     build_info = meta["build_info"]
     expected_commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
     assert build_info["git_commit"] == expected_commit

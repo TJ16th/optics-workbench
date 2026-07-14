@@ -63,6 +63,10 @@ python -m pytest -q          # エンジン（既知設計とのGolden Test含�
 npm run ci                   # UIビルド + i18n検査 + 用語集カバレッジ
 ```
 
+### 評価APIの互換性
+
+API schema `2.5.0`では、`merit.score`を残差二乗和とペナルティの合計へ統一しました。旧線形weighted scoreは1リリースの互換期間に限り`legacy_merit`で取得でき、API応答の`metadata.deprecations`に廃止予定を含みます。
+
 ## ドキュメント
 
 仕様書（正本・日本語）：

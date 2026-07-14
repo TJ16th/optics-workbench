@@ -19,8 +19,8 @@ async function mockEngine(
     await route.fulfill({
       json: {
         engine_version: 'test',
-        api_schema_version: '2.4.0',
-        result_schema_version: '2.4.0',
+        api_schema_version: '2.5.0',
+        result_schema_version: '2.5.0',
         material_catalog_version: 'test',
         preset_version: 'test',
         build_info: { git_commit: 'test-build', git_dirty: false, started_at: '2026-07-10T00:00:00+00:00' },

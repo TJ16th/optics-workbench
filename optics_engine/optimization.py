@@ -26,6 +26,7 @@ class MeritResult:
     score: float
     metrics: dict[str, float | None]
     weights: dict[str, float]
+    definition: str = "sum_of_squared_residuals_plus_penalties"
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ class OperandResult:
     residual: float | None
     field_id: str | None = None
     wavelength_nm: float | None = None
+    one_sided: str | None = None
 
 
 @dataclass(frozen=True)
@@ -49,6 +51,7 @@ class EvaluateResult:
     metadata: dict[str, Any]
     operands: list[OperandResult] = dataclass_field(default_factory=list)
     configuration_resolved: dict[str, Any] | None = None
+    legacy_merit: MeritResult | None = None
 
 
 @dataclass(frozen=True)
@@ -66,13 +69,17 @@ class BatchEvaluateResult:
 
 PRESETS: dict[str, dict[str, Any]] = {
     "fast_design_score": {
-        "metrics": ["rms_spot_radius", "relative_illumination", "geometric_mtf"],
+        "operands": [
+            {"metric": "rms_spot_radius", "target": 0.0, "tolerance": 1.0, "weight": 1.0},
+            {"metric": "relative_illumination", "target": 1.0, "tolerance": 1.0, "weight": 0.25},
+            {"metric": "geometric_mtf", "target": 1.0, "tolerance": 1.0, "weight": 0.5},
+        ],
         "weights": {"rms_spot_radius": 1.0, "relative_illumination_loss": 0.25, "geometric_mtf_loss": 0.5},
         "ray_sampling": {"samples_per_field": 21, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}},
         "frequencies_lp_per_mm": [10.0],
     },
     "spot_only": {
-        "metrics": ["rms_spot_radius"],
+        "operands": [{"metric": "rms_spot_radius", "target": 0.0, "tolerance": 1.0, "weight": 1.0}],
         "weights": {"rms_spot_radius": 1.0},
         "ray_sampling": {"samples_per_field": 21, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}},
     },
@@ -106,18 +113,45 @@ def _wavelengths_from_evaluation(compiled: CompiledSystem, evaluation: dict[str,
     return [compiled.system.wavelengths_nm.primary]
 
 
-def _resolve_evaluation(evaluation: dict[str, Any] | None, ray_sampling: dict[str, Any] | None) -> tuple[list[str], dict[str, float], dict[str, Any], list[float]]:
+def _default_operand(metric: str, evaluation: dict[str, Any]) -> dict[str, Any]:
+    constraints = evaluation.get("constraints", {})
+    constraint_key = {
+        "edge_thickness": "min_edge_thickness_mm",
+        "min_air_gap": "min_air_gap_mm",
+    }.get(metric)
+    if constraint_key and constraint_key in constraints:
+        tolerance_key = f"{constraint_key.removesuffix('_mm')}_tolerance_mm"
+        return {
+            "metric": metric,
+            "target": float(constraints[constraint_key]),
+            "tolerance": float(constraints.get(tolerance_key, 1.0)),
+            "weight": 1.0,
+            "one_sided": "lower",
+        }
+    target = 1.0 if metric in {"relative_illumination", "geometric_mtf", "white_mtf"} else 0.0
+    return {"metric": metric, "target": target, "tolerance": 1.0, "weight": 1.0}
+
+
+def _resolve_evaluation(
+    evaluation: dict[str, Any] | None,
+    ray_sampling: dict[str, Any] | None,
+) -> tuple[list[str], list[dict[str, Any]], dict[str, float], dict[str, Any], list[float]]:
     evaluation = dict(evaluation or {})
     preset = evaluation.get("preset")
     preset_data = PRESETS.get(preset, {}) if preset else {}
-    operand_metrics = [str(operand.get("metric", "")) for operand in evaluation.get("operands", [])]
-    metrics = list(evaluation.get("metrics", operand_metrics or preset_data.get("metrics", ["rms_spot_radius"])))
+    if evaluation.get("operands") is not None:
+        operands = [dict(operand) for operand in evaluation.get("operands", [])]
+    elif preset_data:
+        operands = [dict(operand) for operand in preset_data.get("operands", [])]
+    else:
+        operands = [_default_operand(str(metric), evaluation) for metric in evaluation.get("metrics", ["rms_spot_radius"])]
+    metrics = [str(operand.get("metric", "")) for operand in operands]
     weights = dict(preset_data.get("weights", {}))
     weights.update(evaluation.get("weights", {}))
     sampling = dict(preset_data.get("ray_sampling", {"samples_per_field": 21, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}}))
     sampling.update(ray_sampling or {})
     frequencies = list(evaluation.get("frequencies_lp_per_mm", preset_data.get("frequencies_lp_per_mm", [10.0])))
-    return metrics, weights, sampling, [float(freq) for freq in frequencies]
+    return metrics, operands, weights, sampling, [float(freq) for freq in frequencies]
 
 
 def _constraint_penalty(violations: list[dict[str, Any]]) -> float:
@@ -125,6 +159,33 @@ def _constraint_penalty(violations: list[dict[str, Any]]) -> float:
     for violation in violations:
         penalty += 1000.0 if violation.get("severity") == "error" else 10.0
     return penalty
+
+
+def _derive_merit(operands: list[OperandResult], *, hard_penalty: float = 0.0) -> MeritResult:
+    metrics: dict[str, float | None] = {}
+    weights: dict[str, float] = {}
+    score = float(hard_penalty)
+    ray_loss_penalty = 0.0
+    continuous_constraint_penalty = 0.0
+    for operand in operands:
+        metrics[operand.metric] = operand.value
+        weights[operand.metric] = operand.weight
+        contribution = float(operand.residual or 0.0) ** 2
+        score += contribution
+        if operand.metric == "ray_loss_ratio":
+            ray_loss_penalty += contribution
+        elif operand.metric in {"edge_thickness", "min_air_gap"}:
+            continuous_constraint_penalty += contribution
+    metrics.update(
+        {
+            "ray_loss_penalty": ray_loss_penalty,
+            "continuous_constraint_penalty": continuous_constraint_penalty,
+            "hard_penalty": float(hard_penalty),
+            "constraint_penalty": float(hard_penalty),
+            "score": score,
+        }
+    )
+    return MeritResult(score=score, metrics=metrics, weights=weights)
 
 
 def _rms_finite(values: list[float | None]) -> float | None:
@@ -365,11 +426,8 @@ def _evaluate_operands(
     options: dict[str, Any],
     frequencies: list[float],
     evaluation: dict[str, Any],
-) -> tuple[list[OperandResult], MeritResult]:
+) -> list[OperandResult]:
     results: list[OperandResult] = []
-    natural_values: dict[str, float | None] = {}
-    score = 0.0
-    weights: dict[str, float] = {}
     for operand in operands:
         metric = str(operand.get("metric", ""))
         field_id = str(operand["field_id"]) if operand.get("field_id") is not None else None
@@ -393,11 +451,21 @@ def _evaluate_operands(
         target = float(operand.get("target", 0.0))
         tolerance = float(operand.get("tolerance", 1.0))
         weight = float(operand.get("weight", 1.0))
-        residual = None if value is None else weight * (value - target) / tolerance
-        if residual is not None:
-            score += residual * residual
-        natural_values[metric] = value
-        weights[metric] = weight
+        one_sided = operand.get("one_sided")
+        if one_sided not in {None, "lower", "upper"}:
+            raise StructuredOpticsError(
+                "optics_value_error",
+                "Operand one_sided must be lower or upper.",
+                params={"metric": metric, "one_sided": one_sided, "supported": ["lower", "upper"]},
+            )
+        if value is None:
+            residual = None
+        elif one_sided == "lower":
+            residual = weight * max(0.0, target - value) / tolerance
+        elif one_sided == "upper":
+            residual = weight * max(0.0, value - target) / tolerance
+        else:
+            residual = weight * (value - target) / tolerance
         results.append(
             OperandResult(
                 metric=metric,
@@ -408,13 +476,13 @@ def _evaluate_operands(
                 residual=residual,
                 field_id=field_id,
                 wavelength_nm=wavelength_nm,
+                one_sided=one_sided,
             )
         )
-    natural_values["score"] = score
-    return results, MeritResult(score=score, metrics=natural_values, weights=weights)
+    return results
 
 
-def _compute_merit(metric_values: dict[str, Any], weights: dict[str, float]) -> MeritResult:
+def _compute_legacy_merit(metric_values: dict[str, Any], weights: dict[str, float]) -> MeritResult:
     score = 0.0
     flat: dict[str, float | None] = {}
     rms = metric_values.get("rms_spot_radius")
@@ -423,13 +491,13 @@ def _compute_merit(metric_values: dict[str, Any], weights: dict[str, float]) -> 
         score += weights.get("rms_spot_radius", 1.0) * float(rms)
     ri = metric_values.get("relative_illumination")
     if ri is not None:
-        min_ri = min(row.relative_illumination for row in ri.rows) if ri.rows else 0.0
+        min_ri = float(ri)
         loss = max(0.0, 1.0 - min_ri)
         flat["relative_illumination_loss"] = loss
         score += weights.get("relative_illumination_loss", 0.0) * loss
     mtf = metric_values.get("geometric_mtf")
-    if mtf is not None and mtf.points:
-        value = mtf.points[-1].mtf_radial
+    if mtf is not None:
+        value = float(mtf)
         loss = max(0.0, 1.0 - value)
         flat["geometric_mtf_loss"] = loss
         score += weights.get("geometric_mtf_loss", 0.0) * loss
@@ -441,7 +509,17 @@ def _compute_merit(metric_values: dict[str, Any], weights: dict[str, float]) -> 
             flat[metric] = float(value)
             score += weights.get(metric, 1.0) * float(value)
     flat["score"] = score
-    return MeritResult(score=score, metrics=flat, weights=weights)
+    return MeritResult(score=score, metrics=flat, weights=weights, definition="legacy_linear_weighted_score")
+
+
+def _legacy_deprecation_metadata() -> dict[str, Any]:
+    return {
+        "field": "legacy_merit",
+        "deprecated": True,
+        "replacement": "merit",
+        "removal_target_api_schema_version": "2.6.0",
+        "message_en": "legacy_merit preserves the deprecated linear weighted score for one compatibility release.",
+    }
 
 
 def evaluate_system(
@@ -468,18 +546,29 @@ def evaluate_system(
     )
     if not config_validation.ok:
         violations = [issue.model_dump(mode="json") for issue in config_validation.issues]
+        hard_penalty = _constraint_penalty(violations)
         return EvaluateResult(
             status="infeasible",
-            merit=MeritResult(score=_constraint_penalty(violations), metrics={"constraint_penalty": _constraint_penalty(violations)}, weights={}),
+            merit=_derive_merit([], hard_penalty=hard_penalty),
             metrics={},
             violations=violations,
-            metadata={"stage": "constraint_check", "system_hash": compiled.system_hash},
+            metadata={
+                "stage": "constraint_check",
+                "system_hash": compiled.system_hash,
+                "merit_definition": "sum_of_squared_residuals_plus_penalties",
+                "deprecations": [_legacy_deprecation_metadata()],
+            },
+            legacy_merit=MeritResult(
+                score=hard_penalty,
+                metrics={"constraint_penalty": hard_penalty, "score": hard_penalty},
+                weights={},
+                definition="legacy_linear_weighted_score",
+            ),
         )
 
-    metrics, weights, sampling, frequencies = _resolve_evaluation(evaluation, ray_sampling)
+    metrics, requested_operands, weights, sampling, frequencies = _resolve_evaluation(evaluation, ray_sampling)
     fields = _fields_from_evaluation(evaluation)
     wavelengths = _wavelengths_from_evaluation(compiled, evaluation)
-    requested_operands = list(evaluation_data.get("operands", []))
     _validate_metric_names(metrics, requested_operands)
     invalid_tolerances = [
         (index, operand)
@@ -504,66 +593,42 @@ def evaluate_system(
         penalty = _constraint_penalty(violations)
         return EvaluateResult(
             status="infeasible",
-            merit=MeritResult(score=penalty, metrics={"constraint_penalty": penalty}, weights={}),
+            merit=_derive_merit([], hard_penalty=penalty),
             metrics={},
             violations=violations,
-            metadata={"stage": "operand_validation", "system_hash": compiled.system_hash},
+            metadata={
+                "stage": "operand_validation",
+                "system_hash": compiled.system_hash,
+                "merit_definition": "sum_of_squared_residuals_plus_penalties",
+                "deprecations": [_legacy_deprecation_metadata()],
+            },
+            legacy_merit=MeritResult(
+                score=penalty,
+                metrics={"constraint_penalty": penalty, "score": penalty},
+                weights={},
+                definition="legacy_linear_weighted_score",
+            ),
         )
-    trace = None
-    if not requested_operands and any(metric in metrics for metric in ("rms_spot_radius", "geometric_mtf")):
-        trace = trace_forward(compiled, fields, sampling, wavelengths, {"configuration": configuration})
-    metric_values: dict[str, Any] = {}
-    if "rms_spot_radius" in metrics and not requested_operands:
-        assert trace is not None
-        metric_values["rms_spot_radius"] = analyze_spot(trace).rms_radius_mm
-    if "relative_illumination" in metrics and not requested_operands:
-        metric_values["relative_illumination"] = analyze_relative_illumination(compiled, fields, sampling, wavelengths, {"configuration": configuration})
-    if "geometric_mtf" in metrics and not requested_operands:
-        assert trace is not None
-        metric_values["geometric_mtf"] = analyze_geometric_mtf(trace, frequencies)
     analysis_options = {"configuration": configuration}
-    if not requested_operands:
-        for metric in metrics:
-            if metric in {"rms_spot_radius", "relative_illumination", "geometric_mtf"}:
-                continue
-            metric_values[metric] = _metric_scalar_value(
-                compiled,
-                metric,
-                fields,
-                sampling,
-                wavelengths,
-                analysis_options,
-                frequencies,
-                evaluation_data,
-            )
-
-    if requested_operands:
-        operand_results, merit = _evaluate_operands(
-            compiled,
-            requested_operands,
-            fields,
-            sampling,
-            wavelengths,
-            analysis_options,
-            frequencies,
-            evaluation_data,
-        )
-        metric_values.update({operand.metric: operand.value for operand in operand_results})
-    else:
-        operand_results = []
-        merit = _compute_merit(metric_values, weights)
+    operand_results = _evaluate_operands(
+        compiled,
+        requested_operands,
+        fields,
+        sampling,
+        wavelengths,
+        analysis_options,
+        frequencies,
+        evaluation_data,
+    )
+    metric_values: dict[str, Any] = {operand.metric: operand.value for operand in operand_results}
+    legacy_merit = _compute_legacy_merit(metric_values, weights)
     loss_operands = _ray_loss_operands(compiled, fields, sampling, wavelengths, analysis_options, evaluation_data)
     operand_results.extend(loss_operands)
-    loss_penalty = sum(float(operand.residual or 0.0) ** 2 for operand in loss_operands)
     constraint_operands = _constraint_operands(compiled, configuration, constraints)
+    requested_metric_names = {operand.metric for operand in operand_results}
+    constraint_operands = [operand for operand in constraint_operands if operand.metric not in requested_metric_names]
     operand_results.extend(constraint_operands)
-    constraint_penalty = sum(float(operand.residual or 0.0) ** 2 for operand in constraint_operands)
-    if merit is not None:
-        merit_metrics = dict(merit.metrics)
-        merit_metrics["ray_loss_penalty"] = loss_penalty
-        merit_metrics["continuous_constraint_penalty"] = constraint_penalty
-        merit_metrics["score"] = merit.score + loss_penalty + constraint_penalty
-        merit = MeritResult(score=merit.score + loss_penalty + constraint_penalty, metrics=merit_metrics, weights=dict(merit.weights))
+    merit = _derive_merit(operand_results)
     return EvaluateResult(
         status="ok",
         merit=merit,
@@ -573,10 +638,14 @@ def evaluate_system(
             "stage": "evaluation",
             "system_hash": compiled.system_hash,
             "metrics": metrics,
+            "merit_definition": "sum_of_squared_residuals_plus_penalties",
+            "expanded_operands": requested_operands,
+            "deprecations": [_legacy_deprecation_metadata()],
             **({"warnings": variable_application.warnings} if variable_application.warnings else {}),
         },
         operands=operand_results,
         configuration_resolved=configuration if solve_results else None,
+        legacy_merit=legacy_merit,
     )
 
 

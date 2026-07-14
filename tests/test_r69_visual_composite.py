@@ -104,7 +104,7 @@ def test_visual_composite_api_and_meta_capabilities():
 
     client = TestClient(app)
     meta = client.get("/v1/meta").json()
-    assert meta["api_schema_version"] == "2.4.0"
+    assert meta["api_schema_version"] == "2.5.0"
     assert "instrument_and_retinal" in meta["capabilities"]["visual_evaluation_modes"]
     response = client.post(
         "/v1/analysis/visual-composite",
