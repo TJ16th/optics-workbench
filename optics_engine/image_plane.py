@@ -126,6 +126,7 @@ def _sub_trace(trace: TraceResult, mask: np.ndarray) -> TraceResult:
         status=trace.status[mask],
         sensor_y_mm=trace.sensor_y_mm[mask],
         sensor_z_mm=trace.sensor_z_mm[mask],
+        weights=None if trace.weights is None else trace.weights[mask],
         paths=[],
         metadata=dict(trace.metadata),
     )
@@ -177,6 +178,7 @@ def _project_trace_to_shifted_plane(
         status=trace.status.copy(),
         sensor_y_mm=y,
         sensor_z_mm=z,
+        weights=None if trace.weights is None else trace.weights.copy(),
         paths=[],
         metadata=dict(trace.metadata),
     )

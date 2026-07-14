@@ -284,7 +284,12 @@ def _ray_loss_operands(
                 [trace.field_ids[index] == field_id and abs(float(trace.wavelengths_nm[index]) - wavelength) <= 1.0e-9 for index in range(trace.status.size)],
                 dtype=bool,
             )
-            value = 0.0 if not np.any(mask) else float(np.mean(np.isin(trace.status[mask], sorted(statuses))))
+            if not np.any(mask):
+                value = 0.0
+            else:
+                weights = np.ones(int(np.sum(mask)), dtype=float) if trace.weights is None else np.asarray(trace.weights[mask], dtype=float)
+                total = float(np.sum(weights))
+                value = 0.0 if total <= 0.0 else float(np.sum(weights[np.isin(trace.status[mask], sorted(statuses))]) / total)
             results.append(
                 OperandResult(
                     metric="ray_loss_ratio",

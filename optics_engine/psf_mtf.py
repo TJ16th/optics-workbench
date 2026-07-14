@@ -83,19 +83,27 @@ def _arrived_points(trace_result: TraceResult) -> tuple[np.ndarray, np.ndarray]:
     return trace_result.sensor_y_mm[mask], trace_result.sensor_z_mm[mask]
 
 
+def _arrived_weights(trace_result: TraceResult) -> np.ndarray:
+    mask = trace_result.arrived_mask
+    weights = np.ones(int(np.sum(mask)), dtype=float) if trace_result.weights is None else np.asarray(trace_result.weights[mask], dtype=float)
+    total = float(np.sum(weights))
+    return weights / total if total > 0.0 else weights
+
+
 def encircled_energy(trace_result: TraceResult, radii_mm: list[float] | None = None) -> list[EncircledEnergyPoint]:
     y, z = _arrived_points(trace_result)
     if y.size == 0:
         return []
-    cy = float(np.mean(y))
-    cz = float(np.mean(z))
+    weights = _arrived_weights(trace_result)
+    cy = float(np.sum(weights * y))
+    cz = float(np.sum(weights * z))
     rr = np.sqrt((y - cy) ** 2 + (z - cz) ** 2)
     if radii_mm is None:
         max_r = float(np.max(rr))
         radii = np.linspace(0.0, max_r, 8).tolist() if max_r > 0.0 else [0.0]
     else:
         radii = radii_mm
-    return [EncircledEnergyPoint(float(radius), float(np.mean(rr <= radius))) for radius in radii]
+    return [EncircledEnergyPoint(float(radius), float(np.sum(weights[rr <= radius]))) for radius in radii]
 
 
 def analyze_geometric_psf(
@@ -109,15 +117,16 @@ def analyze_geometric_psf(
     if y.size == 0:
         return GeometricPSFResult([], [], [], None, None, 0.0, [])
 
-    cy = float(np.mean(y))
-    cz = float(np.mean(z))
+    weights = _arrived_weights(trace_result)
+    cy = float(np.sum(weights * y))
+    cz = float(np.sum(weights * z))
     if extent_mm is None:
         half = float(max(np.max(np.abs(y - cy)), np.max(np.abs(z - cz)), 1.0e-9))
         extent_mm = 2.0 * half
     half_extent = extent_mm / 2.0
     y_edges = np.linspace(cy - half_extent, cy + half_extent, grid_size + 1)
     z_edges = np.linspace(cz - half_extent, cz + half_extent, grid_size + 1)
-    hist, y_edges, z_edges = np.histogram2d(y, z, bins=[y_edges, z_edges])
+    hist, y_edges, z_edges = np.histogram2d(y, z, bins=[y_edges, z_edges], weights=weights * y.size)
     total = float(np.sum(hist))
     if total > 0:
         hist = hist / total
@@ -153,17 +162,18 @@ def analyze_geometric_mtf(
         metadata["combined_weighted_point_count"] = int(trace_result.metadata["combined_weighted_point_count"])
     if y.size == 0:
         return GeometricMTFResult([MTFPoint(float(freq), 0.0, 0.0, 0.0) for freq in frequencies_lp_per_mm], metadata)
-    y = y - np.mean(y)
-    z = z - np.mean(z)
+    weights = _arrived_weights(trace_result)
+    y = y - np.sum(weights * y)
+    z = z - np.sum(weights * z)
     radial = np.sqrt(y * y + z * z)
     points: list[MTFPoint] = []
     for freq in frequencies_lp_per_mm:
         phase_y = np.exp(-2j * np.pi * freq * y)
         phase_z = np.exp(-2j * np.pi * freq * z)
         phase_r = np.exp(-2j * np.pi * freq * radial)
-        mtf_y = float(abs(np.mean(phase_y)))
-        mtf_z = float(abs(np.mean(phase_z)))
-        mtf_r = float(abs(np.mean(phase_r)))
+        mtf_y = float(abs(np.sum(weights * phase_y)))
+        mtf_z = float(abs(np.sum(weights * phase_z)))
+        mtf_r = float(abs(np.sum(weights * phase_r)))
         points.append(MTFPoint(float(freq), mtf_y, mtf_z, mtf_r))
     return GeometricMTFResult(points, metadata)
 
@@ -261,6 +271,7 @@ def _combine_traces(trace_results: list[TraceResult], weights: list[float]) -> T
         status=np.concatenate(statuses),
         sensor_y_mm=np.concatenate(y_values),
         sensor_z_mm=np.concatenate(z_values),
+        weights=None,
         paths=[],
         metadata=metadata,
     )

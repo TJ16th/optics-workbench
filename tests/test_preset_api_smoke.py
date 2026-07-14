@@ -242,7 +242,7 @@ def test_shipped_preset_apertures_preserve_default_throughput_and_paraxial_resul
         trace = trace_forward(
             compiled,
             fields,
-            {"samples_per_field": 9, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+            {"samples_per_field": 9, "pupil_distribution": "grid", "ray_aiming": {"mode": "full"}},
             preset["system"]["wavelengths_nm"]["samples"],
         )
         statuses = {str(status): trace.status.tolist().count(status) for status in set(trace.status.tolist())}
@@ -273,7 +273,7 @@ def test_p008_real_achromatic_afocal_preset_metrics_and_throughput():
     afocal = analyze_afocal(
         compiled,
         preset["recommendedFields"][0],
-        {"samples_per_field": 25, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+        {"samples_per_field": 25, "pupil_distribution": "grid", "ray_aiming": {"mode": "full"}},
     )
     assert afocal.arrived_count == 25
     assert afocal.residual_divergence_diopter == pytest.approx(0.36818659544890275)
@@ -328,7 +328,7 @@ def test_p004_double_gauss_meets_fast_paraxial_target_and_positive_edge_thicknes
     center_trace = trace_forward(
         compiled,
         [preset["recommendedFields"][0]],
-        {"samples_per_field": 81, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+        {"samples_per_field": 81, "pupil_distribution": "grid", "ray_aiming": {"mode": "full"}},
         [587.56],
     )
     assert analyze_spot(center_trace).rms_radius_mm == pytest.approx(0.48432273992330394)
@@ -377,7 +377,7 @@ def test_p011_planar_double_gauss_has_six_positive_thickness_elements():
     center_trace = trace_forward(
         compiled,
         [preset["recommendedFields"][0]],
-        {"samples_per_field": 81, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+        {"samples_per_field": 81, "pupil_distribution": "grid", "ray_aiming": {"mode": "full"}},
         [587.56],
     )
     assert center_trace.status.tolist() == ["alive"] * 81
@@ -425,7 +425,7 @@ def test_p012_tessar_meets_f28_target_with_four_positive_thickness_elements():
     center_trace = trace_forward(
         compiled,
         [preset["recommendedFields"][0]],
-        {"samples_per_field": 81, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+        {"samples_per_field": 81, "pupil_distribution": "grid", "ray_aiming": {"mode": "full"}},
         [587.56],
     )
     assert center_trace.status.tolist() == ["alive"] * 81
@@ -491,7 +491,7 @@ def test_p009_aspheric_singlet_reduces_primary_wavelength_spherical_spot():
     assert asp1["conic"] == pytest.approx(-1.1792)
     assert asp1["asphere_coefficients"] == {"A4": pytest.approx(-2.4992e-6)}
 
-    sampling = {"samples_per_field": 81, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}}
+    sampling = {"samples_per_field": 81, "pupil_distribution": "grid", "ray_aiming": {"mode": "full"}}
     field = [aspheric["recommendedFields"][0]]
     spherical_trace = trace_forward(compile_system(load_system(spherical["system"])), field, sampling, [587.56])
     aspheric_trace = trace_forward(compile_system(load_system(aspheric["system"])), field, sampling, [587.56])
@@ -550,7 +550,7 @@ def test_p010_high_order_asphere_has_two_curvature_reversals_and_full_throughput
     center_trace = trace_forward(
         compiled,
         [preset["recommendedFields"][0]],
-        {"samples_per_field": 81, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+        {"samples_per_field": 81, "pupil_distribution": "grid", "ray_aiming": {"mode": "full"}},
         [587.56],
     )
     assert analyze_spot(center_trace).rms_radius_mm == pytest.approx(0.4646328343540561)

@@ -27,7 +27,9 @@ def analyze_spot(trace_result: TraceResult) -> SpotResult:
 
     y = trace_result.sensor_y_mm[mask]
     z = trace_result.sensor_z_mm[mask]
-    cy = float(np.mean(y))
-    cz = float(np.mean(z))
-    rms = float(np.sqrt(np.mean((y - cy) ** 2 + (z - cz) ** 2)))
+    weights = np.ones(y.size, dtype=float) if trace_result.weights is None else np.asarray(trace_result.weights[mask], dtype=float)
+    weights /= np.sum(weights)
+    cy = float(np.sum(weights * y))
+    cz = float(np.sum(weights * z))
+    rms = float(np.sqrt(np.sum(weights * ((y - cy) ** 2 + (z - cz) ** 2))))
     return SpotResult(arrived, blocked, failed, cy, cz, rms)

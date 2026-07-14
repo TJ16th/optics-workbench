@@ -43,6 +43,7 @@ class TraceResult:
     status: np.ndarray
     sensor_y_mm: np.ndarray
     sensor_z_mm: np.ndarray
+    weights: np.ndarray | None = None
     paths: list[list[dict[str, Any]]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     eye_theta_y_deg: np.ndarray | None = None
@@ -71,13 +72,96 @@ class ReverseTraceResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-def _unit_disk_samples(count: int, distribution: str = "hexapolar", seed: int | None = None) -> np.ndarray:
-    if count <= 1:
+def _sobol_2d(count: int, seed: int) -> np.ndarray:
+    bits = 32
+    directions = np.zeros((2, bits), dtype=np.uint32)
+    for bit in range(bits):
+        directions[0, bit] = np.uint32(1 << (31 - bit))
+    directions[1, 0] = np.uint32(1 << 31)
+    directions[1, 1] = np.uint32(3 << 30)
+    for bit in range(2, bits):
+        directions[1, bit] = directions[1, bit - 2] ^ (directions[1, bit - 2] >> np.uint32(2)) ^ directions[1, bit - 1]
+    points = np.empty((count, 2), dtype=float)
+    digital_shift = np.random.default_rng(seed).integers(0, 2**32, size=2, dtype=np.uint32)
+    for index in range(count):
+        gray = index ^ (index >> 1)
+        value = np.zeros(2, dtype=np.uint32)
+        bit = 0
+        while gray:
+            if gray & 1:
+                value ^= directions[:, bit]
+            gray >>= 1
+            bit += 1
+        points[index] = (value ^ digital_shift).astype(np.float64) / float(2**32)
+    return points
+
+
+def _hexapolar_samples(count: int) -> np.ndarray:
+    points = [np.array([0.0, 0.0])]
+    ring = 1
+    while len(points) < count:
+        ring_count = 6 * ring
+        radius = ring / max(1, int(np.ceil((np.sqrt(12 * count - 3) - 3) / 6)))
+        take = min(ring_count, count - len(points))
+        angles = 2.0 * np.pi * np.arange(take) / take
+        points.extend(np.column_stack([radius * np.cos(angles), radius * np.sin(angles)]))
+        ring += 1
+    result = np.asarray(points[:count], dtype=float)
+    grid_size = int(np.ceil(np.sqrt(count * 4.0 / np.pi))) + 1
+    values = np.linspace(-1.0, 1.0, grid_size)
+    legacy_grid = np.array([(y, z) for y in values for z in values if y * y + z * z <= 1.0 + 1.0e-12], dtype=float)
+    legacy_grid = legacy_grid[np.argsort(np.sum(legacy_grid * legacy_grid, axis=1))][:count]
+    target_radius = float(np.max(np.linalg.norm(legacy_grid, axis=1)))
+    actual_radius = float(np.max(np.linalg.norm(result, axis=1)))
+    if actual_radius > 0.0:
+        result *= target_radius / actual_radius
+    return result
+
+
+def _polar_samples(count: int) -> np.ndarray:
+    if count == 1:
         return np.array([[0.0, 0.0]], dtype=float)
+    rings = max(1, int(np.ceil(np.sqrt(count))))
+    points: list[np.ndarray] = []
+    remaining = count
+    for ring in range(1, rings + 1):
+        rings_left = rings - ring + 1
+        ring_count = max(1, remaining // rings_left)
+        radius = np.sqrt((ring - 0.5) / rings)
+        angles = 2.0 * np.pi * np.arange(ring_count) / ring_count + (ring % 2) * np.pi / ring_count
+        points.extend(np.column_stack([radius * np.cos(angles), radius * np.sin(angles)]))
+        remaining -= ring_count
+    return np.asarray(points[:count], dtype=float)
+
+
+def _gaussian_quadrature_samples(count: int) -> tuple[np.ndarray, np.ndarray]:
+    radial_count = max(factor for factor in range(1, int(np.sqrt(count)) + 1) if count % factor == 0)
+    angular_count = count // radial_count
+    nodes, radial_weights = np.polynomial.legendre.leggauss(radial_count)
+    radial_t = 0.5 * (nodes + 1.0)
+    radial_weights = 0.5 * radial_weights
+    points: list[tuple[float, float]] = []
+    weights: list[float] = []
+    for radial_index, t_value in enumerate(radial_t):
+        radius = np.sqrt(t_value)
+        for angular_index in range(angular_count):
+            angle = 2.0 * np.pi * angular_index / angular_count
+            points.append((radius * np.cos(angle), radius * np.sin(angle)))
+            weights.append(float(radial_weights[radial_index] / angular_count))
+    normalized = np.asarray(weights, dtype=float)
+    normalized /= np.sum(normalized)
+    return np.asarray(points, dtype=float), normalized
+
+
+def _unit_disk_samples_with_weights(count: int, distribution: str = "hexapolar", seed: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+    if count <= 1:
+        return np.array([[0.0, 0.0]], dtype=float), np.ones(1, dtype=float)
     if distribution == "fan_y":
-        return np.column_stack([np.linspace(-1.0, 1.0, count), np.zeros(count)])
+        points = np.column_stack([np.linspace(-1.0, 1.0, count), np.zeros(count)])
+        return points, np.full(count, 1.0 / count)
     if distribution == "fan_z":
-        return np.column_stack([np.zeros(count), np.linspace(-1.0, 1.0, count)])
+        points = np.column_stack([np.zeros(count), np.linspace(-1.0, 1.0, count)])
+        return points, np.full(count, 1.0 / count)
     if distribution == "random":
         if seed is None:
             raise StructuredOpticsError(
@@ -88,7 +172,8 @@ def _unit_disk_samples(count: int, distribution: str = "hexapolar", seed: int | 
         rng = np.random.default_rng(seed)
         radius = np.sqrt(rng.random(count))
         angle = 2.0 * np.pi * rng.random(count)
-        return np.column_stack([radius * np.cos(angle), radius * np.sin(angle)])
+        points = np.column_stack([radius * np.cos(angle), radius * np.sin(angle)])
+        return points, np.full(count, 1.0 / count)
     if distribution == "sobol":
         if seed is None:
             raise StructuredOpticsError(
@@ -96,10 +181,26 @@ def _unit_disk_samples(count: int, distribution: str = "hexapolar", seed: int | 
                 "A seed is required for sobol pupil sampling.",
                 params={"pupil_distribution": distribution, "required_parameter": "seed"},
             )
-        rng = np.random.default_rng(seed)
-        radius = np.sqrt(rng.random(count))
-        angle = 2.0 * np.pi * rng.random(count)
-        return np.column_stack([radius * np.cos(angle), radius * np.sin(angle)])
+        uv = _sobol_2d(count, seed)
+        radius = np.sqrt(uv[:, 0])
+        angle = 2.0 * np.pi * uv[:, 1]
+        points = np.column_stack([radius * np.cos(angle), radius * np.sin(angle)])
+        return points, np.full(count, 1.0 / count)
+    if distribution == "polar":
+        return _polar_samples(count), np.full(count, 1.0 / count)
+    if distribution == "hexapolar":
+        return _hexapolar_samples(count), np.full(count, 1.0 / count)
+    if distribution == "gaussian_quadrature":
+        return _gaussian_quadrature_samples(count)
+    if distribution != "grid":
+        raise StructuredOpticsError(
+            "optics_value_error",
+            "Unknown pupil distribution.",
+            params={
+                "pupil_distribution": distribution,
+                "supported_distributions": ["grid", "fan_y", "fan_z", "random", "sobol", "polar", "hexapolar", "gaussian_quadrature"],
+            },
+        )
 
     grid_size = int(np.ceil(np.sqrt(count * 4.0 / np.pi))) + 1
     values = np.linspace(-1.0, 1.0, grid_size)
@@ -110,7 +211,11 @@ def _unit_disk_samples(count: int, distribution: str = "hexapolar", seed: int | 
         angles = np.linspace(0.0, 2.0 * np.pi, count - pts.shape[0], endpoint=False)
         extra = np.column_stack([np.cos(angles), np.sin(angles)])
         pts = np.vstack([pts, extra])
-    return pts[:count]
+    return pts[:count], np.full(count, 1.0 / count)
+
+
+def _unit_disk_samples(count: int, distribution: str = "hexapolar", seed: int | None = None) -> np.ndarray:
+    return _unit_disk_samples_with_weights(count, distribution, seed)[0]
 
 
 def _configuration_variables(configuration: dict[str, Any] | None) -> dict[str, Any]:
@@ -933,7 +1038,7 @@ def trace_forward(
     store_path = bool(options.get("store_path", False))
 
     seed = int(sampling["seed"]) if "seed" in sampling else None
-    samples = _unit_disk_samples(samples_per_field, distribution, seed)
+    samples, sample_weights = _unit_disk_samples_with_weights(samples_per_field, distribution, seed)
     targets = _target_points_for_stop_with_layout(compiled, samples, centers_mm, rotations, configuration)
     first_x = centers_mm[0, 0]
     stop_idx, stop_outer, stop_inner = _aperture_radius(compiled, configuration)
@@ -942,6 +1047,7 @@ def trace_forward(
     origins: list[np.ndarray] = []
     directions: list[np.ndarray] = []
     ray_wavelengths: list[float] = []
+    ray_weights: list[float] = []
     field_ids: list[str] = []
     aiming_ok: list[bool] = []
     aiming_iterations: list[int] = []
@@ -987,10 +1093,11 @@ def trace_forward(
                 field_ok = [True] * len(field_origins)
                 field_iterations = [0] * len(field_origins)
 
-            for origin, ok, iterations in zip(field_origins, field_ok, field_iterations):
+            for origin, ok, iterations, sample_weight in zip(field_origins, field_ok, field_iterations, sample_weights):
                 origins.append(origin)
                 directions.append(direction)
                 ray_wavelengths.append(float(wavelength))
+                ray_weights.append(float(sample_weight))
                 field_ids.append(str(field.get("id", "field")))
                 aiming_ok.append(ok)
                 aiming_iterations.append(iterations)
@@ -1010,6 +1117,7 @@ def trace_forward(
     t_trace = time.perf_counter()
     aiming_ok_array = np.array(aiming_ok, dtype=bool)
     result.status[~aiming_ok_array] = STATUS_AIMING_FAILED
+    result.weights = np.asarray(ray_weights, dtype=float)
     result.metadata.update(
         {
             "ray_aiming_mode": aiming_mode,
@@ -1025,6 +1133,7 @@ def trace_forward(
             "aiming_exact_solved_count": int(aiming_exact_solved_count),
             "samples_per_field": samples_per_field,
             "sampling_seed": seed,
+            "pupil_weights": sample_weights.tolist(),
         }
     )
     nominal_stop_radius = None
