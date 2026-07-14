@@ -583,6 +583,60 @@ test('navigation and context drawer transitions keep layout and chart dimensions
   expect(afterDrawer?.width ?? 0).toBeGreaterThan(400)
 })
 
+test('R103 System workspace links row selection and debounced preview to the live mini layout', async ({ page }) => {
+  const previewRequests: unknown[] = []
+  const registerRequests: unknown[] = []
+  await mockEngine(page, { previewRequests, registerRequests })
+  await page.goto('/?lng=en&fixture=all-presets')
+  await selectPresetOption(page, 'P005 Coaxial Cassegrain Telescope Demo')
+  await page.getByRole('button', { name: 'System', exact: true }).click()
+
+  const workspace = page.getByTestId('system-workspace')
+  const miniLayout = page.locator('#system-mini-layout-svg')
+  await expect(workspace).toBeVisible()
+  await page.getByTestId('surface-row').filter({ hasText: 'M1' }).click()
+  await expect(miniLayout.locator('[data-surface-id="M1"]')).toHaveAttribute('data-selected', 'true')
+
+  const requestCount = previewRequests.length
+  await page.locator('#surface-STOP-annulus-inner').fill('42')
+  await expect.poll(() => previewRequests.length, { timeout: 3_000 }).toBeGreaterThan(requestCount)
+  await expect(page.getByRole('button', { name: 'System', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(miniLayout.locator('[data-surface-id="STOP"]')).toHaveAttribute('data-selected', 'true')
+  expect(registerRequests.at(-1)).toMatchObject({ surfaces: expect.arrayContaining([expect.objectContaining({ id: 'STOP' })]) })
+})
+
+test('R103 layout legend overlays without resizing the layout and result strip stays compact', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  const layout = page.locator('#layout-svg')
+  const before = await layout.boundingBox()
+  const legend = page.getByTestId('layout-legend-toggle')
+  await legend.locator('summary').click()
+  await expect(legend).toHaveAttribute('open', '')
+  await expect(page.getByTestId('layout-legend')).toBeVisible()
+  const after = await layout.boundingBox()
+  expect(after).toEqual(before)
+  await expect(page.getByTestId('compact-result-strip')).toBeVisible()
+  const strip = await page.getByTestId('compact-result-strip').boundingBox()
+  expect(strip?.height ?? 0).toBeLessThan(190)
+  await legend.locator('summary').click()
+  await expect(legend).not.toHaveAttribute('open', '')
+})
+
+test('R103 snapshot save stays in place and toast action opens Compare', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await page.getByRole('button', { name: 'Run Preview' }).click()
+  await page.getByRole('button', { name: 'Save Snapshot' }).click()
+
+  await expect(page.getByRole('button', { name: 'Preview', exact: true })).toHaveAttribute('aria-current', 'page')
+  const toast = page.getByTestId('snapshot-toast')
+  await expect(toast).toContainText('snapshot-1')
+  await toast.getByRole('button', { name: 'Open in Compare' }).click()
+  await expect(page.getByRole('button', { name: 'Compare', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('.snapshot-row').filter({ hasText: 'snapshot-1' })).toBeVisible()
+})
+
 test('shipped preset selection resets fields to recommended values', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en&fixture=all-presets')
@@ -736,6 +790,7 @@ test('layout view legend explains ray, wavelength, element, and marker styles', 
   await mockEngine(page)
   await page.goto('/?lng=en&fixture=all-presets')
 
+  await page.getByTestId('layout-legend-toggle').locator('summary').click()
   const legend = page.getByTestId('layout-legend')
   await expect(legend).toBeVisible()
   await expect(legend).toContainText('Chief ray')
@@ -1634,12 +1689,14 @@ test('snapshots embed artifacts and compare two saved conditions', async ({ page
   await expect(page.locator('#image-plane-policy-mode')).toHaveValue('sweep')
   await page.getByRole('button', { name: 'Solve Image Plane' }).click()
   await page.getByRole('button', { name: 'Save Snapshot' }).click()
+  await page.getByTestId('snapshot-toast').getByRole('button', { name: 'Open in Compare' }).click()
   await expect(page.locator('.snapshot-row').filter({ hasText: 'snapshot-1' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Analysis', exact: true }).click()
   await page.locator('#field-0-theta-y').fill('3')
   await page.getByRole('button', { name: 'Solve Image Plane' }).click()
   await page.getByRole('button', { name: 'Save Snapshot' }).click()
+  await page.getByTestId('snapshot-toast').getByRole('button', { name: 'Open in Compare' }).click()
 
   await expect(page.getByTestId('compare-view')).toContainText('Condition Diff')
   await expect(page.getByTestId('compare-view')).toContainText('Result Compare')
@@ -1655,9 +1712,11 @@ test('partial snapshots fall back when embedded artifact retrieval fails', async
   await expect(page.locator('#image-plane-policy-mode')).toHaveValue('sweep')
   await page.getByRole('button', { name: 'Solve Image Plane' }).click()
   await page.getByRole('button', { name: 'Save Snapshot' }).click()
+  await page.getByTestId('snapshot-toast').getByRole('button', { name: 'Open in Compare' }).click()
   await page.getByRole('button', { name: 'Analysis', exact: true }).click()
   await page.getByRole('button', { name: 'Solve Image Plane' }).click()
   await page.getByRole('button', { name: 'Save Snapshot' }).click()
+  await page.getByTestId('snapshot-toast').getByRole('button', { name: 'Open in Compare' }).click()
 
   await expect(page.getByText('partial').first()).toBeVisible()
   await expect(page.getByText('Partial Snapshot')).toBeVisible()

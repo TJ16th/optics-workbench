@@ -16,6 +16,7 @@ import {
   Switch,
   Tag,
   TextInput,
+  ToastNotification,
   Toggletip,
   ToggletipButton,
   ToggletipContent,
@@ -873,12 +874,18 @@ function LayoutView({
   evaluationPlane,
   configuration,
   showDensityRays,
+  compact = false,
+  selectedSurfaceIds = [],
+  id = 'layout-svg',
 }: {
   system: OpticalSystem
   trace?: TraceResponse
   evaluationPlane?: EvaluationPlaneMetadata
   configuration?: RuntimeConfiguration
   showDensityRays: boolean
+  compact?: boolean
+  selectedSurfaceIds?: string[]
+  id?: string
 }) {
   const { t } = useTranslation(['layoutView'])
   const positions = systemPositions(system)
@@ -991,8 +998,8 @@ function LayoutView({
 
   return (
     <svg
-      id="layout-svg"
-      className="layout-view"
+      id={id}
+      className={`layout-view${compact ? ' layout-view--mini' : ''}`}
       viewBox="0 0 720 340"
       role="img"
       aria-label={t('layoutView.optical_layout_aria')}
@@ -1022,7 +1029,9 @@ function LayoutView({
         return (
           <g
             key={surface.id}
+            className={selectedSurfaceIds.includes(surface.id) ? 'layout-surface-selected' : undefined}
             data-surface-id={surface.id}
+            data-selected={selectedSurfaceIds.includes(surface.id) ? 'true' : 'false'}
             data-surface-kind={surface.kind}
             data-vertex-x-mm={x}
             data-radius-mm={surface.radius_mm}
@@ -1240,10 +1249,14 @@ function LayoutLegend({ system }: { system: OpticalSystem }) {
 function SurfaceTable({
   surfaces,
   onUpdateAnnulusRadius,
+  selectedSurfaceId,
+  onSelectSurface,
   onOpenHelp,
 }: {
   surfaces: Surface[]
   onUpdateAnnulusRadius: (index: number, radius: 'inner' | 'outer', value: number) => void
+  selectedSurfaceId: string
+  onSelectSurface: (surfaceId: string) => void
   onOpenHelp: (termId: string) => void
 }) {
   const { t } = useTranslation(['surfaceTable'])
@@ -1266,7 +1279,17 @@ function SurfaceTable({
         </thead>
         <tbody>
           {surfaces.map((surface, surfaceIndex) => (
-            <tr key={surface.id}>
+            <tr
+              key={surface.id}
+              tabIndex={0}
+              aria-selected={selectedSurfaceId === surface.id}
+              data-testid="surface-row"
+              data-surface-id={surface.id}
+              onClick={() => onSelectSurface(surface.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') onSelectSurface(surface.id)
+              }}
+            >
               {surfaceColumns.map((column) => {
                 const isAnnulusDiameter = column.id === 'semi_diameter_mm' && surface.aperture?.shape === 'annulus'
                 if (!isAnnulusDiameter) return <td key={column.id} data-column-id={column.id}>{String(column.value(surface))}</td>
@@ -1310,12 +1333,16 @@ function GroupPanel({
   onAddGroup,
   onUpdateGroup,
   onRemoveGroup,
+  selectedGroupId,
+  onSelectGroup,
   onOpenHelp,
 }: {
   system: OpticalSystem
   onAddGroup: () => void
   onUpdateGroup: (index: number, patch: Partial<OpticalGroup>) => void
   onRemoveGroup: (index: number) => void
+  selectedGroupId: string
+  onSelectGroup: (groupId: string) => void
   onOpenHelp: (termId: string) => void
 }) {
   const { t } = useTranslation(['surfaceTable'])
@@ -1342,7 +1369,15 @@ function GroupPanel({
             const range = groupSurfaceRange(group, surfaces)
             const rangeState = range.fromIndex < 0 || range.toIndex < 0 || range.fromIndex > range.toIndex ? 'invalid' : 'ok'
             return (
-              <div key={`${group.id}-${index}`} className="group-row" data-testid="group-row" data-range-state={rangeState}>
+              <div
+                key={`${group.id}-${index}`}
+                className="group-row"
+                data-testid="group-row"
+                data-range-state={rangeState}
+                data-selected={selectedGroupId === group.id ? 'true' : 'false'}
+                onClick={() => onSelectGroup(group.id)}
+                onFocusCapture={() => onSelectGroup(group.id)}
+              >
                 <TextInput
                   id={`group-id-${index}`}
                   labelText={t('surfaceTable.groups.id')}
@@ -2744,6 +2779,8 @@ export function App() {
     focusCurve, setFocusCurve, focusResult, setFocusResult, lastRequest, setLastRequest,
     lastResponse, setLastResponse, helpTermId, setHelpTermId, snapshots, setSnapshots,
     compareLeftId, setCompareLeftId, compareRightId, setCompareRightId, exportLanguage, setExportLanguage,
+    selectedSurfaceId, setSelectedSurfaceId, selectedGroupId, setSelectedGroupId,
+    snapshotNoticeId, setSnapshotNoticeId,
   } = useWorkbenchControllerState<Snapshot, ImagePlanePolicyDraft, DecenterTiltDraft>({
     apiBase: defaultApiBase,
     system: cloneSystem(presets[0].system),
@@ -2902,8 +2939,12 @@ export function App() {
 
   const addGroup = () => {
     const nextSystem = cloneSystem(system)
-    nextSystem.groups = [...(nextSystem.groups ?? []), defaultGroupFor(nextSystem)]
+    const nextGroup = defaultGroupFor(nextSystem)
+    nextSystem.groups = [...(nextSystem.groups ?? []), nextGroup]
     markSystemChanged(nextSystem)
+    setSelectedGroupId(nextGroup.id)
+    setSelectedSurfaceId('')
+    scheduleSystemPreview(nextSystem)
   }
 
   const updateGroup = (index: number, patch: Partial<OpticalGroup>) => {
@@ -2911,6 +2952,9 @@ export function App() {
     const groups = nextSystem.groups ?? []
     nextSystem.groups = groups.map((group, groupIndex) => (groupIndex === index ? { ...group, ...patch } : group))
     markSystemChanged(nextSystem)
+    setSelectedGroupId(String(patch.id ?? nextSystem.groups[index]?.id ?? ''))
+    setSelectedSurfaceId('')
+    scheduleSystemPreview(nextSystem)
   }
 
   const updateAnnulusRadius = (index: number, radius: 'inner' | 'outer', value: number) => {
@@ -2923,12 +2967,18 @@ export function App() {
       surface.semi_diameter_mm = value
     }
     markSystemChanged(nextSystem)
+    setSelectedSurfaceId(surface.id)
+    setSelectedGroupId('')
+    scheduleSystemPreview(nextSystem)
   }
 
   const removeGroup = (index: number) => {
     const nextSystem = cloneSystem(system)
+    const removedId = nextSystem.groups?.[index]?.id
     nextSystem.groups = (nextSystem.groups ?? []).filter((_, groupIndex) => groupIndex !== index)
     markSystemChanged(nextSystem)
+    if (selectedGroupId === removedId) setSelectedGroupId('')
+    scheduleSystemPreview(nextSystem)
   }
 
   const readImagePlanePolicyForm = () => {
@@ -2971,7 +3021,7 @@ export function App() {
     options: { store_path: true, profiling: true, include_layout_baseline_rays: true },
   })
 
-  const applyPreviewResult = (result: TraceResponse, clean: boolean) => {
+  const applyPreviewResult = (result: TraceResponse, clean: boolean, navigateToPreview = true) => {
     setTrace(result)
     const nextEvaluationPlane = extractEvaluationPlane(result)
     setEvaluationPlane(nextEvaluationPlane)
@@ -2979,7 +3029,7 @@ export function App() {
     setFocusResult(undefined)
     setLastResponse(result)
     setAnalysisDirty(!clean)
-    setActiveTab('preview')
+    if (navigateToPreview) setActiveTab('preview')
   }
 
   const resolvePreviewSystemId = async (previewSystem: OpticalSystem, rememberRegistration: boolean) => {
@@ -2998,6 +3048,7 @@ export function App() {
     lowResolution: boolean,
     previewSystem: OpticalSystem = system,
     rememberRegistration = !lowResolution,
+    navigateToPreview = true,
   ) => {
     const sequence = motionPreviewSequenceRef.current + 1
     motionPreviewSequenceRef.current = sequence
@@ -3011,7 +3062,7 @@ export function App() {
       setLastRequest(request)
       const result = await runPreview(apiBase, request)
       if (sequence !== motionPreviewSequenceRef.current) return
-      applyPreviewResult(result, !lowResolution)
+      applyPreviewResult(result, !lowResolution, navigateToPreview)
     } catch (error) {
       if (sequence !== motionPreviewSequenceRef.current) return
       setLastResponse(getApiIssue(error))
@@ -3024,6 +3075,13 @@ export function App() {
     if (sliderPreviewTimerRef.current) window.clearTimeout(sliderPreviewTimerRef.current)
     sliderPreviewTimerRef.current = window.setTimeout(() => {
       void runMotionPreview(configuration, true, previewSystem, false)
+    }, sliderPreviewDebounceMs)
+  }
+
+  const scheduleSystemPreview = (previewSystem: OpticalSystem) => {
+    if (sliderPreviewTimerRef.current) window.clearTimeout(sliderPreviewTimerRef.current)
+    sliderPreviewTimerRef.current = window.setTimeout(() => {
+      void runMotionPreview(runtimeConfigurationRef.current, true, previewSystem, false, false)
     }, sliderPreviewDebounceMs)
   }
 
@@ -3275,7 +3333,7 @@ export function App() {
     setSnapshots((current) => [snapshot, ...current])
     setCompareLeftId((current) => current || snapshotId)
     setCompareRightId((current) => current || (compareLeftId ? snapshotId : ''))
-    setActiveTab('compare')
+    setSnapshotNoticeId(snapshotId)
   }
 
   const exportSnapshotJson = (snapshot: Snapshot) => {
@@ -3300,6 +3358,13 @@ export function App() {
     { key: 'compare' as const, icon: Compare },
     { key: 'debug' as const, icon: Code },
   ]
+  const selectedGroup = (system.groups ?? []).find((group) => group.id === selectedGroupId)
+  const selectedGroupRange = selectedGroup ? groupSurfaceRange(selectedGroup, system.surfaces) : undefined
+  const selectedLayoutSurfaceIds = selectedSurfaceId
+    ? [selectedSurfaceId]
+    : selectedGroupRange && selectedGroupRange.fromIndex >= 0 && selectedGroupRange.toIndex >= selectedGroupRange.fromIndex
+      ? system.surfaces.slice(selectedGroupRange.fromIndex, selectedGroupRange.toIndex + 1).map((surface) => surface.id)
+      : []
 
   return (
     <Theme theme={resolvedTheme === 'dark' ? 'g100' : 'g10'} className={`app-theme app-theme--${resolvedTheme}`}>
@@ -3400,6 +3465,8 @@ export function App() {
               onChange={({ selectedItem }) => {
                 if (selectedItem) {
                   setSelectedPresetId(selectedItem.id)
+                  setSelectedSurfaceId(selectedItem.system.surfaces[0]?.id ?? '')
+                  setSelectedGroupId('')
                   setAnalysisView('standard')
                   setSystem(cloneSystem(selectedItem.system))
                   setSystemId(null)
@@ -3459,9 +3526,50 @@ export function App() {
 
         <section className="center-pane">
           {activeTab === 'system' ? (
-            <div className="panel large-panel">
-              <SurfaceTable surfaces={system.surfaces} onUpdateAnnulusRadius={updateAnnulusRadius} onOpenHelp={setHelpTermId} />
-              <GroupPanel system={system} onAddGroup={addGroup} onUpdateGroup={updateGroup} onRemoveGroup={removeGroup} onOpenHelp={setHelpTermId} />
+            <div className="system-workspace" data-testid="system-workspace">
+              <div className="panel large-panel system-editor-pane">
+                <SurfaceTable
+                  surfaces={system.surfaces}
+                  onUpdateAnnulusRadius={updateAnnulusRadius}
+                  selectedSurfaceId={selectedSurfaceId}
+                  onSelectSurface={(surfaceId) => {
+                    setSelectedSurfaceId(surfaceId)
+                    setSelectedGroupId('')
+                  }}
+                  onOpenHelp={setHelpTermId}
+                />
+                <GroupPanel
+                  system={system}
+                  onAddGroup={addGroup}
+                  onUpdateGroup={updateGroup}
+                  onRemoveGroup={removeGroup}
+                  selectedGroupId={selectedGroupId}
+                  onSelectGroup={(groupId) => {
+                    setSelectedGroupId(groupId)
+                    setSelectedSurfaceId('')
+                  }}
+                  onOpenHelp={setHelpTermId}
+                />
+              </div>
+              <aside className="panel system-mini-layout" data-testid="system-mini-layout">
+                <div className="panel-heading">
+                  <div>
+                    <h2>{t('layoutView:layoutView.live_layout')}</h2>
+                    <p className="muted">{t('layoutView:layoutView.selected_surfaces', { ids: selectedLayoutSurfaceIds.join(', ') || t('common.empty.dash') })}</p>
+                  </div>
+                  {sliderPreviewPending ? <Tag type="blue">{t('layoutView:layoutView.updating')}</Tag> : null}
+                </div>
+                <LayoutView
+                  id="system-mini-layout-svg"
+                  system={system}
+                  trace={trace}
+                  evaluationPlane={evaluationPlane}
+                  configuration={runtimeConfiguration}
+                  showDensityRays={showDensityRays}
+                  compact
+                  selectedSurfaceIds={selectedLayoutSurfaceIds}
+                />
+              </aside>
             </div>
           ) : null}
 
@@ -3495,15 +3603,21 @@ export function App() {
                   />
                 ) : null}
                 <LayoutView system={system} trace={trace} evaluationPlane={evaluationPlane} configuration={runtimeConfiguration} showDensityRays={showDensityRays} />
-                <LayoutLegend system={system} />
+                <details className="layout-legend-popover" data-testid="layout-legend-toggle">
+                  <summary>{t('layoutView:layoutView.legend.toggle')}</summary>
+                  <div className="layout-legend-popover__content">
+                    <LayoutLegend system={system} />
+                  </div>
+                </details>
               </div>
-              <div className="result-band">
-                <div className="panel">
+              <div className="result-band compact-result-strip" data-testid="compact-result-strip">
+                <div className="panel compact-spot-result">
                   <h2>{termLabel('spot_diagram', i18n.language)}</h2>
                   <SpotStrip trace={trace} />
                 </div>
-                <div className="panel">
+                <div className="panel compact-trace-summary">
                   <h2>{t('analysis:analysis.trace_summary')}</h2>
+                  <div className="compact-summary-metrics">
                   <div className="metric-row">
                     <TermHelp termId="ray_fan" fallback={t('analysis:analysis.rays')} onOpenHelp={setHelpTermId} />
                     <strong>{formatInteger(trace?.status.length ?? 0)}</strong>
@@ -3521,6 +3635,7 @@ export function App() {
                     <strong>
                       {formatFixed((trace?.metadata?.profiling as Record<string, number> | undefined)?.trace_ms ?? 0, 3)} {t('units:units.ms')}
                     </strong>
+                  </div>
                   </div>
                 </div>
               </div>
@@ -3817,6 +3932,29 @@ export function App() {
           </Accordion>
         </aside>
       </main>
+
+      {snapshotNoticeId ? (
+        <div className="snapshot-toast" data-testid="snapshot-toast">
+          <ToastNotification
+            kind="success"
+            lowContrast
+            timeout={0}
+            title={t('analysis:analysis.snapshot_saved_title')}
+            subtitle={t('analysis:analysis.snapshot_saved_detail', { id: snapshotNoticeId })}
+            onCloseButtonClick={() => setSnapshotNoticeId('')}
+          />
+          <Button
+            className="snapshot-toast-action"
+            size="sm"
+            onClick={() => {
+              setActiveTab('compare')
+              setSnapshotNoticeId('')
+            }}
+          >
+            {t('analysis:analysis.open_in_compare')}
+          </Button>
+        </div>
+      ) : null}
 
       <HelpDrawer termId={helpTermId} onClose={() => setHelpTermId(null)} onNavigate={setHelpTermId} />
     </div>

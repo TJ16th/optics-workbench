@@ -2,7 +2,11 @@
   "layoutView": {
     "optical_layout": "光学レイアウト",
     "optical_layout_aria": "光学レイアウトプレビュー",
+    "live_layout": "ライブレイアウト",
+    "selected_surfaces": "選択中: {{ids}}",
+    "updating": "更新中",
     "legend": {
+      "toggle": "凡例",
       "air_gap": "空気間隔",
       "aiming_failed_ray": "aiming_failed光線",
       "annulus_obscuration": "Annulus STOP（副鏡による中央遮蔽）",

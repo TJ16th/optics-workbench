@@ -2,7 +2,11 @@
   "layoutView": {
     "optical_layout": "Optical Layout",
     "optical_layout_aria": "Optical layout preview",
+    "live_layout": "Live layout",
+    "selected_surfaces": "Selected: {{ids}}",
+    "updating": "updating",
     "legend": {
+      "toggle": "Legend",
       "air_gap": "Air gap",
       "aiming_failed_ray": "Aiming failed",
       "annulus_obscuration": "Annulus STOP (secondary-mirror central obstruction)",

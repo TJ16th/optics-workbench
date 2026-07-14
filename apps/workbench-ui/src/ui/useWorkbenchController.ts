@@ -85,6 +85,9 @@ export function useWorkbenchControllerState<Snapshot, ImagePlanePolicyDraft, Dec
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
   const [compareLeftId, setCompareLeftId] = useState('')
   const [compareRightId, setCompareRightId] = useState('')
+  const [selectedSurfaceId, setSelectedSurfaceId] = useState(initial.system.surfaces[0]?.id ?? '')
+  const [selectedGroupId, setSelectedGroupId] = useState('')
+  const [snapshotNoticeId, setSnapshotNoticeId] = useState('')
   const [exportLanguage, setExportLanguage] = useState<SupportedLanguage>('ja')
 
   return {
@@ -104,6 +107,8 @@ export function useWorkbenchControllerState<Snapshot, ImagePlanePolicyDraft, Dec
     focusCurve, setFocusCurve, focusResult, setFocusResult, lastRequest, setLastRequest,
     lastResponse, setLastResponse, helpTermId, setHelpTermId, snapshots, setSnapshots,
     compareLeftId, setCompareLeftId, compareRightId, setCompareRightId, exportLanguage, setExportLanguage,
+    selectedSurfaceId, setSelectedSurfaceId, selectedGroupId, setSelectedGroupId,
+    snapshotNoticeId, setSnapshotNoticeId,
   }
 }
 

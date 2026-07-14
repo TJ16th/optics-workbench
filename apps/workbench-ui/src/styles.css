@@ -13,6 +13,7 @@
   --ow-ray-blocked: #6f6f6f;
   --ow-blue: #0f62fe;
   --ow-blue-alt: #4589ff;
+  --ow-selected-bg: #e8f1ff;
   --ow-green: #198038;
   --ow-red: #da1e28;
   --ow-amber: #8a7400;
@@ -50,6 +51,7 @@
   --ow-ray-blocked: #a8a8a8;
   --ow-blue: #78a9ff;
   --ow-blue-alt: #a6c8ff;
+  --ow-selected-bg: #002d9c;
   --ow-green: #42be65;
   --ow-red: #fa4d56;
   --ow-amber: #f1c21b;
@@ -280,6 +282,34 @@ body {
   margin-bottom: 0;
 }
 
+.system-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.85fr);
+  gap: 1rem;
+  min-height: 0;
+}
+
+.system-editor-pane,
+.system-mini-layout {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.system-mini-layout {
+  align-self: start;
+  position: sticky;
+  top: 0;
+}
+
+.system-mini-layout .panel-heading {
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.system-mini-layout .panel-heading p {
+  margin: 0;
+}
+
 .panel h2 {
   font-size: 0.95rem;
   margin: 0 0 0.75rem;
@@ -435,6 +465,12 @@ body {
 .group-row[data-range-state='invalid'] {
   border-left: 3px solid var(--ow-red);
   padding-left: 0.5rem;
+}
+
+.group-row[data-selected='true'] {
+  background: var(--ow-selected-bg);
+  outline: 2px solid var(--ow-blue);
+  outline-offset: 2px;
 }
 
 .group-issues {
@@ -706,6 +742,33 @@ body {
   display: block;
 }
 
+.layout-view--mini {
+  aspect-ratio: 2.1 / 1;
+  max-height: 340px;
+}
+
+.layout-surface-selected .surface-line,
+.layout-surface-selected .sensor-plane,
+.layout-surface-selected .stop-aperture-segment {
+  stroke: var(--ow-blue-alt);
+  stroke-width: 4px;
+}
+
+.layout-surface-selected .surface-label {
+  fill: var(--ow-blue-alt);
+  font-weight: 600;
+}
+
+.surface-table tbody tr {
+  cursor: pointer;
+}
+
+.surface-table tbody tr[aria-selected='true'] {
+  background: var(--ow-selected-bg);
+  outline: 2px solid var(--ow-blue);
+  outline-offset: -2px;
+}
+
 .layout-legend {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -714,6 +777,92 @@ body {
   padding-top: 0.75rem;
   border-top: 1px solid var(--ow-border-soft);
   color: var(--ow-text-secondary);
+}
+
+.layout-legend-popover {
+  position: relative;
+  width: max-content;
+  margin-top: 0.5rem;
+  margin-left: auto;
+}
+
+.layout-legend-popover > summary {
+  cursor: pointer;
+  color: var(--ow-blue);
+  font-size: 0.8rem;
+  font-weight: 600;
+  list-style-position: inside;
+}
+
+.layout-legend-popover__content {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: calc(100% + 0.4rem);
+  width: min(720px, calc(100vw - 4rem));
+  padding: 0.75rem;
+  border: 1px solid var(--ow-border);
+  background: var(--ow-panel);
+  box-shadow: 0 3px 10px var(--ow-drawer-shadow);
+}
+
+.layout-legend-popover__content .layout-legend {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.compact-result-strip {
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.compact-result-strip .panel {
+  margin-bottom: 0;
+  padding: 0.75rem;
+}
+
+.compact-result-strip .panel h2 {
+  margin-bottom: 0.45rem;
+}
+
+.compact-spot-result .spot-strip {
+  display: block;
+  width: 128px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.compact-summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(110px, 1fr));
+  gap: 0.75rem;
+}
+
+.compact-summary-metrics .metric-row {
+  display: grid;
+  gap: 0.2rem;
+  justify-content: initial;
+  align-content: start;
+}
+
+.snapshot-toast {
+  position: fixed;
+  z-index: 9000;
+  right: 1rem;
+  bottom: 1rem;
+  width: min(24rem, calc(100vw - 2rem));
+}
+
+.snapshot-toast .cds--toast-notification {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.snapshot-toast-action {
+  width: 100%;
+  max-width: none;
 }
 
 .layout-legend-group {
@@ -1193,6 +1342,9 @@ body {
 }
 
 @media (max-width: 1366px) {
+  .system-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.7fr);
+  }
   .workbench-grid.context-drawer-layout.navigation-expanded {
     grid-template-columns: 280px minmax(0, 1fr);
   }
@@ -1229,6 +1381,7 @@ body {
   }
 
   .result-band,
+  .system-workspace,
   .analysis-chart-grid,
   .chart-pair,
   .standard-aberration-grid,
@@ -1241,5 +1394,9 @@ body {
   .wavelength-add-row,
     .wavelength-row {
     grid-template-columns: 1fr;
+  }
+
+  .compact-summary-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
