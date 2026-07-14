@@ -836,9 +836,13 @@ function layoutBaselineRayItems(trace?: TraceResponse) {
     .map((ray: LayoutBaselineRay, index) => ({
       ...ray,
       index,
-      className: `ray-line ray-baseline ray-baseline-${ray.role} ${wavelengthClass(ray.wavelength_nm)}${ray.status === 'blocked' ? ' ray-baseline-blocked' : ''}`,
+      className: `ray-line ray-baseline ray-baseline-${ray.role} ${wavelengthClass(ray.wavelength_nm)}${ray.status === 'blocked' ? ' ray-baseline-blocked' : ray.status === 'aiming_failed' ? ' ray-baseline-aiming-failed' : ''}`,
     }))
     .filter((ray) => (ray.status === 'alive' || ray.status === 'aiming_failed' || ray.status === 'blocked') && ray.path.length >= 2)
+}
+
+function layoutBaselineAimingFailureCount(trace?: TraceResponse) {
+  return trace?.metadata.layout_baseline_rays?.filter((ray) => ray.status === 'aiming_failed').length ?? 0
 }
 
 function LayoutView({
@@ -1112,7 +1116,7 @@ function LayoutView({
           : null}
       {baselinePaths.map(({ path, className, index, field_index, wavelength_index, role, status, stop_y_mm }) => {
         const d = rayPathD(path, xScale, centerY, rayYScale, objectPlaneX, hasSensor ? 0 : objectExtensionMm)
-        const endPoint = status === 'blocked' ? path[path.length - 1]?.point_mm : undefined
+        const endPoint = status === 'blocked' || status === 'aiming_failed' ? path[path.length - 1]?.point_mm : undefined
         const hasFiniteEnd = Boolean(endPoint?.length && endPoint.length >= 2 && endPoint.every((value) => Number.isFinite(value)))
         const endX = hasFiniteEnd && endPoint ? xScale(endPoint[0]) : undefined
         const endY = hasFiniteEnd && endPoint ? centerY - endPoint[1] * rayYScale : undefined
@@ -1130,10 +1134,17 @@ function LayoutView({
               data-stop-y-mm={stop_y_mm ?? undefined}
             />
             {endX !== undefined && endY !== undefined ? (
-              <g className="ray-blocked-marker" data-ray-end-marker="blocked" data-field-index={field_index} data-baseline-role={role}>
-                <line x1={endX - 3.5} y1={endY - 3.5} x2={endX + 3.5} y2={endY + 3.5} />
-                <line x1={endX - 3.5} y1={endY + 3.5} x2={endX + 3.5} y2={endY - 3.5} />
-              </g>
+              status === 'blocked' ? (
+                <g className="ray-blocked-marker" data-ray-end-marker="blocked" data-field-index={field_index} data-baseline-role={role}>
+                  <line x1={endX - 3.5} y1={endY - 3.5} x2={endX + 3.5} y2={endY + 3.5} />
+                  <line x1={endX - 3.5} y1={endY + 3.5} x2={endX + 3.5} y2={endY - 3.5} />
+                </g>
+              ) : (
+                <g className="ray-aiming-failed-marker" data-ray-end-marker="aiming_failed" data-field-index={field_index} data-baseline-role={role}>
+                  <polygon points={`${endX},${endY - 4.5} ${endX + 4.5},${endY} ${endX},${endY + 4.5} ${endX - 4.5},${endY}`} />
+                  <circle cx={endX} cy={endY} r="1.2" />
+                </g>
+              )
             ) : null}
           </g>
         ) : null
@@ -1154,6 +1165,7 @@ function LayoutLegend({ system }: { system: OpticalSystem }) {
         { key: 'marginal', className: 'legend-line legend-line-marginal', label: t('layoutView.legend.marginal_ray') },
         { key: 'density', className: 'legend-line legend-line-density', label: t('layoutView.legend.density_ray') },
         { key: 'vignetted', className: 'legend-line legend-line-vignetted', label: t('layoutView.legend.vignetted_ray') },
+        { key: 'aiming-failed', className: 'legend-line legend-line-aiming-failed', label: t('layoutView.legend.aiming_failed_ray') },
       ],
     },
     {
@@ -3343,6 +3355,15 @@ export function App() {
                     </Button>
                   </div>
                 </div>
+                {layoutBaselineAimingFailureCount(trace) > 0 ? (
+                  <InlineNotification
+                    lowContrast
+                    kind="warning"
+                    title={t('analysis:analysis.aiming_failed_title')}
+                    subtitle={t('layoutView:layoutView.aiming_failed_warning_detail', { count: layoutBaselineAimingFailureCount(trace) })}
+                    data-testid="preview-aiming-warning"
+                  />
+                ) : null}
                 <LayoutView system={system} trace={trace} evaluationPlane={evaluationPlane} configuration={runtimeConfiguration} showDensityRays={showDensityRays} />
                 <LayoutLegend system={system} />
               </div>

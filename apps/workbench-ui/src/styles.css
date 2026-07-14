@@ -808,10 +808,34 @@ body {
   stroke-opacity: 0.9;
 }
 
+.ray-baseline-aiming-failed {
+  stroke: #ff832b;
+  stroke-width: 1.55;
+  stroke-dasharray: 8 3 2 3;
+  stroke-opacity: 1;
+}
+
 .ray-blocked-marker {
   stroke: #6f6f6f;
   stroke-width: 1.5;
   pointer-events: none;
+}
+
+.ray-aiming-failed-marker {
+  fill: #fff;
+  stroke: #ff832b;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.ray-aiming-failed-marker circle {
+  fill: #ff832b;
+  stroke: none;
+}
+
+.legend-line-aiming-failed {
+  border-color: #ff832b;
+  border-top-style: dashed;
 }
 
 .legend-line.ray-f {

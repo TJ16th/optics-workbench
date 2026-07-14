@@ -4,6 +4,7 @@
     "optical_layout_aria": "Optical layout preview",
     "legend": {
       "air_gap": "Air gap",
+      "aiming_failed_ray": "Aiming failed",
       "annulus_obscuration": "Annulus STOP (secondary-mirror central obstruction)",
       "aria": "Optical layout legend",
       "c_line": "C line",
@@ -25,6 +26,7 @@
       "vignetted_ray": "Vignetted ray",
       "wavelengths": "Wavelengths"
     },
+    "aiming_failed_warning_detail": "Exact aiming failed for {{count}} layout baseline ray(s). Partial paths use amber diamond markers.",
     "show_density_rays": "Show sampled rays",
     "spot_diagram": "Spot Diagram",
     "spot_diagram_aria": "Spot diagram"

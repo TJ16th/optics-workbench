@@ -4,6 +4,7 @@
     "optical_layout_aria": "光学レイアウトプレビュー",
     "legend": {
       "air_gap": "空気間隔",
+      "aiming_failed_ray": "aiming_failed光線",
       "annulus_obscuration": "Annulus STOP（副鏡による中央遮蔽）",
       "aria": "光学レイアウト凡例",
       "c_line": "C線",
@@ -25,6 +26,7 @@
       "vignetted_ray": "遮蔽光線",
       "wavelengths": "波長"
     },
+    "aiming_failed_warning_detail": "Layout baseline光線のexact aimingが{{count}}本失敗しました。部分経路はamberのdiamondマーカーで示します。",
     "show_density_rays": "サンプル光線を表示",
     "spot_diagram": "スポットダイアグラム",
     "spot_diagram_aria": "スポットダイアグラム"
