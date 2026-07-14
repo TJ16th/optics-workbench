@@ -61,6 +61,38 @@ class TraceResult:
 
 
 @dataclass
+class CandidateTraceResult:
+    """Raw trace results with a leading candidate axis."""
+
+    origins: np.ndarray
+    directions: np.ndarray
+    wavelengths_nm: np.ndarray
+    field_ids: list[list[str]]
+    status: np.ndarray
+    sensor_y_mm: np.ndarray
+    sensor_z_mm: np.ndarray
+    paths: list[list[list[dict[str, Any]]]]
+    metadata: dict[str, Any] = field(default_factory=dict)
+    eye_theta_y_deg: np.ndarray | None = None
+    eye_theta_z_deg: np.ndarray | None = None
+
+    def candidate(self, index: int) -> TraceResult:
+        return TraceResult(
+            origins=self.origins[index],
+            directions=self.directions[index],
+            wavelengths_nm=self.wavelengths_nm[index],
+            field_ids=self.field_ids[index],
+            status=self.status[index],
+            sensor_y_mm=self.sensor_y_mm[index],
+            sensor_z_mm=self.sensor_z_mm[index],
+            paths=self.paths[index],
+            metadata={"system_hash": self.metadata["system_hashes"][index]},
+            eye_theta_y_deg=None if self.eye_theta_y_deg is None else self.eye_theta_y_deg[index],
+            eye_theta_z_deg=None if self.eye_theta_z_deg is None else self.eye_theta_z_deg[index],
+        )
+
+
+@dataclass
 class ReverseTraceResult:
     origins: np.ndarray
     directions: np.ndarray
@@ -470,6 +502,242 @@ def _material_indices_for_wavelengths(compiled: CompiledSystem, material_id: str
     unique, inverse = np.unique(wavelengths_nm, return_inverse=True)
     values = np.array([compiled.material_index(material_id, float(wavelength)) for wavelength in unique], dtype=float)
     return values[inverse]
+
+
+def _candidate_batch_eligible(compiled_candidates: list[CompiledSystem]) -> bool:
+    if not compiled_candidates:
+        return True
+    reference = compiled_candidates[0]
+    topology = tuple((surface.id, surface.kind, surface.surface_type) for surface in reference.surfaces)
+    material_ids = tuple(material.id for material in reference.system.materials)
+    material_order = tuple(surface.material_after for surface in reference.surfaces)
+    for compiled in compiled_candidates[1:]:
+        if tuple((surface.id, surface.kind, surface.surface_type) for surface in compiled.surfaces) != topology:
+            return False
+        if tuple(material.id for material in compiled.system.materials) != material_ids:
+            return False
+        if tuple(surface.material_after for surface in compiled.surfaces) != material_order:
+            return False
+    return True
+
+
+def _candidate_field_ids(field_ids: list[str] | list[list[str]] | None, candidate_count: int, ray_count: int) -> list[list[str]]:
+    if field_ids is None:
+        return [["field"] * ray_count for _ in range(candidate_count)]
+    if candidate_count and field_ids and isinstance(field_ids[0], str):
+        common = [str(value) for value in field_ids]
+        if len(common) != ray_count:
+            raise ValueError("field_ids must match the ray axis")
+        return [common.copy() for _ in range(candidate_count)]
+    nested = [[str(value) for value in values] for values in field_ids]
+    if len(nested) != candidate_count or any(len(values) != ray_count for values in nested):
+        raise ValueError("field_ids must have shape [candidate, ray]")
+    return nested
+
+
+def _stack_candidate_results(results: list[TraceResult], *, batch_eligible: bool, chunk_size: int) -> CandidateTraceResult:
+    candidate_count = len(results)
+    ray_count = results[0].status.size if results else 0
+    return CandidateTraceResult(
+        origins=np.stack([result.origins for result in results]) if results else np.empty((0, ray_count, 3)),
+        directions=np.stack([result.directions for result in results]) if results else np.empty((0, ray_count, 3)),
+        wavelengths_nm=np.stack([result.wavelengths_nm for result in results]) if results else np.empty((0, ray_count)),
+        field_ids=[result.field_ids for result in results],
+        status=np.stack([result.status for result in results]) if results else np.empty((0, ray_count), dtype=object),
+        sensor_y_mm=np.stack([result.sensor_y_mm for result in results]) if results else np.empty((0, ray_count)),
+        sensor_z_mm=np.stack([result.sensor_z_mm for result in results]) if results else np.empty((0, ray_count)),
+        paths=[result.paths for result in results],
+        metadata={
+            "batch_eligible": batch_eligible,
+            "fallback_used": not batch_eligible,
+            "candidate_chunk_size": chunk_size,
+            "system_hashes": [result.metadata["system_hash"] for result in results],
+        },
+        eye_theta_y_deg=np.stack([result.eye_theta_y_deg for result in results]) if results else np.empty((0, ray_count)),
+        eye_theta_z_deg=np.stack([result.eye_theta_z_deg for result in results]) if results else np.empty((0, ray_count)),
+    )
+
+
+def _trace_raw_candidates(
+    compiled_candidates: list[CompiledSystem],
+    origins: np.ndarray,
+    directions: np.ndarray,
+    wavelengths_nm: np.ndarray,
+    *,
+    field_ids: list[str] | list[list[str]] | None = None,
+    stop_at_surface_index: int | None = None,
+    store_path: bool = True,
+    configurations: list[dict[str, Any] | None] | None = None,
+    candidate_chunk_size: int | None = None,
+) -> CandidateTraceResult:
+    """Trace equal-topology systems while retaining a dense candidate axis.
+
+    Ineligible candidate sets deliberately use the independent Level 1 path.
+    Chunking is candidate ordered and therefore cannot change per-candidate ray
+    ordering or numerical reductions.
+    """
+
+    candidate_count = len(compiled_candidates)
+    origins = np.asarray(origins, dtype=float)
+    directions = np.asarray(directions, dtype=float)
+    wavelengths_nm = np.asarray(wavelengths_nm, dtype=float)
+    if origins.ndim != 3 or origins.shape[-1] != 3:
+        raise ValueError("origins must have shape [candidate, ray, 3]")
+    if directions.shape != origins.shape:
+        raise ValueError("directions must match origins")
+    if wavelengths_nm.shape != origins.shape[:2]:
+        raise ValueError("wavelengths_nm must have shape [candidate, ray]")
+    if origins.shape[0] != candidate_count:
+        raise ValueError("candidate inputs must match compiled_candidates")
+    ray_count = origins.shape[1]
+    candidate_fields = _candidate_field_ids(field_ids, candidate_count, ray_count)
+    configurations = configurations or [None] * candidate_count
+    if len(configurations) != candidate_count:
+        raise ValueError("configurations must match compiled_candidates")
+    chunk_size = candidate_count if candidate_chunk_size is None else int(candidate_chunk_size)
+    if chunk_size <= 0:
+        raise ValueError("candidate_chunk_size must be positive")
+    chunk_size = max(1, min(chunk_size, max(candidate_count, 1)))
+
+    eligible = _candidate_batch_eligible(compiled_candidates)
+    if not eligible:
+        results = []
+        for index, compiled in enumerate(compiled_candidates):
+            layout = runtime_layout(compiled, configurations[index])
+            results.append(
+                _trace_raw(
+                    compiled,
+                    origins[index],
+                    directions[index],
+                    wavelengths_nm[index],
+                    field_ids=candidate_fields[index],
+                    stop_at_surface_index=stop_at_surface_index,
+                    store_path=store_path,
+                    centers_mm=layout.centers_mm,
+                    rotations=layout.rotations,
+                    configuration=configurations[index],
+                )
+            )
+        return _stack_candidate_results(results, batch_eligible=False, chunk_size=chunk_size)
+
+    current_dirs = normalize(directions.copy())
+    current_origins = origins.copy()
+    status = np.full((candidate_count, ray_count), STATUS_ALIVE, dtype=object)
+    sensor_y = np.full((candidate_count, ray_count), np.nan)
+    sensor_z = np.full((candidate_count, ray_count), np.nan)
+    eye_theta_y = np.full((candidate_count, ray_count), np.nan)
+    eye_theta_z = np.full((candidate_count, ray_count), np.nan)
+    current_n = np.empty((candidate_count, ray_count), dtype=float)
+    paths: list[list[list[dict[str, Any]]]] = [[[] for _ in range(ray_count)] for _ in range(candidate_count)]
+    layouts = [runtime_layout(compiled, configurations[index]) for index, compiled in enumerate(compiled_candidates)]
+    surface_count = len(compiled_candidates[0].surfaces) if compiled_candidates else 0
+    centers = np.stack([layout.centers_mm for layout in layouts]) if layouts else np.empty((0, 0, 3))
+    rotations = np.stack([layout.rotations for layout in layouts]) if layouts else np.empty((0, 0, 3, 3))
+    for candidate, compiled in enumerate(compiled_candidates):
+        current_n[candidate] = _material_indices_for_wavelengths(compiled, "AIR", wavelengths_nm[candidate])
+
+    for chunk_start in range(0, candidate_count, chunk_size):
+        chunk_end = min(chunk_start + chunk_size, candidate_count)
+        for surface_idx in range(surface_count):
+            for candidate in range(chunk_start, chunk_end):
+                compiled = compiled_candidates[candidate]
+                surface = compiled.surfaces[surface_idx]
+                alive = status[candidate] == STATUS_ALIVE
+                if not np.any(alive):
+                    continue
+                alive_indices = np.where(alive)[0]
+                center = centers[candidate, surface_idx]
+                rotation = rotations[candidate, surface_idx]
+                local_origins = (current_origins[candidate, alive] - center) @ rotation
+                local_dirs_alive = current_dirs[candidate, alive] @ rotation
+                if surface.kind in {"refractive", "mirror"}:
+                    local_points, valid_alive = intersect_surface(local_origins, local_dirs_alive, 0.0, surface)
+                else:
+                    local_points, valid_alive = intersect_sphere(local_origins, local_dirs_alive, 0.0, 0.0)
+                points = local_points @ rotation.T + center
+                status[candidate, alive_indices[~valid_alive]] = STATUS_MISSED
+                valid_indices = alive_indices[valid_alive]
+                if valid_indices.size == 0:
+                    continue
+                valid_local_points = local_points[valid_alive]
+                valid_points = points[valid_alive]
+                if store_path:
+                    for offset, ray_idx in enumerate(valid_indices):
+                        paths[candidate][ray_idx].append(
+                            {
+                                "surface_id": surface.id,
+                                "point_mm": valid_points[offset].tolist(),
+                                "local_point_mm": valid_local_points[offset].tolist(),
+                                "direction": current_dirs[candidate, ray_idx].tolist(),
+                                "status": str(status[candidate, ray_idx]),
+                            }
+                        )
+                passes = _aperture_pass_with_runtime(
+                    valid_local_points, surface, surface_idx, compiled, configurations[candidate]
+                )
+                status[candidate, valid_indices[~passes]] = STATUS_BLOCKED
+                valid_indices = valid_indices[passes]
+                if valid_indices.size == 0:
+                    continue
+                valid_local_points = valid_local_points[passes]
+                valid_points = valid_points[passes]
+                current_origins[candidate, valid_indices] = valid_points
+                if stop_at_surface_index is not None and surface_idx == stop_at_surface_index:
+                    continue
+                if surface.kind == "refractive":
+                    normals = surface_normals_for_surface(valid_local_points, 0.0, surface)
+                    n_after = _material_indices_for_wavelengths(
+                        compiled, surface.material_after, wavelengths_nm[candidate, valid_indices]
+                    )
+                    local_in_dirs = current_dirs[candidate, valid_indices] @ rotation
+                    out_dirs_local, refract_ok = refract(
+                        local_in_dirs, normals, current_n[candidate, valid_indices], n_after
+                    )
+                    status[candidate, valid_indices[~refract_ok]] = STATUS_TIR
+                    ok_indices = valid_indices[refract_ok]
+                    current_dirs[candidate, ok_indices] = out_dirs_local[refract_ok] @ rotation.T
+                    current_n[candidate, ok_indices] = n_after[refract_ok]
+                elif surface.kind == "mirror":
+                    normals = surface_normals_for_surface(valid_local_points, 0.0, surface)
+                    local_in_dirs = current_dirs[candidate, valid_indices] @ rotation
+                    current_dirs[candidate, valid_indices] = reflect(local_in_dirs, normals) @ rotation.T
+                elif surface.kind == "thin_lens":
+                    local_out = thin_lens_transform(
+                        valid_local_points,
+                        current_dirs[candidate, valid_indices] @ rotation,
+                        0.0,
+                        float(surface.focal_length_mm),
+                    )
+                    current_dirs[candidate, valid_indices] = local_out @ rotation.T
+                elif surface.kind == "sensor":
+                    sensor_y[candidate, valid_indices] = valid_local_points[:, 1]
+                    sensor_z[candidate, valid_indices] = valid_local_points[:, 2]
+                elif surface.kind == "eye_reference":
+                    local_dirs = current_dirs[candidate, valid_indices] @ rotation
+                    eye_theta_y[candidate, valid_indices] = np.rad2deg(np.arctan2(local_dirs[:, 1], local_dirs[:, 0]))
+                    eye_theta_z[candidate, valid_indices] = np.rad2deg(np.arctan2(local_dirs[:, 2], local_dirs[:, 0]))
+            if stop_at_surface_index is not None and surface_idx == stop_at_surface_index:
+                break
+
+    return CandidateTraceResult(
+        origins=origins,
+        directions=current_dirs,
+        wavelengths_nm=wavelengths_nm,
+        field_ids=candidate_fields,
+        status=status,
+        sensor_y_mm=sensor_y,
+        sensor_z_mm=sensor_z,
+        paths=paths,
+        metadata={
+            "batch_eligible": True,
+            "fallback_used": False,
+            "candidate_chunk_size": chunk_size,
+            "surface_data_shape": list(centers.shape),
+            "system_hashes": [compiled.system_hash for compiled in compiled_candidates],
+        },
+        eye_theta_y_deg=eye_theta_y,
+        eye_theta_z_deg=eye_theta_z,
+    )
 
 
 def _trace_raw(
