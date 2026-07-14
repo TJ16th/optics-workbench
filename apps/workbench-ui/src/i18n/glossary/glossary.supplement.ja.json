@@ -41,6 +41,21 @@
       "label": "Ray Fan横収差",
       "en_term": "Ray Fan Error",
       "short": "直交する瞳fanの横収差をRMS集約した値。単位はmm。"
+    },
+    "white_mtf": {
+      "label": "白色光MTF",
+      "en_term": "White-light MTF",
+      "short": "複数波長の重みを反映した白色光のMTF。"
+    },
+    "ray_loss_ratio": {
+      "label": "光線損失率",
+      "en_term": "Ray Loss Ratio",
+      "short": "指定した光線ステータスにより失われた光線の重み付き比率。"
+    },
+    "min_air_gap": {
+      "label": "最小空気間隔",
+      "en_term": "Minimum Air Gap",
+      "short": "隣接する光学面間で評価した最小の空気間隔。単位はmm。"
     }
   },
   "errors": {
@@ -63,6 +78,11 @@
       "label": "非球面指定が不正",
       "message": "{surface_id} は未対応の面種別にaspherical_evenを指定しています。",
       "action": "aspherical_evenは屈折面またはミラー面だけに使ってください。"
+    },
+    "invalid_semi_diameter": {
+      "label": "半径指定が不正",
+      "message": "面 {surface_id} のsemi_diameter_mmは正の値である必要があります。",
+      "action": "semi_diameter_mmに0より大きい値を指定してください。"
     },
     "invalid_group_range": {
       "label": "Group範囲が不正",
@@ -138,6 +158,16 @@
       "label": "模型眼内絞りは未対応",
       "message": "初期版はeye_reference後段のaperture_stopに対応していません。",
       "action": "眼瞳にはeye_referenceを使用し、模型眼内のaperture_stopを削除してください。"
+    },
+    "surface_interference": {
+      "label": "光学面が干渉",
+      "message": "面 {surface_ids} の有効径内で光学面が干渉しています。",
+      "action": "面間隔、有効径、または曲率を見直してください。"
+    },
+    "iris_exceeds_clear_aperture": {
+      "label": "絞り径が有効径を超過",
+      "message": "絞り径が面 {surface_id} の有効径を超えています。",
+      "action": "絞り径を小さくするか、有効径を拡大してください。"
     },
     "visual_composite_requires_afocal": {
       "label": "Afocal系が必要",

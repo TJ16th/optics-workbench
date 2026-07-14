@@ -41,6 +41,21 @@
       "label": "Ray Fan Error",
       "en_term": "Ray Fan Error",
       "short": "RMS transverse ray error from the orthogonal pupil fans, in mm."
+    },
+    "white_mtf": {
+      "label": "White-light MTF",
+      "en_term": "White-light MTF",
+      "short": "MTF combined across wavelengths using their configured weights."
+    },
+    "ray_loss_ratio": {
+      "label": "Ray Loss Ratio",
+      "en_term": "Ray Loss Ratio",
+      "short": "Weighted ratio of rays lost to the selected ray statuses."
+    },
+    "min_air_gap": {
+      "label": "Minimum Air Gap",
+      "en_term": "Minimum Air Gap",
+      "short": "Minimum air spacing evaluated between adjacent optical surfaces, in mm."
     }
   },
   "errors": {
@@ -63,6 +78,11 @@
       "label": "Invalid asphere surface",
       "message": "{surface_id} uses aspherical_even on an unsupported surface kind.",
       "action": "Use aspherical_even only for refractive or mirror surfaces."
+    },
+    "invalid_semi_diameter": {
+      "label": "Invalid semi-diameter",
+      "message": "Surface {surface_id} requires a positive semi_diameter_mm.",
+      "action": "Set semi_diameter_mm to a value greater than zero."
     },
     "invalid_group_range": {
       "label": "Invalid group range",
@@ -138,6 +158,16 @@
       "label": "Retinal aperture stop unsupported",
       "message": "The initial visual composite does not support aperture_stop after eye_reference.",
       "action": "Use eye_reference for the eye pupil and remove retinal-section aperture stops."
+    },
+    "surface_interference": {
+      "label": "Surface interference",
+      "message": "Surfaces {surface_ids} interfere within their clear apertures.",
+      "action": "Review the spacing, clear aperture, or surface curvature."
+    },
+    "iris_exceeds_clear_aperture": {
+      "label": "Iris exceeds clear aperture",
+      "message": "The iris diameter exceeds the clear aperture of surface {surface_id}.",
+      "action": "Reduce the iris diameter or increase the clear aperture."
     },
     "visual_composite_requires_afocal": {
       "label": "Afocal system required",
