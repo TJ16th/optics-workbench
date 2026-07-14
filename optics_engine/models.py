@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any, Literal
 
 import numpy as np
@@ -43,6 +44,19 @@ class Material(BaseModel):
     table: list[dict[str, float] | list[float]] | None = None
 
     def refractive_index(self, wavelength_nm: float) -> float:
+        wavelength_nm = float(wavelength_nm)
+        if not math.isfinite(wavelength_nm) or wavelength_nm <= 0.0:
+            raise StructuredOpticsError(
+                "optics_value_error",
+                "Wavelength must be a positive finite value.",
+                params={"wavelength_nm": wavelength_nm, "material_id": self.id, "constraint": "finite value > 0"},
+            )
+        if self.type in {"nd_vd", "sellmeier", "catalog"} and not 200.0 <= wavelength_nm <= 2500.0:
+            raise StructuredOpticsError(
+                "optics_value_error",
+                "Wavelength is outside the supported dispersion-model range.",
+                params={"wavelength_nm": wavelength_nm, "material_id": self.id, "valid_range_nm": [200.0, 2500.0]},
+            )
         if self.type == "constant":
             return 1.0 if self.n is None else float(self.n)
         if self.type == "nd_vd":
@@ -98,6 +112,12 @@ class Material(BaseModel):
             rows.sort()
             xs = [row[0] for row in rows]
             ys = [row[1] for row in rows]
+            if not xs[0] <= wavelength_nm <= xs[-1]:
+                raise StructuredOpticsError(
+                    "optics_value_error",
+                    "Wavelength is outside the custom material table range.",
+                    params={"wavelength_nm": wavelength_nm, "material_id": self.id, "valid_range_nm": [xs[0], xs[-1]]},
+                )
             return float(np.interp(float(wavelength_nm), xs, ys))
         raise UnsupportedOpticsError(f"material type {self.type!r} is not implemented")
 

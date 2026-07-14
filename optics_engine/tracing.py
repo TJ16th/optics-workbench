@@ -20,6 +20,7 @@ from .core import (
     thin_lens_transform,
 )
 from .configuration import runtime_layout, validate_configuration
+from .models import StructuredOpticsError
 from .system import CompiledSystem
 
 STATUS_ALIVE = "alive"
@@ -105,7 +106,13 @@ def _runtime_iris_radius(configuration: dict[str, Any] | None) -> float | None:
     if "iris_radius_mm" not in variables:
         return None
     value = float(variables["iris_radius_mm"])
-    return value if np.isfinite(value) and value > 0.0 else None
+    if not np.isfinite(value) or value <= 0.0:
+        raise StructuredOpticsError(
+            "optics_value_error",
+            "Iris radius must be a positive finite value.",
+            params={"iris_radius_mm": value, "constraint": "finite value > 0"},
+        )
+    return value
 
 
 def _aperture_radius(compiled: CompiledSystem, configuration: dict[str, Any] | None = None) -> tuple[int | None, float, float]:
@@ -898,6 +905,12 @@ def trace_forward(
     distribution = sampling.get("pupil_distribution", "hexapolar")
     aiming = sampling.get("ray_aiming", {})
     aiming_mode = aiming.get("mode", "paraxial")
+    if aiming_mode not in {"off", "paraxial", "full"}:
+        raise StructuredOpticsError(
+            "optics_value_error",
+            "Unknown ray aiming mode.",
+            params={"ray_aiming_mode": aiming_mode, "supported_modes": ["off", "paraxial", "full"]},
+        )
     tolerance_mm = float(aiming.get("tolerance_mm", 1.0e-6))
     max_iterations = int(aiming.get("max_iterations", 20))
     store_path = bool(options.get("store_path", False))
@@ -995,6 +1008,26 @@ def trace_forward(
             "samples_per_field": samples_per_field,
         }
     )
+    nominal_stop_radius = None
+    if stop_idx is not None:
+        stop_surface = compiled.surfaces[stop_idx]
+        nominal_stop_radius = stop_surface.semi_diameter_mm
+        if stop_surface.aperture is not None:
+            nominal_stop_radius = (
+                stop_surface.aperture.outer_semi_diameter_mm
+                or stop_surface.aperture.semi_diameter_mm
+                or nominal_stop_radius
+            )
+    runtime_iris = _runtime_iris_radius(configuration)
+    if runtime_iris is not None and nominal_stop_radius is not None and runtime_iris > nominal_stop_radius:
+        result.metadata.setdefault("warnings", []).append(
+            {
+                "severity": "warning",
+                "code": "iris_exceeds_clear_aperture",
+                "params": {"iris_radius_mm": runtime_iris, "nominal_clear_radius_mm": float(nominal_stop_radius)},
+                "message_en": "Iris radius exceeds the nominal stop clear aperture; downstream surfaces may vignette rays.",
+            }
+        )
     if include_analysis_metadata:
         from .paraxial import analyze_paraxial
 

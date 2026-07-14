@@ -119,8 +119,20 @@ def _jsonable(value):
     return value
 
 
+def _reject_unknown_analysis_selectors(payload: dict) -> None:
+    for key in ("metric", "view"):
+        if key in payload:
+            raise StructuredOpticsError(
+                "optics_value_error",
+                "Unsupported top-level analysis selector.",
+                params={"parameter": key, "value": payload[key], "supported_parameters": []},
+            )
+
+
 def _compiled_from_payload(payload: dict):
     from ..system import get_cached_system
+
+    _reject_unknown_analysis_selectors(payload)
 
     system_id = payload.get("system_id") or payload.get("system_hash")
     if system_id:
@@ -143,6 +155,7 @@ def _compiled_from_payload_profiled(payload: dict):
     from ..system import get_cached_system, normalized_system_hash
 
     start = time.perf_counter()
+    _reject_unknown_analysis_selectors(payload)
     system_id = payload.get("system_id") or payload.get("system_hash")
     if system_id:
         compiled = get_cached_system(str(system_id))
@@ -256,6 +269,10 @@ def validate(payload: dict):
 @app.post("/v1/systems/register")
 def register(payload: dict):
     system = load_system(payload)
+    validation = validate_system(system)
+    if not validation.ok:
+        issue = next(issue for issue in validation.issues if issue.severity == "error")
+        raise StructuredOpticsError(issue.code, issue.message_en, params=issue.params, severity=issue.severity)
     compiled = compile_system(system)
     return {"system_id": compiled.system_hash, "system_hash": compiled.system_hash}
 
@@ -708,6 +725,19 @@ def material_refractive_index(payload: dict):
 
 @app.post("/v1/education/preview")
 def preview(payload: dict):
-    ray_sampling = payload.get("ray_sampling", {})
+    ray_sampling = dict(payload.get("ray_sampling", {}))
     ray_sampling.setdefault("ray_aiming", {"mode": "paraxial"})
-    return forward({**payload, "ray_sampling": ray_sampling, "options": {**payload.get("options", {}), "store_path": True, "preview_mode": True}})
+    configuration = dict(payload.get("configuration", {}))
+    controls = payload.get("controls", {})
+    if "iris_radius_mm" in controls:
+        variables = dict(configuration.get("variables", {}))
+        variables["iris_radius_mm"] = controls["iris_radius_mm"]
+        configuration["variables"] = variables
+    return forward(
+        {
+            **payload,
+            "configuration": configuration,
+            "ray_sampling": ray_sampling,
+            "options": {**payload.get("options", {}), "store_path": True, "preview_mode": True},
+        }
+    )

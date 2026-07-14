@@ -6,6 +6,7 @@ from .models import OpticalSystem, ValidationIssue, ValidationResult
 def validate_system(system: OpticalSystem) -> ValidationResult:
     issues: list[ValidationIssue] = []
     composite = system.visual_evaluation is not None and system.visual_evaluation.mode == "instrument_and_retinal"
+    material_ids = {material.id for material in system.materials} | {"AIR"}
 
     stop_count = sum(1 for surface in system.surfaces if surface.kind == "aperture_stop")
     if stop_count > 1:
@@ -121,6 +122,40 @@ def validate_system(system: OpticalSystem) -> ValidationResult:
                 )
             )
         surface_ids.add(surface.id)
+
+        if surface.material_after is not None and surface.material_after not in material_ids:
+            issues.append(
+                ValidationIssue(
+                    code="unknown_material",
+                    params={"surface_id": surface.id, "material_id": surface.material_after},
+                    message_en="surface references a material that is not defined",
+                    surface_id=surface.id,
+                    severity="error",
+                )
+            )
+        if surface.semi_diameter_mm is not None and surface.semi_diameter_mm <= 0.0:
+            issues.append(
+                ValidationIssue(
+                    code="invalid_semi_diameter",
+                    params={"surface_id": surface.id, "semi_diameter_mm": surface.semi_diameter_mm, "constraint": "value > 0"},
+                    message_en="surface semi_diameter_mm must be positive",
+                    surface_id=surface.id,
+                    severity="error",
+                )
+            )
+        if surface.aperture is not None:
+            for name in ("semi_diameter_mm", "outer_semi_diameter_mm"):
+                value = getattr(surface.aperture, name)
+                if value is not None and value <= 0.0:
+                    issues.append(
+                        ValidationIssue(
+                            code="invalid_semi_diameter",
+                            params={"surface_id": surface.id, "property": name, "value": value, "constraint": "value > 0"},
+                            message_en="aperture outer radius must be positive",
+                            surface_id=surface.id,
+                            severity="error",
+                        )
+                    )
 
         if surface.surface_type == "aspherical_even" and surface.kind not in {"refractive", "mirror"}:
             issues.append(

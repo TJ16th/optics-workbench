@@ -37,6 +37,7 @@ ERROR_CODES = [
     "image_plane_policy_not_applicable",
     "infeasible",
     "invalid_asphere_surface",
+    "invalid_semi_diameter",
     "invalid_group_range",
     "invalid_tilt_range",
     "invalid_visual_composite_boundary",
@@ -74,6 +75,7 @@ WARNING_CODES = [
     "min_air_gap",
     "missing_aperture_stop",
     "radius_key_deprecated",
+    "iris_exceeds_clear_aperture",
     "solve_not_converged",
 ]
 
