@@ -25,6 +25,7 @@ from .. import (
     analyze_exit_pupil,
     analyze_eye_box,
     analyze_telescope,
+    analyze_through_focus_mtf,
     analyze_visual_composite,
     analyze_white_mtf,
     analyze_white_psf,
@@ -501,6 +502,25 @@ def psf(payload: dict):
 def mtf(payload: dict):
     _, trace, evaluation_plane, _, _ = _trace_for_analysis(payload)
     return _analysis_response(analyze_geometric_mtf(trace, payload.get("frequencies_lp_per_mm", [0.0, 10.0, 20.0])), evaluation_plane)
+
+
+@app.post("/v1/analysis/mtf/through-focus")
+def through_focus_mtf(payload: dict):
+    compiled, fields, sampling, wavelengths, options, evaluation_plane, _ = _analysis_context(payload)
+    return _analysis_response(
+        analyze_through_focus_mtf(
+            compiled,
+            fields,
+            sampling,
+            wavelengths,
+            options,
+            frequencies_lp_per_mm=payload.get("frequencies_lp_per_mm", [10.0, 30.0]),
+            defocus_range_mm=payload.get("defocus_range_mm"),
+            defocus_points=int(payload.get("defocus_points", 21)),
+            depth_of_focus_multiplier=float(payload.get("depth_of_focus_multiplier", 4.0)),
+        ),
+        evaluation_plane,
+    )
 
 
 @app.post("/v1/analysis/relative-illumination")

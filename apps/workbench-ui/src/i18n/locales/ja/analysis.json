@@ -67,6 +67,11 @@
     "retinal_centroid_y": "網膜重心Y",
     "psf_samples": "PSF到達光線",
     "angular_mtf_10": "角度MTF 10 cycles/degree",
-    "retinal_mtf_10": "網膜MTF 10 lp/mm"
+    "retinal_mtf_10": "網膜MTF 10 lp/mm",
+    "standard_view": "標準解析",
+    "through_focus_view": "デフォーカスMTF",
+    "through_focus_mtf_title": "デフォーカスMTF",
+    "through_focus_mtf_note": "実線はメリディオナル（M）、破線はサジタル（S）です。幾何MTFのため回折は含みません。",
+    "axis_defocus_mm": "デフォーカス mm"
   }
 }

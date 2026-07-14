@@ -2,6 +2,10 @@
 
 ## 改訂履歴
 
+### R92追記（Through-focus MTF View）
+
+Analysisタブへ標準解析と切り替え可能なThrough-focus MTF Viewを追加した。推奨fieldごとに独立パネルを表示し、10/30 lp/mmのM/S曲線を比較できる。
+
 ### v0.4
 
 エンジンv2.4の視覚評価コンポジットに対応した。`visual_evaluation.mode: instrument_and_retinal`の系では、Analysisタブに装置側`instrument`と網膜側`retinal`のセグメント切替を表示し、角度spot/PSF/MTF・射出瞳・アイレリーフと、網膜spot/PSF/MTFを単位系を混在させず表示する。初期UIプリセット`V001`は簡約Gullstrand眼、587.56 nm単色、4 mm固定瞳、無調節、平面網膜に限定する。
@@ -1450,6 +1454,20 @@ focal系のWorkbench UIは、解析条件の`MTFモード`を`単色` / `白色�
 - field angle・歪曲率が有限の点だけをfield順に結線する
 
 未実行時は実行を促すempty stateを表示する。実行済みでplot可能な点がないpanelは「プロット可能なデータがない」状態を表示する。API errorは構造化エラー通知として表示し、不正な点を正常seriesへ混入しない。
+
+## 17.11 Through-focus MTF View【R92新設】
+
+- Analysisタブ内で`標準解析` / `デフォーカスMTF`をセグメント切替する
+- `POST /v1/analysis/mtf/through-focus`を使用し、解析条件のfield、波長、evaluation plane、ray aimingを引き継ぐ
+- 推奨fieldごとに独立したpanelを1つ表示する。panel見出しにはfield idと`theta_y_deg / theta_z_deg`を示す
+- X軸は評価面基準の`defocus mm`、Y軸は`MTF`で0〜1に固定する
+- 初期表示周波数は10 lp/mmと30 lp/mmとし、周波数を色で区別する
+- 同じ周波数ではMを実線、Sを破線とし、4 series（M@10 / S@10 / M@30 / S@30）を凡例に表示する
+- M/Sはエンジン応答の`mtf_meridional` / `mtf_sagittal`を使用し、UIでY/Zから再推定しない
+- 現行実装は幾何MTFであるため、`diffraction included: false`に相当する注意を表示する
+- defocus範囲はAPI metadataの物理基準範囲を使用し、UI側で固定±0.1 mmへ置き換えない
+
+3 field・21 defocus点・2周波数・M/Sの既定表示は同期APIで30秒以内を目標とする。`defocus_mm = 0`の値は、同一field・波長・評価面・瞳サンプリングにおける通常MTFの10/30 lp/mmと一致しなければならない。
 
 ---
 

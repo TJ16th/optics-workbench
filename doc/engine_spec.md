@@ -2,6 +2,10 @@
 
 ## 改訂履歴
 
+### R92追記（Through-focus MTF）
+
+写真レンズのデフォーカス感度をfield別・M/S別に評価する`POST /v1/analysis/mtf/through-focus`を追加した。固定周波数群（既定10/30 lp/mm）を複数の評価面へ投影し、同じ瞳サンプルを再利用して決定論的に返す。
+
 ### v2.4における主な改訂点（視覚評価コンポジット）
 
 アフォーカル装置の射出光を簡約模型眼へ接続し、従来の装置側角度評価と網膜側位置評価を同一traceから分離して取得するための仕様を追加した。
@@ -1572,6 +1576,24 @@ system_type: afocal ではX位置の評価面という概念が成立しない�
 
 単独エンドポイントとしてのbest-focus solveも、上記と同じ criteria / search / apply_to（report_only相当）を受け取り、solved位置・focus curve（sweep時）を返す。解析エンドポイント内蔵のpolicyと単独solveは同一の実装を共有する。
 
+### 21.6 Through-focus MTF【R92新設】
+
+`POST /v1/analysis/mtf/through-focus`は、現在の評価面を`defocus_mm = 0`として前後の仮想評価面へ最終光線を投影し、field・空間周波数・defocusごとのメリディオナル（M）/サジタル（S）幾何MTFを返す。初期実装の周波数は既定`[10, 30]` lp/mm、評価点数は既定21点とする。
+
+M方向はセンサー面内でfieldベクトル`(theta_y_deg, theta_z_deg)`と平行、S方向はこれに直交する方向とする。軸上fieldではMをY、SをZと定義する。これにより`theta_z_deg`を含むfieldでも座標軸とM/Sを混同しない。
+
+既定の片側defocus範囲は固定値ではなく、次式を基準に決める。
+
+```text
+diffraction_depth_of_focus_mm = 2 * primary_wavelength_mm * f_number^2
+half_range_mm = abs(paraxial_focus_offset_mm)
+              + depth_of_focus_multiplier * diffraction_depth_of_focus_mm
+```
+
+`depth_of_focus_multiplier`の既定は4とする。明示的な`defocus_range_mm`がある場合は、その値を片側範囲として優先する。範囲根拠、F値、主波長、回折焦点深度、近軸焦点offsetはmetadataに含める。
+
+性能上、瞳サンプリング・ray aiming・全光学面の追跡はリクエストごとに1回だけ行う。各defocus位置ではセンサー到達時の位置・方向から仮想面交点を解析的に求める。したがって計算量はdefocus点数に比例して全系を再トレースする方式を採らない。出力は幾何MTFであり、`diffraction_included: false`を明記する。
+
 ---
 
 ## 22. PSF・MTF
@@ -2309,6 +2331,7 @@ POST /v1/analysis/ms-image-surface
 POST /v1/analysis/relative-illumination
 POST /v1/analysis/psf
 POST /v1/analysis/mtf
+POST /v1/analysis/mtf/through-focus       【R92新設】
 POST /v1/analysis/white-psf
 POST /v1/analysis/white-mtf
 POST /v1/analysis/visual-instrument

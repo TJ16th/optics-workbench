@@ -40,6 +40,7 @@ from .presets import gullstrand_visual_composite_demo
 from .system import CompiledSystem, compile_system, get_cached_system
 from .solves import ParaxialImageDistanceSolveResult, solve_paraxial_image_distance
 from .tracing import ReverseTraceResult, TraceResult, trace_forward, trace_reverse
+from .through_focus import ThroughFocusMTFResult, analyze_through_focus_mtf
 from .validation import validate_system
 from .visual import (
     AfocalEvaluationResult,
@@ -100,6 +101,7 @@ __all__ = [
     "RayFanResult",
     "SpotResult",
     "TraceResult",
+    "ThroughFocusMTFResult",
     "TelescopeResult",
     "VisualCompositeResult",
     "ValidationResult",
@@ -125,6 +127,7 @@ __all__ = [
     "analyze_white_mtf",
     "analyze_white_psf",
     "analyze_telescope",
+    "analyze_through_focus_mtf",
     "analyze_visual_composite",
     "afocal_from_trace",
     "angular_magnification",

@@ -277,6 +277,28 @@ async function mockEngine(
       },
     })
   })
+  await page.route('http://127.0.0.1:8000/v1/analysis/mtf/through-focus', async (route) => {
+    const request = route.request().postDataJSON()
+    const fields = request.fields ?? []
+    const frequencies = request.frequencies_lp_per_mm ?? [10, 30]
+    const offsets = Array.from({ length: request.defocus_points ?? 21 }, (_, index) => -0.1 + index * 0.01)
+    await route.fulfill({
+      json: {
+        points: fields.flatMap((field: { id: string; theta_y_deg: number; theta_z_deg: number }, fieldIndex: number) =>
+          offsets.flatMap((defocus: number) => frequencies.map((frequency: number) => ({
+            field_id: field.id,
+            theta_y_deg: field.theta_y_deg,
+            theta_z_deg: field.theta_z_deg,
+            frequency_lp_per_mm: frequency,
+            defocus_mm: defocus,
+            mtf_meridional: Math.max(0, 0.9 - Math.abs(defocus - fieldIndex * 0.01) * 4 - frequency / 200),
+            mtf_sagittal: Math.max(0, 0.86 - Math.abs(defocus + fieldIndex * 0.01) * 3 - frequency / 220),
+          }))),
+        ),
+        metadata: { defocus_range_mm: 0.1, defocus_points: 21, diffraction_included: false },
+      },
+    })
+  })
   await page.route('http://127.0.0.1:8000/v1/analysis/white-mtf', async (route) => {
     const request = route.request().postDataJSON()
     const frequencies = request.frequencies_lp_per_mm ?? [0, 10, 20]
@@ -1220,6 +1242,32 @@ test('P002 and P003 analysis charts render standard aberration panels without co
       expect(box.width).toBeGreaterThan(5)
       expect(box.height).toBeGreaterThan(5)
     }
+  }
+})
+
+test('P002 through-focus MTF renders one four-series panel per recommended field', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await selectPresetOption(page, 'P002 N-BK7 Biconvex Singlet 50mm Demo')
+  await page.getByRole('tab', { name: 'Analysis', exact: true }).click()
+  await page.getByTestId('analysis-view-switcher').getByRole('tab', { name: 'Through-focus MTF' }).click()
+  await page.getByRole('button', { name: 'Run Charts' }).click()
+
+  const view = page.getByTestId('through-focus-mtf-view')
+  await expect(view).toBeVisible()
+  for (const fieldId of ['center', 'mid-y', 'edge-y']) {
+    const panel = page.getByTestId(`through-focus-panel-${fieldId}`)
+    const chart = page.getByTestId(`through-focus-chart-${fieldId}`)
+    await expect(panel).toBeVisible()
+    await expect(chart).toHaveAttribute('data-point-count', '84')
+    await expect(chart).toHaveAttribute('data-x-domain-min', '-0.1')
+    await expect(chart).toHaveAttribute('data-x-domain-max', '0.1')
+    await expect(chart).toHaveAttribute('data-y-domain-min', '0')
+    await expect(chart).toHaveAttribute('data-y-domain-max', '1')
+    for (const legend of ['M @ 10 lp/mm', 'S @ 10 lp/mm', 'M @ 30 lp/mm', 'S @ 30 lp/mm']) {
+      await expect(panel.getByText(legend, { exact: true })).toBeVisible()
+    }
+    await expect(chart.locator('polyline[stroke-dasharray="6 4"]')).toHaveCount(2)
   }
 })
 

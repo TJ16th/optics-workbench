@@ -67,6 +67,11 @@
     "retinal_centroid_y": "Retinal centroid Y",
     "psf_samples": "PSF arrived rays",
     "angular_mtf_10": "Angular MTF at 10 cycles/degree",
-    "retinal_mtf_10": "Retinal MTF at 10 lp/mm"
+    "retinal_mtf_10": "Retinal MTF at 10 lp/mm",
+    "standard_view": "Standard",
+    "through_focus_view": "Through-focus MTF",
+    "through_focus_mtf_title": "Through-focus MTF",
+    "through_focus_mtf_note": "Solid lines are meridional (M); dashed lines are sagittal (S). Geometric MTF, diffraction included: false.",
+    "axis_defocus_mm": "defocus mm"
   }
 }

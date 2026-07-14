@@ -23,7 +23,7 @@ import {
 import { Add, Checkmark, Download, Play, Renew, Save, TrashCan } from '@carbon/icons-react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { DEFAULT_MTF_FREQUENCIES_LP_PER_MM, defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, runVisualComposite, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
+import { DEFAULT_MTF_FREQUENCIES_LP_PER_MM, defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, runThroughFocusMtf, runVisualComposite, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
 import { presets, visualFixturePresets } from '../domain/presets'
 import type {
   AnalysisField,
@@ -48,6 +48,7 @@ import type {
   RuntimeConfiguration,
   Surface,
   TraceResponse,
+  ThroughFocusMtfPoint,
   ValidationResult,
   VisualCompositeResponse,
   WavelengthSample,
@@ -60,6 +61,7 @@ import { wavelengthColor } from './chartTheme'
 import { makeExportSvg, type ExportChart } from './exportSvg'
 
 type TabKey = 'system' | 'preview' | 'analysis' | 'compare' | 'debug'
+type AnalysisViewKey = 'standard' | 'through_focus'
 
 type Snapshot = {
   id: string
@@ -1882,7 +1884,7 @@ function EvaluatedFieldList({ trace, fields }: { trace?: TraceResponse; fields: 
 }
 
 type ChartPoint = { x: number; y: number }
-type ChartSeries = { id: string; color: string; points: ChartPoint[]; sortBy?: 'x' | 'y' }
+type ChartSeries = { id: string; color: string; points: ChartPoint[]; sortBy?: 'x' | 'y'; lineDash?: string }
 
 function ChartSvg({
   series,
@@ -1961,7 +1963,7 @@ function ChartSvg({
           const polyline = ordered.map((point) => `${sx(point.x)},${sy(point.y)}`).join(' ')
           return (
             <g key={item.id}>
-              {ordered.length > 1 ? <polyline points={polyline} fill="none" stroke={item.color} strokeWidth="2" /> : null}
+              {ordered.length > 1 ? <polyline points={polyline} fill="none" stroke={item.color} strokeWidth="2" strokeDasharray={item.lineDash} /> : null}
               {ordered.map((point, index) => (
                 <circle key={index} cx={sx(point.x)} cy={sy(point.y)} r={marker.radius} fill={item.color} opacity={marker.opacity} />
               ))}
@@ -1972,7 +1974,7 @@ function ChartSvg({
       <div className="chart-legend">
         {series.map((item) => (
           <span key={item.id}>
-            <i style={{ background: item.color }} />
+            <i className="chart-legend-line" style={{ borderTopColor: item.color, borderTopStyle: item.lineDash ? 'dashed' : 'solid' }} />
             {item.id}
           </span>
         ))}
@@ -2108,6 +2110,63 @@ function mtfFrequencyDomain(points: MtfPoint[] | undefined): readonly [number, n
   const frequencies = (points ?? []).map((point) => point.frequency_lp_per_mm).filter(Number.isFinite)
   const maxFrequency = Math.max(0, ...frequencies)
   return [0, maxFrequency > 0 ? maxFrequency : 1]
+}
+
+function throughFocusSeries(points: ThroughFocusMtfPoint[]): ChartSeries[] {
+  const frequencies = [...new Set(points.map((point) => point.frequency_lp_per_mm))].sort((left, right) => left - right)
+  const colors = ['#0f62fe', '#da1e28', '#24a148', '#8a3ffc']
+  return frequencies.flatMap((frequency, index) => {
+    const frequencyPoints = points.filter((point) => point.frequency_lp_per_mm === frequency)
+    return [
+      {
+        id: `M @ ${formatFixed(frequency, 0)} lp/mm`,
+        color: colors[index % colors.length],
+        points: frequencyPoints.map((point) => ({ x: point.defocus_mm, y: point.mtf_meridional })),
+      },
+      {
+        id: `S @ ${formatFixed(frequency, 0)} lp/mm`,
+        color: colors[index % colors.length],
+        lineDash: '6 4',
+        points: frequencyPoints.map((point) => ({ x: point.defocus_mm, y: point.mtf_sagittal })),
+      },
+    ]
+  })
+}
+
+function ThroughFocusMtfCharts({ result }: { result?: ChartAnalysisResult['throughFocusMtf'] }) {
+  const { t } = useTranslation(['analysis'])
+  if (!result?.points.length) return <p className="muted">{t('analysis:analysis.run_charts_empty')}</p>
+  const groups = new Map<string, ThroughFocusMtfPoint[]>()
+  for (const point of result.points) groups.set(point.field_id, [...(groups.get(point.field_id) ?? []), point])
+  return (
+    <div className="through-focus-view" data-testid="through-focus-mtf-view">
+      <div className="through-focus-heading">
+        <h2>{t('analysis:analysis.through_focus_mtf_title')}</h2>
+        <p className="muted">{t('analysis:analysis.through_focus_mtf_note')}</p>
+      </div>
+      <div className="through-focus-grid">
+        {[...groups.entries()].map(([fieldId, points]) => {
+          const first = points[0]
+          const defocus = points.map((point) => point.defocus_mm)
+          return (
+            <section className="panel chart-panel through-focus-panel" key={fieldId} data-testid={`through-focus-panel-${fieldId}`}>
+              <h3>{fieldId}</h3>
+              <p className="muted">{formatFixed(first.theta_y_deg, 3)} / {formatFixed(first.theta_z_deg, 3)} deg</p>
+              <ChartSvg
+                series={throughFocusSeries(points)}
+                xLabel={t('analysis:analysis.axis_defocus_mm')}
+                yLabel="MTF"
+                emptyLabel={t('analysis:analysis.chart_empty')}
+                testId={`through-focus-chart-${fieldId}`}
+                xDomain={[Math.min(...defocus), Math.max(...defocus)]}
+                yDomain={[0, 1]}
+              />
+            </section>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function seriesFromFocusCurve(points: FocusCurvePoint[] | undefined, bestOffset?: number): ChartSeries[] {
@@ -2633,6 +2692,7 @@ export function App() {
   const [apiBase, setApiBase] = useState(defaultApiBase)
   const [selectedPresetId, setSelectedPresetId] = useState('P001')
   const [activeTab, setActiveTab] = useState<TabKey>('preview')
+  const [analysisView, setAnalysisView] = useState<AnalysisViewKey>('standard')
   const [samplesPerField, setSamplesPerField] = useState(9)
   const [analysisFields, setAnalysisFields] = useState<AnalysisField[]>(() => presetFields(presets[0]))
   const [wavelengths, setWavelengths] = useState<WavelengthSample[]>(() => initialWavelengths(presets[0].system))
@@ -3034,6 +3094,24 @@ export function App() {
     },
   })
 
+  const throughFocusMutation = useMutation({
+    mutationFn: async () => {
+      const id = await ensureRegisteredSystem()
+      const request = makeAnalysisRequest(id)
+      setLastRequest(request)
+      return runThroughFocusMtf(apiBase, request)
+    },
+    onSuccess: (result) => {
+      setChartResult((current) => ({ ...current, throughFocusMtf: result }))
+      setLastResponse(result)
+      setAnalysisDirty(false)
+      setActiveTab('analysis')
+    },
+    onError: (error) => {
+      setLastResponse(getApiIssue(error))
+    },
+  })
+
   const visualMutation = useMutation({
     mutationFn: async () => {
       const id = await ensureRegisteredSystem()
@@ -3072,12 +3150,12 @@ export function App() {
     },
   })
 
-  const running = validateMutation.isPending || registerMutation.isPending || previewMutation.isPending || chartsMutation.isPending || visualMutation.isPending || focusMutation.isPending
+  const running = validateMutation.isPending || registerMutation.isPending || previewMutation.isPending || chartsMutation.isPending || throughFocusMutation.isPending || visualMutation.isPending || focusMutation.isPending
   const engineOnline = health.data?.status === 'ok'
   const apiMajor = meta.data?.api_schema_version?.split('.')[0]
   const versionBlocked = Boolean(apiMajor && apiMajor !== '2')
   const healthIssue = getApiIssue(health.error)
-  const mutationIssue = getApiIssue(validateMutation.error ?? registerMutation.error ?? previewMutation.error ?? chartsMutation.error ?? focusMutation.error)
+  const mutationIssue = getApiIssue(validateMutation.error ?? registerMutation.error ?? previewMutation.error ?? chartsMutation.error ?? throughFocusMutation.error ?? focusMutation.error)
   const requestSummary = analysisRequestSummary(lastRequest)
 
   const saveSnapshot = async () => {
@@ -3176,6 +3254,7 @@ export function App() {
               onChange={({ selectedItem }) => {
                 if (selectedItem) {
                   setSelectedPresetId(selectedItem.id)
+                  setAnalysisView('standard')
                   setSystem(cloneSystem(selectedItem.system))
                   setSystemId(null)
                   setSystemHash(null)
@@ -3305,12 +3384,18 @@ export function App() {
                     <h2>{t('analysis:analysis.analysis_charts_title')}</h2>
                     <p className="muted">{t('analysis:analysis.analysis_charts_summary')}</p>
                   </div>
+                  {system.system_type !== 'afocal' ? (
+                    <ContentSwitcher selectedIndex={analysisView === 'standard' ? 0 : 1} onChange={({ name }) => setAnalysisView(name as AnalysisViewKey)} data-testid="analysis-view-switcher">
+                      <Switch name="standard" text={t('analysis:analysis.standard_view')} />
+                      <Switch name="through_focus" text={t('analysis:analysis.through_focus_view')} />
+                    </ContentSwitcher>
+                  ) : null}
                   {system.visual_evaluation?.mode === 'instrument_and_retinal' ? (
                     <Button size="sm" renderIcon={Play} disabled={!engineOnline || running || versionBlocked} onClick={() => visualMutation.mutate()}>
                       {t('analysis:analysis.run_visual_composite')}
                     </Button>
                   ) : (
-                    <Button size="sm" renderIcon={Play} disabled={!engineOnline || running || versionBlocked} onClick={() => chartsMutation.mutate()}>
+                    <Button size="sm" renderIcon={Play} disabled={!engineOnline || running || versionBlocked} onClick={() => (analysisView === 'through_focus' ? throughFocusMutation.mutate() : chartsMutation.mutate())}>
                       {t('analysis:analysis.run_charts')}
                     </Button>
                   )}
@@ -3346,14 +3431,18 @@ export function App() {
                   )}
                 </section>
               ) : null}
-              <EvaluationPlanePanel
-                evaluationPlane={evaluationPlane}
-                focusCurve={focusCurve}
-                canWriteBack={Boolean(!policyDisabled && evaluationPlane && Number.isFinite(evaluationPlane.solved_offset_from_sensor_mm ?? evaluationPlane.offset_from_sensor_mm))}
-                onWriteBack={writeBackSensor}
-                onOpenHelp={setHelpTermId}
-              />
-              <AnalysisCharts result={chartResult} onOpenHelp={setHelpTermId} />
+              {analysisView === 'standard' ? (
+                <>
+                  <EvaluationPlanePanel
+                    evaluationPlane={evaluationPlane}
+                    focusCurve={focusCurve}
+                    canWriteBack={Boolean(!policyDisabled && evaluationPlane && Number.isFinite(evaluationPlane.solved_offset_from_sensor_mm ?? evaluationPlane.offset_from_sensor_mm))}
+                    onWriteBack={writeBackSensor}
+                    onOpenHelp={setHelpTermId}
+                  />
+                  <AnalysisCharts result={chartResult} onOpenHelp={setHelpTermId} />
+                </>
+              ) : <ThroughFocusMtfCharts result={chartResult?.throughFocusMtf} />}
             </div>
           ) : null}
 

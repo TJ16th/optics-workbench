@@ -11,6 +11,7 @@ import type {
   OpticalSystem,
   RuntimeConfiguration,
   TraceResponse,
+  ThroughFocusMtfResult,
   ValidationResult,
   VisualCompositeResponse,
   WavelengthSample,
@@ -270,6 +271,15 @@ export async function runChartAnalyses(apiBase: string, request: AnalysisRequest
       diffraction_included: false,
     },
   }
+}
+
+export async function runThroughFocusMtf(apiBase: string, request: AnalysisRequest): Promise<ThroughFocusMtfResult> {
+  return postAnalysis<ThroughFocusMtfResult>(apiBase, '/v1/analysis/mtf/through-focus', {
+    ...request,
+    ray_sampling: DEFAULT_MTF_SAMPLING,
+    frequencies_lp_per_mm: [10, 30],
+    defocus_points: 21,
+  })
 }
 
 export async function runBestFocus(apiBase: string, request: AnalysisRequest): Promise<BestFocusResponse> {

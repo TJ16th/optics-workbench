@@ -156,6 +156,7 @@ def meta_payload() -> dict[str, Any]:
             "visual_evaluation_modes": ["instrument_only", "instrument_and_retinal"],
             "schematic_eye_models": ["gullstrand_simplified_relaxed"],
             "retina_surface_types": ["plane"],
+            "through_focus_mtf": True,
         },
         "build": {
             "python_version": platform.python_version(),

@@ -305,6 +305,21 @@ export type MtfPoint = {
 
 export type MtfMode = 'monochromatic' | 'white'
 
+export type ThroughFocusMtfPoint = {
+  field_id: string
+  theta_y_deg: number
+  theta_z_deg: number
+  frequency_lp_per_mm: number
+  defocus_mm: number
+  mtf_meridional: number
+  mtf_sagittal: number
+}
+
+export type ThroughFocusMtfResult = {
+  points: ThroughFocusMtfPoint[]
+  metadata: Record<string, unknown>
+}
+
 export type ChartAnalysisResult = {
   rayFan?: {
     points: RayFanPoint[]
@@ -325,6 +340,7 @@ export type ChartAnalysisResult = {
     metadata?: Record<string, unknown>
     artifacts?: ArtifactMap
   }
+  throughFocusMtf?: ThroughFocusMtfResult
 }
 
 export type VisualCompositeResponse = {

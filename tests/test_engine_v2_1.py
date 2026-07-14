@@ -189,6 +189,7 @@ def test_health_and_meta_payloads_advertise_v2_3_capabilities_and_enumerations()
     assert meta["result_schema_version"] == "2.5.0"
     assert "best_focus_rms" in meta["capabilities"]["image_plane_policy_modes"]
     assert meta["capabilities"]["artifact_store"] is True
+    assert meta["capabilities"]["through_focus_mtf"] is True
     assert meta["capabilities"]["artifacts"]["enabled"] is True
     assert meta["capabilities"]["artifacts"]["ttl_seconds"] > 0.0
     assert "enumerations" in meta
