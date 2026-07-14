@@ -786,12 +786,8 @@ body {
   margin-left: auto;
 }
 
-.layout-legend-popover > summary {
-  cursor: pointer;
-  color: var(--ow-blue);
-  font-size: 0.8rem;
-  font-weight: 600;
-  list-style-position: inside;
+.layout-legend-toggle {
+  min-height: 2rem;
 }
 
 .layout-legend-popover__content {

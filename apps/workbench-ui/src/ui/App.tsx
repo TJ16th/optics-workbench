@@ -22,7 +22,7 @@ import {
   ToggletipContent,
   Theme,
 } from '@carbon/react'
-import { Add, ChartLine, Checkmark, Code, Compare, Download, Menu, Play, Renew, Save, Settings, SidePanelOpen, TrashCan, View } from '@carbon/icons-react'
+import { Add, ChartLine, Checkmark, Code, Compare, Download, Information, Menu, Play, Renew, Save, Settings, SidePanelOpen, TrashCan, View } from '@carbon/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { DEFAULT_MTF_FREQUENCIES_LP_PER_MM, defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, runThroughFocusMtf, runVisualComposite, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
@@ -2781,6 +2781,7 @@ export function App() {
     compareLeftId, setCompareLeftId, compareRightId, setCompareRightId, exportLanguage, setExportLanguage,
     selectedSurfaceId, setSelectedSurfaceId, selectedGroupId, setSelectedGroupId,
     snapshotNoticeId, setSnapshotNoticeId,
+    layoutLegendOpen, setLayoutLegendOpen,
   } = useWorkbenchControllerState<Snapshot, ImagePlanePolicyDraft, DecenterTiltDraft>({
     apiBase: defaultApiBase,
     system: cloneSystem(presets[0].system),
@@ -3603,12 +3604,22 @@ export function App() {
                   />
                 ) : null}
                 <LayoutView system={system} trace={trace} evaluationPlane={evaluationPlane} configuration={runtimeConfiguration} showDensityRays={showDensityRays} />
-                <details className="layout-legend-popover" data-testid="layout-legend-toggle">
-                  <summary>{t('layoutView:layoutView.legend.toggle')}</summary>
-                  <div className="layout-legend-popover__content">
+                <div className="layout-legend-popover">
+                  <Button
+                    className="layout-legend-toggle"
+                    data-testid="layout-legend-toggle"
+                    size="sm"
+                    kind="ghost"
+                    renderIcon={Information}
+                    aria-expanded={layoutLegendOpen}
+                    onClick={() => setLayoutLegendOpen((current) => !current)}
+                  >
+                    {t('layoutView:layoutView.legend.toggle')}
+                  </Button>
+                  {layoutLegendOpen ? <div className="layout-legend-popover__content">
                     <LayoutLegend system={system} />
-                  </div>
-                </details>
+                  </div> : null}
+                </div>
               </div>
               <div className="result-band compact-result-strip" data-testid="compact-result-strip">
                 <div className="panel compact-spot-result">

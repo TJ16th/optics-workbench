@@ -88,6 +88,7 @@ export function useWorkbenchControllerState<Snapshot, ImagePlanePolicyDraft, Dec
   const [selectedSurfaceId, setSelectedSurfaceId] = useState(initial.system.surfaces[0]?.id ?? '')
   const [selectedGroupId, setSelectedGroupId] = useState('')
   const [snapshotNoticeId, setSnapshotNoticeId] = useState('')
+  const [layoutLegendOpen, setLayoutLegendOpen] = useState(false)
   const [exportLanguage, setExportLanguage] = useState<SupportedLanguage>('ja')
 
   return {
@@ -109,6 +110,7 @@ export function useWorkbenchControllerState<Snapshot, ImagePlanePolicyDraft, Dec
     compareLeftId, setCompareLeftId, compareRightId, setCompareRightId, exportLanguage, setExportLanguage,
     selectedSurfaceId, setSelectedSurfaceId, selectedGroupId, setSelectedGroupId,
     snapshotNoticeId, setSnapshotNoticeId,
+    layoutLegendOpen, setLayoutLegendOpen,
   }
 }
 

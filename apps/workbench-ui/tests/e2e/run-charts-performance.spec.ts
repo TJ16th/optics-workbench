@@ -43,7 +43,7 @@ test('P011 Preview distinguishes aiming_failed baseline rays against the real AP
   await expect(page.locator('#layout-svg [data-ray-end-marker="blocked"]')).toHaveCount(0)
   await expect(page.getByTestId('preview-aiming-warning')).toContainText('aiming_failed detected')
   await expect(page.getByTestId('preview-aiming-warning')).toContainText('Exact aiming failed for 12 layout baseline ray(s).')
-  await page.getByTestId('layout-legend-toggle').locator('summary').click()
+  await page.getByTestId('layout-legend-toggle').click()
   await expect(page.getByText('Aiming failed', { exact: true })).toBeVisible()
 
   const style = await failedRays.first().evaluate((node) => {
