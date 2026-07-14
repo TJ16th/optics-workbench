@@ -836,3 +836,25 @@ R67で追加したP011 Planar/Xenon型50 mm F1.4を、3 fields × 3 wavelengths 
 - `blocked`と`aiming_failed`を混同せず、原因をmetadataまたは構造化warningから判別できる。
 - 中心81-ray spot RMSの正しい基準値をLevel 0との比較で確定し、`tests/test_preset_api_smoke.py::test_p011_planar_double_gauss_has_six_positive_thickness_elements`がグリーンになる。
 - Level 0/Level 1の代表光線が許容差内で一致し、既存のaiming Golden Testがグリーンを維持する。
+
+## Issue: Jacobian warm refinementの適用判定と性能profilingを追加する
+
+ラベル案: `engine`, `performance`, `testing`
+
+### 背景
+
+R91でJ2独立exact有限差分とJ3 request-local warm refinementを実装した。R83条件の再測定では、J3はJ2比で高速化する条件が多い一方、P007/P012の一部測定ではwarm Newtonのline-search・cold fallback負荷が独立exactを上回った。P011でも変数数に対する時間の単調性が崩れる測定があり、現在のaggregate時間だけではCPU外乱と候補別収束コストを分離できない。
+
+### 対応案
+
+- candidate・variable・field・wavelengthごとにwarm iteration、line-search trial、cold fallback、aiming時間、trace時間を固定順metadataへ集計する。
+- 基準originからの初期residual、予測Newton step、候補geometry差を使い、warm refinementを適用するか最初からcold exactへ送る決定論的な判定を追加する。
+- P002/P007/P011/P012の1/5/10/20変数を交互順・複数processで測定し、熱・scheduler・ブラウザ負荷の影響を分離する。
+- J3単体の改善を確認した後に、R91対象外のJ4 candidate軸batch kernelへ投資するか判断する。
+
+### 受け入れ条件
+
+- 同一requestの数値結果と適用判定が履歴に依存せずビット同一である。
+- warmを選んだcandidateは代表プリセット全体で独立exactより遅くならないか、遅くなる場合は規定閾値でcoldへ切り替わる。
+- response metadataから候補別の反復・fallback・時間内訳を再現できる。
+- R83条件の複数回測定で中央値と分散を報告し、`1.25 x cold`目標に対する達否を安定して判定できる。
