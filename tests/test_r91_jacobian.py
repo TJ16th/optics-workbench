@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from optics_engine import evaluate_system, load_system, trace_forward, compile_system
 from optics_engine.api.main import app
-from optics_engine.artifacts import ARTIFACT_STORE
+from optics_engine.artifacts import ARTIFACT_STORE, ArtifactStore
 from optics_engine.evaluation_metrics import SUPPORTED_EVALUATE_METRICS
 from optics_engine.optimization import _evaluate_with_jacobian, _matrix_payload
 from optics_engine.tracing import _AIMING_AFFINE_CACHE
@@ -412,3 +412,33 @@ def test_large_matrix_artifact_is_content_addressed_and_concurrent_put_is_safe()
     response = TestClient(app).get(f"/v1/artifacts/jacobian/{artifact.id}")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/x-npy")
+
+
+def test_candidate_batch_parallel_calls_and_artifact_ttl_remain_safe(tmp_path):
+    def evaluate():
+        return evaluate_system(
+            aspheric_system(),
+            evaluation(),
+            ray_sampling=sampling(),
+            jacobian={"mode": "forward_diff", "variables": ["S1_curvature", "S1_conic", "S1_A4"]},
+        )
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(lambda _: evaluate(), range(4)))
+    payloads = [asdict(result.jacobian) for result in results]
+    assert payloads[1:] == [payloads[0]] * 3
+    assert all(result.jacobian.metadata["candidate_batch_trace_calls"] > 0 for result in results)
+
+    store = ArtifactStore(ttl_seconds=0.1, root_dir=tmp_path)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        artifacts = list(
+            pool.map(
+                lambda index: store.put("jacobian", f"matrix-{index}".encode(), id=f"batch-{index}"),
+                range(4),
+            )
+        )
+    assert all(store.get(artifact.category, artifact.id) is not None for artifact in artifacts)
+    import time
+
+    time.sleep(0.15)
+    assert all(store.get_with_status(artifact.category, artifact.id)[1] == "expired" for artifact in artifacts)

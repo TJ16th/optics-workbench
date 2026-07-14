@@ -2279,6 +2279,14 @@ matrixは行=オペランド（＋ペナルティ疑似オペランド）、列=
 * aiming は基準点の解を全摂動点のwarm startに使う
 * 摂動後の系がハードinfeasibleになった場合、該当列は片側差分へフォールバックし、応答にフラグを立てる
 
+**v2.3実装状況（J4）**
+
+* 基準点は独立に1回評価し、forward差分のplus candidate群、central差分のplus/minus candidate群をcandidate軸バッチとしてトレースする。配列形状はorigin/directionが`[candidate, ray, 3]`、wavelength/statusが`[candidate, ray]`である。
+* candidate軸バッチの適格条件は、全candidateでsurface topology、surface ID順、material ID順、各surfaceのmaterial参照順が一致することである。不一致の場合は既存の独立exact評価へ自動fallbackする。
+* ray生存数の差はdenseな`[candidate, ray]` maskで扱う。candidate chunkは固定candidate順に分割し、chunk sizeは数値結果を変更しない。
+* Level 0参照実装と従来`_trace_raw()`は温存し、Golden等価性のoracleとする。
+* candidate batchは計算量削減を保証するcapabilityではない。R93の10反復実測では`1.25×cold`目標は全条件で未達であり、full exact aimingとworker同期が支配的だった。性能値は`bench_results/20260715_000148_r93_jacobian.json`を参照する。
+
 ### 25.8 将来の勾配提供
 
 将来拡張として、微分可能トレースカーネル（27.5節のJAX方針）により有限差分を自動微分へ差し替える。**その際も25.7節のリクエスト/応答形状は変えない**（modeに autodiff が加わるのみ）。外部最適化器から見た契約を固定するため、25.7節のAPIを先に凍結する。これにより評価回数を有限差分比でさらに削減できる可能性がある。
