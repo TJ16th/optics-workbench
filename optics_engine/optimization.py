@@ -15,6 +15,7 @@ from .field_curvature import analyze_field_curvature, analyze_ms_image_surface
 from .models import OpticalSystem, StructuredOpticsError
 from .paraxial import analyze_paraxial
 from .psf_mtf import analyze_geometric_mtf, analyze_relative_illumination, analyze_white_mtf
+from .solves import resolve_configuration_solves
 from .system import CompiledSystem, compile_system
 from .tracing import trace_forward
 from .variables import apply_variable_bindings
@@ -47,6 +48,7 @@ class EvaluateResult:
     violations: list[dict[str, Any]]
     metadata: dict[str, Any]
     operands: list[OperandResult] = dataclass_field(default_factory=list)
+    configuration_resolved: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -454,6 +456,7 @@ def evaluate_system(
     variable_application = apply_variable_bindings(base_system, variables, configuration)
     system = variable_application.system
     configuration = variable_application.configuration
+    system, configuration, solve_results = resolve_configuration_solves(system, configuration)
     compiled = compile_system(system)
     evaluation_data = dict(evaluation or {})
     constraints = dict(evaluation_data.get("constraints", {}))
@@ -573,6 +576,7 @@ def evaluate_system(
             **({"warnings": variable_application.warnings} if variable_application.warnings else {}),
         },
         operands=operand_results,
+        configuration_resolved=configuration if solve_results else None,
     )
 
 

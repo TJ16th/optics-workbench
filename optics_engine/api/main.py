@@ -40,6 +40,7 @@ from ..artifacts import ARTIFACT_STORE, artifact_uri
 from ..image_plane import resolve_image_plane_policy
 from ..metadata import health_payload, meta_payload
 from ..models import Material, OpticsError, StructuredOpticsError
+from ..solves import solve_paraxial_image_distance
 
 try:
     from fastapi import FastAPI, HTTPException, Request, Response
@@ -696,6 +697,18 @@ def best_focus(payload: dict):
         response["focus_curve"] = resolution.focus_curve
         response = _attach_json_artifact(response, "focus", "focus_curve", resolution.focus_curve)
     return response
+
+
+@app.post("/v1/solve/paraxial-image-distance")
+def paraxial_image_distance(payload: dict):
+    compiled = _compiled_from_payload(payload)
+    solve_payload = payload.get("solve", payload)
+    _, result = solve_paraxial_image_distance(
+        compiled,
+        str(solve_payload.get("thickness_of", "")),
+        payload.get("configuration"),
+    )
+    return _jsonable(result)
 
 
 @app.post("/v1/materials/refractive-index")

@@ -38,6 +38,7 @@ from .psf_mtf import (
 )
 from .presets import gullstrand_visual_composite_demo
 from .system import CompiledSystem, compile_system, get_cached_system
+from .solves import ParaxialImageDistanceSolveResult, solve_paraxial_image_distance
 from .tracing import ReverseTraceResult, TraceResult, trace_forward, trace_reverse
 from .validation import validate_system
 from .visual import (
@@ -92,6 +93,7 @@ __all__ = [
     "MeritResult",
     "OperandResult",
     "ParaxialResult",
+    "ParaxialImageDistanceSolveResult",
     "RuntimeLayout",
     "RelativeIlluminationResult",
     "ReverseTraceResult",
@@ -104,6 +106,7 @@ __all__ = [
     "WhiteMTFResult",
     "WhitePSFResult",
     "analyze_paraxial",
+    "solve_paraxial_image_distance",
     "analyze_afocal",
     "analyze_angular_mtf",
     "analyze_binocular_alignment",
