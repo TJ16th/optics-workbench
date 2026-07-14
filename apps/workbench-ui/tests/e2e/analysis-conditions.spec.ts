@@ -372,7 +372,7 @@ test('visual composite switches between instrument and retinal results', async (
   await mockEngine(page)
   await page.goto('/?lng=en')
   await selectPresetOption(page, 'V001 Simplified Gullstrand Eye Composite')
-  await page.getByRole('tab', { name: 'Analysis', exact: true }).click()
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
   await page.getByRole('button', { name: 'Run eye evaluation' }).click()
   const results = page.getByTestId('visual-composite-results')
   await expect(results.getByText('Angular spot RMS')).toBeVisible()
@@ -451,7 +451,7 @@ test('right pane context reduces R99 scroll excess on every workbench screen', a
 
   const measured: Record<string, number> = {}
   for (const screen of Object.keys(r99Baseline)) {
-    await page.getByRole('tab', { name: screen, exact: true }).click()
+    await page.getByRole('button', { name: screen, exact: true }).click()
     const excess = await page.locator('.right-pane').evaluate((node) => node.scrollHeight - node.clientHeight)
     measured[screen] = excess
     expect(excess, `${screen} right-pane excess`).toBeLessThan(r99Baseline[screen])
@@ -508,6 +508,81 @@ test('theme follows explicit selection, keeps contrast and wavelength identity, 
   light.waveContrast.forEach((value) => expect(value).toBeGreaterThanOrEqual(3))
 })
 
+test('navigation and context defaults follow the R101 viewport thresholds', async ({ page }) => {
+  await mockEngine(page)
+  const assertShell = async (width: number, expanded: boolean, contextMode: 'fixed' | 'drawer') => {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/?lng=en')
+    await page.evaluate(() => window.localStorage.removeItem('optics-workbench-navigation-expanded'))
+    await page.reload()
+    const shell = page.locator('.workbench-grid')
+    await expect(shell).toHaveAttribute('data-navigation-expanded', String(expanded))
+    await expect(shell).toHaveAttribute('data-context-mode', contextMode)
+  }
+
+  await assertShell(1920, true, 'fixed')
+  await assertShell(1440, true, 'fixed')
+  await assertShell(1439, false, 'fixed')
+  await assertShell(1367, false, 'fixed')
+  await assertShell(1366, false, 'drawer')
+
+  const rightPane = page.locator('.right-pane')
+  await expect(rightPane).toHaveAttribute('aria-hidden', 'true')
+  await page.getByRole('button', { name: 'Open context panel' }).click()
+  await expect(rightPane).toHaveClass(/context-drawer-open/)
+  await expect(rightPane).toHaveAttribute('aria-hidden', 'false')
+})
+
+test('navigation collapse persists across reload and keeps all views reachable', async ({ page }) => {
+  await mockEngine(page)
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await page.goto('/?lng=en')
+  await page.evaluate(() => window.localStorage.removeItem('optics-workbench-navigation-expanded'))
+  await page.reload()
+
+  await page.getByRole('button', { name: 'Collapse navigation' }).click()
+  await expect(page.locator('.workbench-grid')).toHaveAttribute('data-navigation-expanded', 'false')
+  for (const view of ['System', 'Preview', 'Analysis', 'Compare', 'Debug']) {
+    await page.getByRole('button', { name: view, exact: true }).click()
+    await expect(page.getByRole('button', { name: view, exact: true })).toHaveAttribute('aria-current', 'page')
+  }
+
+  await page.reload()
+  await expect(page.locator('.workbench-grid')).toHaveAttribute('data-navigation-expanded', 'false')
+})
+
+test('navigation and context drawer transitions keep layout and chart dimensions stable', async ({ page }) => {
+  await mockEngine(page)
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await page.goto('/?lng=en')
+  await page.evaluate(() => window.localStorage.removeItem('optics-workbench-navigation-expanded'))
+  await page.reload()
+
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
+  await page.getByRole('button', { name: 'Run Charts' }).click()
+  const chart = page.getByTestId('longitudinal-aberration-chart')
+  await expect(chart).toBeVisible()
+  await page.getByRole('button', { name: 'Collapse navigation' }).click()
+  await page.waitForTimeout(220)
+  const chartAfter = await chart.boundingBox()
+  await page.waitForTimeout(220)
+  const chartSettled = await chart.boundingBox()
+  expect(chartAfter).not.toBeNull()
+  expect(chartSettled).toEqual(chartAfter)
+  expect(chartSettled?.width ?? 0).toBeGreaterThan(200)
+  expect(chartSettled?.height ?? 0).toBeGreaterThan(100)
+
+  await page.setViewportSize({ width: 1366, height: 900 })
+  await page.getByRole('button', { name: 'Preview', exact: true }).click()
+  const layout = page.locator('#layout-svg')
+  const beforeDrawer = await layout.boundingBox()
+  await page.getByRole('button', { name: 'Open context panel' }).click()
+  await page.waitForTimeout(220)
+  const afterDrawer = await layout.boundingBox()
+  expect(beforeDrawer).toEqual(afterDrawer)
+  expect(afterDrawer?.width ?? 0).toBeGreaterThan(400)
+})
+
 test('shipped preset selection resets fields to recommended values', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en&fixture=all-presets')
@@ -538,7 +613,7 @@ test('P005 System table displays and edits annulus outer and inner radii', async
   await mockEngine(page)
   await page.goto('/?lng=en&fixture=all-presets')
   await selectPresetOption(page, 'P005 Coaxial Cassegrain Telescope Demo')
-  await page.getByRole('tab', { name: 'System' }).click()
+  await page.getByRole('button', { name: 'System', exact: true }).click()
 
   const editor = page.getByTestId('annulus-radius-editor')
   await expect(editor).toHaveCount(1)
@@ -556,7 +631,7 @@ test('P009 System table displays configured conic and asphere coefficients', asy
   await mockEngine(page)
   await page.goto('/?lng=en')
   await selectPresetOption(page, 'P009 N-BK7 Aspheric Singlet 50mm Demo')
-  await page.getByRole('tab', { name: 'System' }).click()
+  await page.getByRole('button', { name: 'System', exact: true }).click()
 
   const table = page.locator('table.surface-table')
   await expect(table.locator('thead')).toContainText('Asphere')
@@ -602,7 +677,7 @@ test('group edits mark the optical system dirty and show range warnings', async 
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByText('P003 Achromat Doublet 100mm Demo').click()
 
-  await page.getByRole('tab', { name: 'System' }).click()
+  await page.getByRole('button', { name: 'System', exact: true }).click()
   await expect(page.getByText('Groups').first()).toBeVisible()
   await expect(page.getByTestId('group-row')).toHaveCount(2)
   await expect(page.getByText('Groups FOCUS_G and OIS_G overlap.')).toBeVisible()
@@ -797,7 +872,7 @@ test('P003 slider preview keeps layout rays on education preview surface paths',
 test('debug tab shows connected engine build info', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en')
-  await page.getByRole('tab', { name: 'Debug' }).click()
+  await page.getByRole('button', { name: 'Debug', exact: true }).click()
 
   const buildPanel = page.locator('.panel').filter({ has: page.getByRole('heading', { name: 'Build Info' }) })
   await expect(buildPanel).toBeVisible()
@@ -1119,7 +1194,7 @@ test('ray count edits only change samples per field in preview requests', async 
     await expect.poll(async () => Number(await page.locator('#layout-svg').getAttribute('data-total-rays')), { timeout: 3_000 }).toBe(expectedRayCount)
   }
 
-  await page.getByRole('tab', { name: 'Debug' }).click()
+  await page.getByRole('button', { name: 'Debug', exact: true }).click()
   const summary = page.getByTestId('request-sampling-panel')
   await expect(summary).toContainText('25')
   await expect(summary).toContainText('hexapolar')
@@ -1317,7 +1392,7 @@ test('P002 and P003 analysis charts render standard aberration panels without co
     await page.goto('/?lng=en')
     await selectPresetOption(page, preset)
 
-    await page.getByRole('tab', { name: 'Analysis' }).click()
+    await page.getByRole('button', { name: 'Analysis', exact: true }).click()
     await page.getByRole('button', { name: 'Run Charts' }).click()
 
     await expect(page.getByTestId('analysis-chart-grid')).toBeVisible()
@@ -1372,7 +1447,7 @@ test('P002 through-focus MTF renders one four-series panel per recommended field
   await mockEngine(page)
   await page.goto('/?lng=en')
   await selectPresetOption(page, 'P002 N-BK7 Biconvex Singlet 50mm Demo')
-  await page.getByRole('tab', { name: 'Analysis', exact: true }).click()
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
   await page.getByTestId('analysis-view-switcher').getByRole('tab', { name: 'Through-focus MTF' }).click()
   await page.getByRole('button', { name: 'Run Charts' }).click()
 
@@ -1407,7 +1482,7 @@ test('curve analyses keep dense fields separate from ray fan and MTF frequency s
   await mockEngine(page)
   await page.goto('/?lng=en')
   await selectPresetOption(page, 'P002 N-BK7 Biconvex Singlet 50mm Demo')
-  await page.getByRole('tab', { name: 'Analysis' }).click()
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
   await page.getByRole('button', { name: 'Run Charts' }).click()
   await expect(page.getByTestId('analysis-chart-grid')).toBeVisible()
 
@@ -1460,7 +1535,7 @@ test('MTF mode switches between monochromatic and weighted white-light endpoints
   await mockEngine(page)
   await page.goto('/?lng=en')
   await selectPresetOption(page, 'P002 N-BK7 Biconvex Singlet 50mm Demo')
-  await page.getByRole('tab', { name: 'Analysis' }).click()
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
 
   const modeControl = page.getByTestId('mtf-mode-control')
   await expect(modeControl.getByRole('tab', { name: 'Monochromatic' })).toHaveAttribute('aria-selected', 'true')
@@ -1506,7 +1581,7 @@ test('P007 full aiming reports excluded failures in ray fan and longitudinal pan
   await page.goto('/?lng=en')
   await selectPresetOption(page, 'P007 Fast Positive-Negative Meniscus Pair 50mm')
   await page.locator('#aiming').selectOption('full')
-  await page.getByRole('tab', { name: 'Analysis' }).click()
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
   await page.getByRole('button', { name: 'Run Charts' }).click()
 
   await expect(page.getByTestId('longitudinal-aiming-warning')).toContainText('aiming_failed detected')
@@ -1525,7 +1600,7 @@ test('image-plane policy solves focus, writes back sensor, and disables for afoc
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByText('P002 N-BK7 Biconvex Singlet 50mm Demo').click()
   await expect(page.getByText('P002 N-BK7 Biconvex Singlet').first()).toBeVisible()
-  await page.getByRole('tab', { name: 'Analysis' }).click()
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
   await page.locator('#image-plane-policy-mode').selectOption('best_focus_rms')
   await expect(page.locator('#image-plane-policy-mode')).toHaveValue('best_focus_rms')
   await page.getByRole('button', { name: 'Solve Image Plane' }).click()
@@ -1538,12 +1613,12 @@ test('image-plane policy solves focus, writes back sensor, and disables for afoc
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByTestId('write-back-sensor').click()
   await expect(page.getByTestId('system-dirty-status')).toContainText('system dirty')
-  await page.getByRole('tab', { name: 'Debug' }).click()
+  await page.getByRole('button', { name: 'Debug', exact: true }).click()
   await expect(page.getByText('"thickness_after_mm": 46.92')).toBeVisible()
 
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByText('P006 Keplerian Afocal Telescope Demo').click()
-  await page.getByRole('tab', { name: 'Analysis' }).click()
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
   await expect(page.locator('#image-plane-policy-mode')).toBeDisabled()
   await expect(page.getByTestId('image-plane-policy-panel')).toContainText('Image-plane policy applies only to focal systems with a sensor.')
 })
@@ -1554,14 +1629,14 @@ test('snapshots embed artifacts and compare two saved conditions', async ({ page
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByText('P003 Achromat Doublet 100mm Demo').click()
 
-  await page.getByRole('tab', { name: 'Analysis' }).click()
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
   await page.locator('#image-plane-policy-mode').selectOption('sweep')
   await expect(page.locator('#image-plane-policy-mode')).toHaveValue('sweep')
   await page.getByRole('button', { name: 'Solve Image Plane' }).click()
   await page.getByRole('button', { name: 'Save Snapshot' }).click()
   await expect(page.locator('.snapshot-row').filter({ hasText: 'snapshot-1' })).toBeVisible()
 
-  await page.getByRole('tab', { name: 'Analysis' }).click()
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
   await page.locator('#field-0-theta-y').fill('3')
   await page.getByRole('button', { name: 'Solve Image Plane' }).click()
   await page.getByRole('button', { name: 'Save Snapshot' }).click()
@@ -1575,12 +1650,12 @@ test('snapshots embed artifacts and compare two saved conditions', async ({ page
 test('partial snapshots fall back when embedded artifact retrieval fails', async ({ page }) => {
   await mockEngine(page, { failArtifacts: true })
   await page.goto('/?lng=en')
-  await page.getByRole('tab', { name: 'Analysis' }).click()
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
   await page.locator('#image-plane-policy-mode').selectOption('sweep')
   await expect(page.locator('#image-plane-policy-mode')).toHaveValue('sweep')
   await page.getByRole('button', { name: 'Solve Image Plane' }).click()
   await page.getByRole('button', { name: 'Save Snapshot' }).click()
-  await page.getByRole('tab', { name: 'Analysis' }).click()
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
   await page.getByRole('button', { name: 'Solve Image Plane' }).click()
   await page.getByRole('button', { name: 'Save Snapshot' }).click()
 

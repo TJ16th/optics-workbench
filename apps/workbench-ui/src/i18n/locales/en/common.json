@@ -20,6 +20,13 @@
       "compare": "Compare",
       "debug": "Debug"
     },
+    "navigation": {
+      "label": "Workbench views",
+      "expand": "Expand navigation",
+      "collapse": "Collapse navigation",
+      "open_context": "Open context panel",
+      "close_context": "Close context panel"
+    },
     "buttons": {
       "validate": "Validate",
       "register": "Register",

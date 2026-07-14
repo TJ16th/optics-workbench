@@ -20,6 +20,13 @@
       "compare": "Compare",
       "debug": "Debug"
     },
+    "navigation": {
+      "label": "Workbench画面",
+      "expand": "ナビゲーションを展開",
+      "collapse": "ナビゲーションを折りたたむ",
+      "open_context": "コンテキストパネルを開く",
+      "close_context": "コンテキストパネルを閉じる"
+    },
     "buttons": {
       "validate": "検証",
       "register": "登録",

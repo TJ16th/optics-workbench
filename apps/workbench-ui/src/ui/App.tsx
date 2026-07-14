@@ -21,7 +21,7 @@ import {
   ToggletipContent,
   Theme,
 } from '@carbon/react'
-import { Add, Checkmark, Download, Play, Renew, Save, TrashCan } from '@carbon/icons-react'
+import { Add, ChartLine, Checkmark, Code, Compare, Download, Menu, Play, Renew, Save, Settings, SidePanelOpen, TrashCan, View } from '@carbon/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { DEFAULT_MTF_FREQUENCIES_LP_PER_MM, defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, runThroughFocusMtf, runVisualComposite, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
@@ -61,9 +61,7 @@ import { getTerm, renderEngineIssue, termLabel } from '../i18n/glossary'
 import type { SupportedLanguage } from '../i18n/resources'
 import { seriesPalette, wavelengthColor } from './chartTheme'
 import { makeExportSvg, type ExportChart } from './exportSvg'
-import { useWorkbenchControllerState, useWorkbenchMutations, type AnalysisViewKey, type ThemePreference, type WorkbenchViewKey } from './useWorkbenchController'
-
-type TabKey = WorkbenchViewKey
+import { useNavigationShellState, useWorkbenchControllerState, useWorkbenchMutations, type AnalysisViewKey, type ThemePreference } from './useWorkbenchController'
 
 const themeStorageKey = 'optics-workbench-theme'
 const presetCategoryOrder: Preset['catalog']['category'][] = ['photographic', 'simple_educational', 'telescope_afocal', 'visual', 'fixtures']
@@ -116,8 +114,6 @@ type DecenterTiltDraft = {
   rollX: number
   rotationReference: 'from_surface_vertex' | 'to_surface_vertex'
 }
-
-const tabKeys: TabKey[] = ['system', 'preview', 'analysis', 'compare', 'debug']
 
 const defaultImagePlanePolicy: ImagePlanePolicyDraft = {
   mode: 'fixed_sensor',
@@ -2771,6 +2767,13 @@ export function App() {
   }, [themePreference])
 
   const resolvedTheme = themePreference === 'system' ? (systemDark ? 'dark' : 'light') : themePreference
+  const {
+    navigationExpanded,
+    setNavigationExpanded,
+    contextUsesDrawer,
+    contextDrawerOpen,
+    setContextDrawerOpen,
+  } = useNavigationShellState()
 
   useEffect(() => {
     document.documentElement.dataset.colorScheme = resolvedTheme
@@ -3290,6 +3293,14 @@ export function App() {
     setLastResponse({ status: 'system_dirty', updated_surface: nextSystem.surfaces[sensorIndex(nextSystem) - 1]?.id, offset_mm: offset })
   }
 
+  const navigationItems = [
+    { key: 'system' as const, icon: Settings },
+    { key: 'preview' as const, icon: View },
+    { key: 'analysis' as const, icon: ChartLine },
+    { key: 'compare' as const, icon: Compare },
+    { key: 'debug' as const, icon: Code },
+  ]
+
   return (
     <Theme theme={resolvedTheme === 'dark' ? 'g100' : 'g10'} className={`app-theme app-theme--${resolvedTheme}`}>
     <div className="app-shell">
@@ -3297,6 +3308,17 @@ export function App() {
         <HeaderName href="#" prefix={t('common.app.prefix')}>
           {t('common.app.name')}
         </HeaderName>
+        {contextUsesDrawer ? (
+            <Button
+              className="context-drawer-toggle"
+              kind="ghost"
+              size="sm"
+              hasIconOnly
+              renderIcon={SidePanelOpen}
+              iconDescription={contextDrawerOpen ? t('common.navigation.close_context') : t('common.navigation.open_context')}
+              onClick={() => setContextDrawerOpen((current) => !current)}
+            />
+        ) : null}
         <div className="header-status">
           <Select
             id="theme-preference"
@@ -3317,8 +3339,45 @@ export function App() {
         </div>
       </Header>
 
-      <main className="workbench-grid">
-        <aside className="left-pane">
+      <main
+        className={`workbench-grid ${navigationExpanded ? 'navigation-expanded' : 'navigation-collapsed'} ${contextUsesDrawer ? 'context-drawer-layout' : ''}`}
+        data-navigation-expanded={navigationExpanded}
+        data-context-mode={contextUsesDrawer ? 'drawer' : 'fixed'}
+      >
+        <aside className="left-pane" data-testid="navigation-shell">
+          <nav className="workbench-navigation" aria-label={t('common.navigation.label')}>
+            <Button
+              className="navigation-toggle"
+              kind="ghost"
+              size="sm"
+              hasIconOnly
+              renderIcon={Menu}
+              iconDescription={navigationExpanded ? t('common.navigation.collapse') : t('common.navigation.expand')}
+              aria-expanded={navigationExpanded}
+              onClick={() => setNavigationExpanded((current) => !current)}
+            />
+            <div className="navigation-items">
+              {navigationItems.map(({ key, icon }) => (
+                <Button
+                  key={key}
+                  className="navigation-item"
+                  kind={activeTab === key ? 'primary' : 'ghost'}
+                  size="sm"
+                  renderIcon={icon}
+                  hasIconOnly={!navigationExpanded}
+                  iconDescription={t(`common.tabs.${key}`)}
+                  aria-current={activeTab === key ? 'page' : undefined}
+                  onClick={() => {
+                    setActiveTab(key)
+                    if (contextUsesDrawer) setContextDrawerOpen(false)
+                  }}
+                >
+                  {navigationExpanded ? t(`common.tabs.${key}`) : null}
+                </Button>
+              ))}
+            </div>
+          </nav>
+          {navigationExpanded ? <div className="left-pane-content">
           <section className="panel">
             <ComboBox
               id="preset"
@@ -3395,15 +3454,10 @@ export function App() {
               <code>{systemId ? `${systemId.slice(0, 18)}...` : t('common.empty.dash')}</code>
             </div>
           </section>
+          </div> : null}
         </aside>
 
         <section className="center-pane">
-          <ContentSwitcher selectedIndex={tabKeys.indexOf(activeTab)} onChange={({ name }) => setActiveTab(name as TabKey)}>
-            {tabKeys.map((key) => (
-              <Switch key={key} name={key} text={t(`common.tabs.${key}`)} />
-            ))}
-          </ContentSwitcher>
-
           {activeTab === 'system' ? (
             <div className="panel large-panel">
               <SurfaceTable surfaces={system.surfaces} onUpdateAnnulusRadius={updateAnnulusRadius} onOpenHelp={setHelpTermId} />
@@ -3610,7 +3664,18 @@ export function App() {
           ) : null}
         </section>
 
-        <aside className="right-pane">
+        {contextUsesDrawer && contextDrawerOpen ? (
+          <button
+            type="button"
+            className="context-drawer-backdrop"
+            aria-label={t('common.navigation.close_context')}
+            onClick={() => setContextDrawerOpen(false)}
+          />
+        ) : null}
+        <aside
+          className={`right-pane ${contextUsesDrawer ? 'right-pane-drawer' : ''} ${contextDrawerOpen ? 'context-drawer-open' : ''}`}
+          aria-hidden={contextUsesDrawer && !contextDrawerOpen}
+        >
           <Accordion className="right-panel-accordion" align="start">
             <AccordionItem title={t('settings:settings.api')}>
               <div className="right-accordion-body">

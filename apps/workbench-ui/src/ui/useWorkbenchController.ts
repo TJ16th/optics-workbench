@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import type {
   AnalysisField,
@@ -19,6 +19,8 @@ import type { SupportedLanguage } from '../i18n/resources'
 export type WorkbenchViewKey = 'system' | 'preview' | 'analysis' | 'compare' | 'debug'
 export type AnalysisViewKey = 'standard' | 'through_focus'
 export type ThemePreference = 'system' | 'light' | 'dark'
+
+const navigationStorageKey = 'optics-workbench-navigation-expanded'
 
 type ControllerInitialState<ImagePlanePolicyDraft, DecenterTiltDraft> = {
   apiBase: string
@@ -128,4 +130,33 @@ export function useWorkbenchMutations<Validate, Register, Preview, Charts, Throu
   const visualMutation = useMutation(specs.visual)
   const focusMutation = useMutation(specs.focus)
   return { validateMutation, registerMutation, previewMutation, chartsMutation, throughFocusMutation, visualMutation, focusMutation }
+}
+
+export function useNavigationShellState() {
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
+  const [navigationExpanded, setNavigationExpanded] = useState(() => {
+    const saved = window.localStorage.getItem(navigationStorageKey)
+    return saved == null ? window.innerWidth >= 1440 : saved === 'true'
+  })
+  const [contextDrawerOpen, setContextDrawerOpen] = useState(false)
+
+  useEffect(() => {
+    const updateViewport = () => setViewportWidth(window.innerWidth)
+    window.addEventListener('resize', updateViewport)
+    return () => window.removeEventListener('resize', updateViewport)
+  }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem(navigationStorageKey, String(navigationExpanded))
+  }, [navigationExpanded])
+
+  const contextUsesDrawer = viewportWidth <= 1366
+  return {
+    viewportWidth,
+    navigationExpanded,
+    setNavigationExpanded,
+    contextUsesDrawer,
+    contextDrawerOpen,
+    setContextDrawerOpen,
+  }
 }

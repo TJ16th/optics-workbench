@@ -19,7 +19,7 @@ export default defineConfig({
   projects: [
     {
       name: 'msedge',
-      use: { ...devices['Desktop Chrome'], channel: 'msedge' },
+      use: { ...devices['Desktop Chrome'], channel: 'msedge', viewport: { width: 1920, height: 1080 } },
     },
   ],
 })

@@ -59,7 +59,7 @@ for (const presetId of ['P007', 'P009'] as const) {
     // The Playwright page fixture owns context/browser cleanup, including assertion and timeout failures.
     await page.goto('/?lng=en')
     await selectCatalogPreset(page, presetId)
-    await page.getByRole('tab', { name: 'Analysis', exact: true }).click()
+    await page.getByRole('button', { name: 'Analysis', exact: true }).click()
 
     const responses = Promise.all(
       chartEndpoints.map((endpoint) =>

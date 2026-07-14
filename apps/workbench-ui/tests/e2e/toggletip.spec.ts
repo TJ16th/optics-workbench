@@ -18,9 +18,9 @@ test('surface header and metric term help support keyboard open and close', asyn
   await page.goto('/?lng=en')
   await expect(page.getByText('Optics Workbench')).toBeVisible()
 
-  await page.getByRole('tab', { name: 'System' }).click()
+  await page.getByRole('button', { name: 'System', exact: true }).click()
   await expectKeyboardToggletip(page, 'radius_mm')
 
-  await page.getByRole('tab', { name: 'Preview' }).click()
+  await page.getByRole('button', { name: 'Preview', exact: true }).click()
   await expectKeyboardToggletip(page, 'ray_fan')
 })
