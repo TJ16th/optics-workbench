@@ -28,6 +28,8 @@ STATUS_MISSED = "missed"
 STATUS_TIR = "total_internal_reflection"
 STATUS_AIMING_FAILED = "aiming_failed"
 
+# Retain the public/internal name used by existing diagnostics. Values are
+# exact solved origin bundles, not affine coefficients.
 _AIMING_AFFINE_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
 
 
@@ -530,7 +532,13 @@ def _aiming_cache_key(
     wavelength_nm: float,
     stop_outer_mm: float,
     stop_inner_mm: float,
+    launch_x: float,
+    targets: np.ndarray,
+    tolerance_mm: float,
+    max_iterations: int,
 ) -> tuple[Any, ...]:
+    canonical_targets = np.ascontiguousarray(targets, dtype=np.float64)
+    targets_hash = hashlib.sha256(canonical_targets.tobytes()).hexdigest()
     return (
         compiled.system_hash,
         _configuration_hash(configuration),
@@ -540,41 +548,12 @@ def _aiming_cache_key(
         compiled.aperture_stop_index,
         round(float(stop_outer_mm), 12),
         round(float(stop_inner_mm), 12),
+        round(float(launch_x), 12),
+        canonical_targets.shape,
+        targets_hash,
+        round(float(tolerance_mm), 15),
+        int(max_iterations),
     )
-
-
-def _target_affine_features(targets: np.ndarray) -> np.ndarray:
-    return np.column_stack([np.ones(targets.shape[0], dtype=float), targets[:, 1], targets[:, 2]])
-
-
-def _select_affine_seed_indices(targets: np.ndarray) -> list[int]:
-    if targets.shape[0] <= 9:
-        return list(range(targets.shape[0]))
-    yz = targets[:, 1:3]
-    candidates = [
-        int(np.argmin(np.sum(yz * yz, axis=1))),
-        int(np.argmin(yz[:, 0])),
-        int(np.argmax(yz[:, 0])),
-        int(np.argmin(yz[:, 1])),
-        int(np.argmax(yz[:, 1])),
-        int(np.argmin(yz[:, 0] + yz[:, 1])),
-        int(np.argmax(yz[:, 0] + yz[:, 1])),
-        int(np.argmin(yz[:, 0] - yz[:, 1])),
-        int(np.argmax(yz[:, 0] - yz[:, 1])),
-    ]
-    seen: set[int] = set()
-    return [idx for idx in candidates if not (idx in seen or seen.add(idx))]
-
-
-def _fit_affine_aiming(targets: np.ndarray, origins: np.ndarray) -> np.ndarray:
-    features = _target_affine_features(targets)
-    coeff, *_ = np.linalg.lstsq(features, origins[:, 1:3], rcond=None)
-    return coeff
-
-
-def _predict_affine_origin(launch_x: float, affine_coeff: np.ndarray, target: np.ndarray) -> np.ndarray:
-    yz = _target_affine_features(target.reshape(1, 3))[0] @ affine_coeff
-    return np.array([launch_x, yz[0], yz[1]], dtype=float)
 
 
 def _aim_residual_to_stop(
@@ -817,7 +796,6 @@ def _aim_origins_for_field_wavelength(
     tolerance_mm: float,
     max_iterations: int,
     configuration: dict[str, Any] | None,
-    skip_affine_refinement: bool,
 ) -> tuple[list[np.ndarray], list[bool], list[int], dict[str, Any]]:
     strategy = str(aiming.get("strategy", "affine"))
     if compiled.aperture_stop_index is None or strategy == "exact" or targets.shape[0] <= 1:
@@ -833,119 +811,62 @@ def _aim_origins_for_field_wavelength(
             max_iterations=max_iterations,
             configuration=configuration,
         )
-        return origins, ok, iterations, {"strategy": "exact", "cache_hit": False, "affine_refined_count": 0, "affine_seed_count": targets.shape[0]}
+        return origins, ok, iterations, {
+            "strategy": "exact",
+            "cache_hit": False,
+            "affine_refined_count": 0,
+            "affine_seed_count": 0,
+            "exact_solved_count": targets.shape[0],
+        }
 
-    refine_threshold_mm = float(aiming.get("affine_refine_threshold_mm", max(tolerance_mm * 10.0, stop_outer_mm * 2.5e-3)))
-    cache_key = _aiming_cache_key(compiled, configuration, field, wavelength_nm, stop_outer_mm, stop_inner_mm)
+    cache_key = _aiming_cache_key(
+        compiled,
+        configuration,
+        field,
+        wavelength_nm,
+        stop_outer_mm,
+        stop_inner_mm,
+        launch_x,
+        targets,
+        tolerance_mm,
+        max_iterations,
+    )
     cached = _AIMING_AFFINE_CACHE.get(cache_key)
-    exact_seed_origins: dict[int, np.ndarray] = {}
-    exact_seed_ok: dict[int, bool] = {}
-    exact_seed_iterations: dict[int, int] = {}
-    cache_hit = cached is not None
+    if cached is not None:
+        origins = [origin.copy() for origin in np.asarray(cached["origins"], dtype=float)]
+        ok = np.asarray(cached["ok"], dtype=bool).tolist()
+        return origins, ok, [0] * len(origins), {
+            "strategy": "affine",
+            "cache_hit": True,
+            "affine_refined_count": 0,
+            "affine_seed_count": 0,
+            "exact_solved_count": 0,
+            "cache_payload": "exact_origin_bundle",
+        }
 
-    if cached is None:
-        seed_indices = _select_affine_seed_indices(targets)
-        seed_targets = targets[seed_indices]
-        seed_origins, seed_ok, seed_iterations = _exact_aim_origins(
-            compiled,
-            launch_x,
-            direction,
-            wavelength_nm,
-            seed_targets,
-            centers_mm,
-            rotations,
-            tolerance_mm=tolerance_mm,
-            max_iterations=max_iterations,
-            configuration=configuration,
-        )
-        ok_seed_indices: list[int] = []
-        ok_seed_origins: list[np.ndarray] = []
-        for seed_idx, origin, origin_ok, origin_iterations in zip(seed_indices, seed_origins, seed_ok, seed_iterations):
-            exact_seed_origins[seed_idx] = origin
-            exact_seed_ok[seed_idx] = origin_ok
-            exact_seed_iterations[seed_idx] = origin_iterations
-            if origin_ok:
-                ok_seed_indices.append(seed_idx)
-                ok_seed_origins.append(origin)
-
-        if len(ok_seed_indices) < 3:
-            origins, ok, iterations = _exact_aim_origins(
-                compiled,
-                launch_x,
-                direction,
-                wavelength_nm,
-                targets,
-                centers_mm,
-                rotations,
-                tolerance_mm=tolerance_mm,
-                max_iterations=max_iterations,
-                configuration=configuration,
-            )
-            return origins, ok, iterations, {
-                "strategy": "exact_fallback",
-                "cache_hit": False,
-                "affine_refined_count": 0,
-                "affine_seed_count": len(seed_indices),
-                "affine_refine_threshold_mm": refine_threshold_mm,
-            }
-
-        affine_coeff = _fit_affine_aiming(targets[ok_seed_indices], np.array(ok_seed_origins, dtype=float))
-        cached = {"affine_coeff": affine_coeff}
-        _AIMING_AFFINE_CACHE[cache_key] = cached
-
-    affine_coeff = np.asarray(cached["affine_coeff"], dtype=float)
-    origins: list[np.ndarray] = []
-    ok: list[bool] = []
-    iterations: list[int] = []
-    refined_count = 0
-
-    for target_idx, target in enumerate(targets):
-        if target_idx in exact_seed_origins:
-            origins.append(exact_seed_origins[target_idx])
-            ok.append(exact_seed_ok[target_idx])
-            iterations.append(exact_seed_iterations[target_idx])
-            continue
-
-        origin = _predict_affine_origin(launch_x, affine_coeff, target)
-        origin_ok = True
-        origin_iterations = 0
-        if not skip_affine_refinement:
-            residual = _aim_residual_to_stop(
-                compiled,
-                launch_x,
-                direction,
-                wavelength_nm,
-                target,
-                origin[1:3],
-                centers_mm,
-                rotations,
-                configuration,
-            )
-            if residual is None or float(np.linalg.norm(residual)) > refine_threshold_mm:
-                refined_count += 1
-                origin, origin_ok, origin_iterations = _aim_origin_to_stop(
-                    compiled,
-                    launch_x,
-                    direction,
-                    wavelength_nm,
-                    target,
-                    centers_mm,
-                    rotations,
-                    tolerance_mm=tolerance_mm,
-                    max_iterations=max_iterations,
-                    configuration=configuration,
-                    initial_param=origin[1:3],
-                )
-        origins.append(origin)
-        ok.append(origin_ok)
-        iterations.append(origin_iterations)
-
+    origins, ok, iterations = _exact_aim_origins(
+        compiled,
+        launch_x,
+        direction,
+        wavelength_nm,
+        targets,
+        centers_mm,
+        rotations,
+        tolerance_mm=tolerance_mm,
+        max_iterations=max_iterations,
+        configuration=configuration,
+    )
+    _AIMING_AFFINE_CACHE[cache_key] = {
+        "origins": np.array(origins, dtype=float),
+        "ok": np.array(ok, dtype=bool),
+    }
     return origins, ok, iterations, {
         "strategy": "affine",
-        "cache_hit": cache_hit,
-        "affine_refined_count": refined_count,
-        "affine_seed_count": len(exact_seed_origins),
-        "affine_refine_threshold_mm": refine_threshold_mm,
+        "cache_hit": False,
+        "affine_refined_count": 0,
+        "affine_seed_count": 0,
+        "exact_solved_count": len(origins),
+        "cache_payload": "exact_origin_bundle",
     }
 
 
@@ -997,12 +918,9 @@ def trace_forward(
     aiming_cache_misses = 0
     affine_refined_count = 0
     affine_seed_count = 0
+    aiming_exact_solved_count = 0
     aiming_strategy = aiming.get("strategy", "affine") if aiming_mode == "full" else aiming_mode
-    skip_affine_refinement = bool(
-        options.get("preview_mode", False)
-        or options.get("preview", False)
-        or aiming.get("refinement", "auto") == "none"
-    )
+    aiming_solution_kind = "exact_bundle_cache" if aiming_mode == "full" and aiming_strategy != "exact" else aiming_strategy
 
     for field in fields:
         if field.get("type", "angular") != "angular":
@@ -1025,7 +943,6 @@ def trace_forward(
                     tolerance_mm=tolerance_mm,
                     max_iterations=max_iterations,
                     configuration=configuration,
-                    skip_affine_refinement=skip_affine_refinement,
                 )
                 if field_meta.get("cache_hit"):
                     aiming_cache_hits += 1
@@ -1033,6 +950,7 @@ def trace_forward(
                     aiming_cache_misses += 1
                 affine_refined_count += int(field_meta.get("affine_refined_count", 0))
                 affine_seed_count += int(field_meta.get("affine_seed_count", 0))
+                aiming_exact_solved_count += int(field_meta.get("exact_solved_count", 0))
             else:
                 field_origins = [_paraxial_launch_origin(launch_x, direction, target) for target in targets]
                 field_ok = [True] * len(field_origins)
@@ -1065,6 +983,7 @@ def trace_forward(
         {
             "ray_aiming_mode": aiming_mode,
             "ray_aiming_strategy": aiming_strategy,
+            "aiming_solution_kind": aiming_solution_kind,
             "aiming_failed_count": int(np.sum(~aiming_ok_array)),
             "aiming_iterations_max": int(max(aiming_iterations) if aiming_iterations else 0),
             "aiming_iterations_mean": float(np.mean(aiming_iterations)) if aiming_iterations else 0.0,
@@ -1072,6 +991,7 @@ def trace_forward(
             "aiming_cache_misses": int(aiming_cache_misses),
             "affine_refined_count": int(affine_refined_count),
             "affine_seed_count": int(affine_seed_count),
+            "aiming_exact_solved_count": int(aiming_exact_solved_count),
             "samples_per_field": samples_per_field,
         }
     )
@@ -1137,6 +1057,7 @@ def trace_forward(
             "aiming_cache_misses": int(aiming_cache_misses),
             "affine_refined_count": int(affine_refined_count),
             "affine_seed_count": int(affine_seed_count),
+            "aiming_exact_solved_count": int(aiming_exact_solved_count),
         }
     return result
 

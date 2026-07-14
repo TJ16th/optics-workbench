@@ -300,7 +300,7 @@ def test_p004_double_gauss_meets_fast_paraxial_target_and_positive_edge_thicknes
         {"samples_per_field": 81, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
         [587.56],
     )
-    assert analyze_spot(center_trace).rms_radius_mm == pytest.approx(0.4834598215345252)
+    assert analyze_spot(center_trace).rms_radius_mm == pytest.approx(0.48432273992330394)
 
 
 def test_p011_planar_double_gauss_has_six_positive_thickness_elements():
@@ -350,7 +350,7 @@ def test_p011_planar_double_gauss_has_six_positive_thickness_elements():
         [587.56],
     )
     assert center_trace.status.tolist() == ["alive"] * 81
-    assert analyze_spot(center_trace).rms_radius_mm == pytest.approx(0.46542296012362827)
+    assert analyze_spot(center_trace).rms_radius_mm == pytest.approx(0.4653881107408963)
 
 
 def test_p012_tessar_meets_f28_target_with_four_positive_thickness_elements():
@@ -398,7 +398,7 @@ def test_p012_tessar_meets_f28_target_with_four_positive_thickness_elements():
         [587.56],
     )
     assert center_trace.status.tolist() == ["alive"] * 81
-    assert analyze_spot(center_trace).rms_radius_mm == pytest.approx(0.03686279799887928)
+    assert analyze_spot(center_trace).rms_radius_mm == pytest.approx(0.036968052965618795)
 
 
 def test_p007_fast_meniscus_preserves_bright_paraxial_target_and_positive_edge_thickness():
@@ -522,7 +522,7 @@ def test_p010_high_order_asphere_has_two_curvature_reversals_and_full_throughput
         {"samples_per_field": 81, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
         [587.56],
     )
-    assert analyze_spot(center_trace).rms_radius_mm == pytest.approx(0.46463283438394304)
+    assert analyze_spot(center_trace).rms_radius_mm == pytest.approx(0.4646328343540561)
 
 
 def test_p005_annular_stop_blocks_the_secondary_mirror_central_obscuration():
