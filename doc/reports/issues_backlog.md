@@ -858,3 +858,21 @@ R91でJ2独立exact有限差分とJ3 request-local warm refinementを実装し�
 - warmを選んだcandidateは代表プリセット全体で独立exactより遅くならないか、遅くなる場合は規定閾値でcoldへ切り替わる。
 - response metadataから候補別の反復・fallback・時間内訳を再現できる。
 - R83条件の複数回測定で中央値と分散を報告し、`1.25 x cold`目標に対する達否を安定して判定できる。
+## Issue: evaluate内の同一条件traceをoperand間で再利用する
+
+ラベル案: `engine`, `performance`
+
+### 背景
+
+R96の性能ドリフト調査で、`fast_design_score`はR89-1以降、`ray_loss_ratio`算出のために独立した`trace_forward()`を追加実行していることを確認した。さらにR90のoperand統一後は、同じfield・wavelength・sampling・configurationを使う`rms_spot_radius`と`geometric_mtf`も個別にtraceしており、R90以前に存在した共有が失われている。`ray_loss_ratio`自体は仕様上必要だが、同一入力の再traceは必要条件ではない。
+
+### 対応案
+
+evaluate request内にtrace結果を保持する評価コンテキストを導入し、field・wavelength・sampling・optionsが同一のoperand間で再利用する。field/wavelengthを限定したoperand、専用samplingを要求する解析、weighted samplingを区別できるcache keyを設計し、`rms_spot_radius`、`geometric_mtf`、`ray_loss_ratio`から段階的に共有する。
+
+### 受け入れ条件
+
+- `fast_design_score`の同一条件trace回数が、現在の4回から必要最小限へ減る。
+- merit、operand値、status、決定論が変更前とbit-identical、または仕様で定めた許容差内で一致する。
+- field/wavelength限定operandと異なるsampling間でtraceが誤共有されない直接テストがある。
+- spec-like smokeの`fast_design_score`中央値がR96現行値から改善し、`preview full`と`high-count trace`に回帰がない。
