@@ -19,10 +19,15 @@ from .evaluation_metrics import SUPPORTED_EVALUATE_METRICS
 from .field_curvature import analyze_field_curvature, analyze_ms_image_surface
 from .models import OpticalSystem, StructuredOpticsError
 from .paraxial import analyze_paraxial
-from .psf_mtf import analyze_geometric_mtf, analyze_relative_illumination, analyze_white_mtf
+from .psf_mtf import (
+    analyze_geometric_mtf,
+    analyze_relative_illumination,
+    analyze_relative_illumination_from_trace,
+    analyze_white_mtf,
+)
 from .solves import resolve_configuration_solves
 from .system import CompiledSystem, compile_system
-from .tracing import CandidateTraceCoordinator, trace_forward
+from .tracing import CandidateTraceCoordinator, TraceResult, trace_forward
 from .variables import apply_variable_bindings, resolve_variable_binding, variable_value
 
 
@@ -111,6 +116,74 @@ PRESETS: dict[str, dict[str, Any]] = {
         "ray_sampling": {"samples_per_field": 21, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}},
     },
 }
+
+
+class _EvaluationTraceContext:
+    """Request-local cache for byte-for-byte identical forward trace calls."""
+
+    _IDENTITY_KEYS = {"_request_local_workspace", "_candidate_trace_coordinator"}
+
+    def __init__(self) -> None:
+        self._traces: dict[tuple[Any, ...], TraceResult] = {}
+
+    @classmethod
+    def _freeze(cls, value: Any, *, key: str | None = None) -> Any:
+        if key in cls._IDENTITY_KEYS:
+            return ("identity", id(value))
+        if value is None or isinstance(value, (bool, int, str)):
+            return (type(value).__name__, value)
+        if isinstance(value, float):
+            return ("float", value.hex())
+        if isinstance(value, (list, tuple)):
+            return (type(value).__name__, tuple(cls._freeze(item) for item in value))
+        if isinstance(value, dict):
+            if not all(isinstance(item_key, str) for item_key in value):
+                raise TypeError("trace cache mappings require string keys")
+            return (
+                "dict",
+                tuple(
+                    (item_key, cls._freeze(value[item_key], key=item_key))
+                    for item_key in sorted(value)
+                ),
+            )
+        raise TypeError(f"unsupported trace cache value: {type(value).__name__}")
+
+    def _key(
+        self,
+        compiled: CompiledSystem,
+        fields: list[dict[str, Any]],
+        sampling: dict[str, Any],
+        wavelengths: list[float],
+        options: dict[str, Any],
+    ) -> tuple[Any, ...] | None:
+        try:
+            return (
+                compiled.system_hash,
+                self._freeze(fields),
+                self._freeze(sampling),
+                self._freeze(wavelengths),
+                self._freeze(options),
+            )
+        except (TypeError, ValueError, OverflowError):
+            return None
+
+    def trace(
+        self,
+        compiled: CompiledSystem,
+        fields: list[dict[str, Any]],
+        sampling: dict[str, Any],
+        wavelengths: list[float],
+        options: dict[str, Any],
+    ) -> TraceResult:
+        key = self._key(compiled, fields, sampling, wavelengths, options)
+        if key is None:
+            return trace_forward(compiled, fields, sampling, wavelengths, options)
+        cached = self._traces.get(key)
+        if cached is not None:
+            return cached
+        result = trace_forward(compiled, fields, sampling, wavelengths, options)
+        self._traces[key] = result
+        return result
 
 def apply_variables(system: OpticalSystem, variables: dict[str, Any] | None) -> OpticalSystem:
     return apply_variable_bindings(system, variables).system
@@ -255,16 +328,22 @@ def _metric_scalar_value(
     options: dict[str, Any],
     frequencies: list[float],
     evaluation: dict[str, Any],
+    trace_context: _EvaluationTraceContext,
 ) -> float | None:
     configuration = options.get("configuration", {})
     if metric == "rms_spot_radius":
-        trace = trace_forward(compiled, fields, sampling, wavelengths, options)
+        trace = trace_context.trace(compiled, fields, sampling, wavelengths, options)
         return analyze_spot(trace).rms_radius_mm
     if metric == "relative_illumination":
-        result = analyze_relative_illumination(compiled, fields, sampling, wavelengths, options)
+        field_ids = [str(field.get("id", "field")) for field in fields]
+        if len(field_ids) == len(set(field_ids)):
+            trace = trace_context.trace(compiled, fields, sampling, wavelengths, options)
+            result = analyze_relative_illumination_from_trace(trace, compiled, fields, sampling, wavelengths)
+        else:
+            result = analyze_relative_illumination(compiled, fields, sampling, wavelengths, options)
         return min((row.relative_illumination for row in result.rows), default=None)
     if metric == "geometric_mtf":
-        trace = trace_forward(compiled, fields, sampling, wavelengths, options)
+        trace = trace_context.trace(compiled, fields, sampling, wavelengths, options)
         result = analyze_geometric_mtf(trace, frequencies)
         return None if not result.points else result.points[-1].mtf_radial
     if metric == "ray_fan_error":
@@ -333,7 +412,7 @@ def _metric_scalar_value(
             "f_number": result.f_number,
         }[metric]
     if metric == "ray_loss_ratio":
-        trace = trace_forward(compiled, fields, sampling, wavelengths, options)
+        trace = trace_context.trace(compiled, fields, sampling, wavelengths, options)
         loss_statuses = set(evaluation.get("ray_loss_statuses", ["total_internal_reflection", "missed", "aiming_failed"]))
         return float(np.mean(np.isin(trace.status, sorted(loss_statuses)))) if trace.status.size else None
     if metric in {"edge_thickness", "min_air_gap"}:
@@ -354,6 +433,7 @@ def _ray_loss_operands(
     wavelengths: list[float],
     options: dict[str, Any],
     evaluation: dict[str, Any],
+    trace_context: _EvaluationTraceContext,
 ) -> list[OperandResult]:
     tolerance = float(evaluation.get("ray_loss_tolerance", 0.1))
     if tolerance <= 0.0:
@@ -373,7 +453,7 @@ def _ray_loss_operands(
             params={"ray_loss_statuses": unknown, "supported_statuses": sorted(supported)},
         )
     statuses = {aliases.get(status, status) for status in requested}
-    trace = trace_forward(compiled, fields, sampling, wavelengths, options)
+    trace = trace_context.trace(compiled, fields, sampling, wavelengths, options)
     results: list[OperandResult] = []
     for field in fields:
         field_id = str(field.get("id", "field"))
@@ -453,6 +533,7 @@ def _evaluate_operands(
     options: dict[str, Any],
     frequencies: list[float],
     evaluation: dict[str, Any],
+    trace_context: _EvaluationTraceContext,
 ) -> list[OperandResult]:
     results: list[OperandResult] = []
     for operand in operands:
@@ -471,6 +552,7 @@ def _evaluate_operands(
                 options,
                 frequencies,
                 evaluation,
+                trace_context,
             )
             if operand_fields and operand_wavelengths
             else None
@@ -648,6 +730,7 @@ def evaluate_system(
             ),
         )
     analysis_options = {"configuration": configuration}
+    trace_context = _EvaluationTraceContext()
     operand_results = _evaluate_operands(
         compiled,
         requested_operands,
@@ -657,10 +740,19 @@ def evaluate_system(
         analysis_options,
         frequencies,
         evaluation_data,
+        trace_context,
     )
     metric_values: dict[str, Any] = {operand.metric: operand.value for operand in operand_results}
     legacy_merit = _compute_legacy_merit(metric_values, weights)
-    loss_operands = _ray_loss_operands(compiled, fields, sampling, wavelengths, analysis_options, evaluation_data)
+    loss_operands = _ray_loss_operands(
+        compiled,
+        fields,
+        sampling,
+        wavelengths,
+        analysis_options,
+        evaluation_data,
+        trace_context,
+    )
     operand_results.extend(loss_operands)
     constraint_operands = _constraint_operands(compiled, configuration, constraints)
     requested_metric_names = {operand.metric for operand in operand_results}

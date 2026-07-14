@@ -185,8 +185,35 @@ def analyze_relative_illumination(
     wavelengths: list[float] | None = None,
     options: dict[str, Any] | None = None,
 ) -> RelativeIlluminationResult:
+    normalized_sampling = _relative_illumination_sampling(sampling)
+    throughputs: list[float] = []
+    for field in fields:
+        trace = trace_forward(compiled, [field], normalized_sampling, wavelengths, options)
+        throughputs.append(float(np.mean(trace.arrived_mask)) if trace.status.size else 0.0)
+    return _relative_illumination_result(fields, throughputs, normalized_sampling, wavelengths, compiled)
+
+
+def analyze_relative_illumination_from_trace(
+    trace: TraceResult,
+    compiled: CompiledSystem,
+    fields: list[dict[str, Any]],
+    sampling: dict[str, Any] | None = None,
+    wavelengths: list[float] | None = None,
+) -> RelativeIlluminationResult:
+    """Compute illumination from a trace made with the same complete field set."""
+
+    normalized_sampling = _relative_illumination_sampling(sampling)
+    field_ids = np.asarray(trace.field_ids, dtype=object)
+    throughputs: list[float] = []
+    for field in fields:
+        mask = field_ids == str(field.get("id", "field"))
+        throughputs.append(float(np.mean(trace.arrived_mask[mask])) if np.any(mask) else 0.0)
+    return _relative_illumination_result(fields, throughputs, normalized_sampling, wavelengths, compiled)
+
+
+def _relative_illumination_sampling(sampling: dict[str, Any] | None) -> dict[str, Any]:
     requested_sampling = sampling or {}
-    sampling = {
+    return {
         **DEFAULT_RELATIVE_ILLUMINATION_SAMPLING,
         **requested_sampling,
         "ray_aiming": {
@@ -194,10 +221,17 @@ def analyze_relative_illumination(
             **requested_sampling.get("ray_aiming", {}),
         },
     }
+
+
+def _relative_illumination_result(
+    fields: list[dict[str, Any]],
+    throughputs: list[float],
+    sampling: dict[str, Any],
+    wavelengths: list[float] | None,
+    compiled: CompiledSystem,
+) -> RelativeIlluminationResult:
     rows_raw: list[tuple[dict[str, Any], float, float]] = []
-    for field in fields:
-        trace = trace_forward(compiled, [field], sampling, wavelengths, options)
-        throughput = float(np.mean(trace.arrived_mask)) if trace.status.size else 0.0
+    for field, throughput in zip(fields, throughputs):
         direction = field_direction(float(field.get("theta_y_deg", 0.0)), float(field.get("theta_z_deg", 0.0)))
         cos4 = float(max(direction[0], 0.0) ** 4)
         rows_raw.append((field, throughput, cos4))
