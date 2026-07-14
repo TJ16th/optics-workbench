@@ -1,0 +1,95 @@
+{
+  "task": "R83",
+  "measured_at_jst": "2026-07-14T13:49:20+09:00",
+  "source_commit": "10584e1",
+  "environment": {
+    "python": "3.12.13",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor_identifier": "Intel64 Family 6 Model 158 Stepping 10",
+    "logical_processors": 12
+  },
+  "workload": {
+    "basis": "R73 aberration merit operand test",
+    "operands": ["ray_fan_error", "longitudinal_aberration"],
+    "fields": 1,
+    "wavelengths": 1,
+    "samples_per_field": 9,
+    "fan_traces_per_evaluate": 3,
+    "nominal_rays_per_evaluate": 27,
+    "ray_aiming": "full"
+  },
+  "repetitions": {
+    "local_cold": 50,
+    "local_hit": 100,
+    "http_cold": 30,
+    "http_hit": 50
+  },
+  "health_http_floor": {
+    "count": 50,
+    "mean_ms": 1.296,
+    "median_ms": 0.892,
+    "p90_ms": 1.029,
+    "p95_ms": 1.094
+  },
+  "presets": {
+    "P002": {
+      "surface_entries": 4,
+      "refractive_surfaces": 2,
+      "perturbation": {"variable": "S1_radius_mm", "base": 50.0, "relative_increment": 1e-7},
+      "local": {
+        "cold": {"count": 50, "mean_ms": 4.264, "median_ms": 3.916, "p90_ms": 5.798, "p95_ms": 7.269, "eval_per_s": 234.515},
+        "hit": {"count": 100, "mean_ms": 3.441, "median_ms": 3.331, "p90_ms": 3.657, "p95_ms": 3.941, "eval_per_s": 290.649}
+      },
+      "http": {
+        "cold": {"count": 30, "mean_ms": 5.667, "median_ms": 5.570, "p90_ms": 6.742, "p95_ms": 6.843, "eval_per_s": 176.447},
+        "hit": {"count": 50, "mean_ms": 6.190, "median_ms": 6.163, "p90_ms": 6.697, "p95_ms": 6.763, "eval_per_s": 161.555}
+      },
+      "estimated_http_overhead_ms": {"cold_mean_delta": 1.403, "cold_percent_of_http": 24.8, "hit_mean_delta": 2.749, "hit_percent_of_http": 44.4}
+    },
+    "P007": {
+      "surface_entries": 6,
+      "refractive_surfaces": 4,
+      "perturbation": {"variable": "S1_radius_mm", "base": 15.0, "relative_increment": 1e-7},
+      "local": {
+        "cold": {"count": 50, "mean_ms": 19.219, "median_ms": 18.319, "p90_ms": 21.619, "p95_ms": 26.332, "eval_per_s": 52.031},
+        "hit": {"count": 100, "mean_ms": 4.516, "median_ms": 4.398, "p90_ms": 4.848, "p95_ms": 5.315, "eval_per_s": 221.455}
+      },
+      "http": {
+        "cold": {"count": 30, "mean_ms": 19.988, "median_ms": 19.579, "p90_ms": 21.504, "p95_ms": 22.674, "eval_per_s": 50.029},
+        "hit": {"count": 50, "mean_ms": 6.505, "median_ms": 6.358, "p90_ms": 7.161, "p95_ms": 7.675, "eval_per_s": 153.738}
+      },
+      "estimated_http_overhead_ms": {"cold_mean_delta": 0.769, "cold_percent_of_http": 3.8, "hit_mean_delta": 1.989, "hit_percent_of_http": 30.6}
+    },
+    "P012": {
+      "surface_entries": 9,
+      "refractive_surfaces": 7,
+      "perturbation": {"variable": "S1_radius_mm", "base": 91.85, "relative_increment": 1e-7},
+      "local": {
+        "cold": {"count": 50, "mean_ms": 26.253, "median_ms": 25.812, "p90_ms": 28.336, "p95_ms": 30.784, "eval_per_s": 38.092},
+        "hit": {"count": 100, "mean_ms": 6.343, "median_ms": 6.147, "p90_ms": 7.073, "p95_ms": 7.786, "eval_per_s": 157.663}
+      },
+      "http": {
+        "cold": {"count": 30, "mean_ms": 27.074, "median_ms": 26.850, "p90_ms": 29.032, "p95_ms": 29.118, "eval_per_s": 36.936},
+        "hit": {"count": 50, "mean_ms": 8.743, "median_ms": 8.553, "p90_ms": 10.099, "p95_ms": 10.320, "eval_per_s": 114.371}
+      },
+      "estimated_http_overhead_ms": {"cold_mean_delta": 0.821, "cold_percent_of_http": 3.0, "hit_mean_delta": 2.400, "hit_percent_of_http": 27.5}
+    },
+    "P011": {
+      "surface_entries": 12,
+      "refractive_surfaces": 10,
+      "perturbation": {"variable": "S1_radius_mm", "base": 58.0, "relative_increment": 1e-7},
+      "local": {
+        "cold": {"count": 50, "mean_ms": 29.710, "median_ms": 29.065, "p90_ms": 32.042, "p95_ms": 33.508, "eval_per_s": 33.659},
+        "hit": {"count": 100, "mean_ms": 8.046, "median_ms": 7.820, "p90_ms": 8.744, "p95_ms": 9.595, "eval_per_s": 124.279}
+      },
+      "http": {
+        "cold": {"count": 30, "mean_ms": 29.937, "median_ms": 29.738, "p90_ms": 32.184, "p95_ms": 32.562, "eval_per_s": 33.403},
+        "hit": {"count": 50, "mean_ms": 10.778, "median_ms": 9.799, "p90_ms": 14.814, "p95_ms": 17.277, "eval_per_s": 92.784}
+      },
+      "estimated_http_overhead_ms": {"cold_mean_delta": 0.227, "cold_percent_of_http": 0.8, "hit_mean_delta": 2.732, "hit_percent_of_http": 25.3}
+    }
+  },
+  "cache_verification": {
+    "all_presets": {"cold_hits": 0, "cold_misses": 1, "warm_hits": 1, "warm_misses": 0}
+  }
+}
