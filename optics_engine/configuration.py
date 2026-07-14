@@ -5,6 +5,7 @@ from typing import Any
 
 import numpy as np
 
+from .core import asphere_sag_and_slope
 from .models import ValidationIssue, ValidationResult
 from .system import CompiledSystem
 
@@ -14,6 +15,70 @@ class RuntimeLayout:
     centers_mm: np.ndarray
     rotations: np.ndarray
     configuration: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class SurfaceGapValue:
+    surface_ids: tuple[str, str]
+    medium_id: str
+    radial_height_mm: float | None
+    vertex_gap_mm: float
+    edge_gap_mm: float | None
+
+
+def _clear_radius(surface) -> float | None:
+    radius = surface.semi_diameter_mm
+    if surface.aperture is not None:
+        radius = surface.aperture.outer_semi_diameter_mm or surface.aperture.semi_diameter_mm or radius
+    return None if radius is None else float(radius)
+
+
+def _surface_sag(surface, radial_height_mm: float) -> float:
+    if surface.surface_type == "plane" or surface.kind in {"aperture_stop", "mechanical_aperture", "thin_lens", "sensor", "eye_reference", "dummy"}:
+        return 0.0
+    if surface.surface_type == "aspherical_even":
+        sag, _ = asphere_sag_and_slope(
+            np.asarray([radial_height_mm], dtype=float),
+            float(surface.radius_mm),
+            float(surface.conic),
+            surface.asphere_coefficients,
+        )
+        return float(sag[0])
+    radius = float(surface.radius_mm)
+    if radius == 0.0:
+        return 0.0
+    under_root = radius * radius - radial_height_mm * radial_height_mm
+    if under_root < 0.0:
+        return float("nan")
+    return radius - float(np.copysign(np.sqrt(under_root), radius))
+
+
+def surface_gap_values(compiled: CompiledSystem, configuration: dict[str, Any] | None = None) -> list[SurfaceGapValue]:
+    layout = runtime_layout(compiled, configuration)
+    rows: list[SurfaceGapValue] = []
+    for index in range(len(compiled.surfaces) - 1):
+        first = compiled.surfaces[index]
+        second = compiled.surfaces[index + 1]
+        if first.thickness_after_mm < 0.0:
+            continue
+        vertex_gap = float(layout.centers_mm[index + 1, 0] - layout.centers_mm[index, 0])
+        radii = [_clear_radius(first), _clear_radius(second)]
+        radial_height = None if any(radius is None for radius in radii) else min(float(radii[0]), float(radii[1]))
+        edge_gap = None
+        if radial_height is not None:
+            edge_gap = vertex_gap + _surface_sag(second, radial_height) - _surface_sag(first, radial_height)
+            if not np.isfinite(edge_gap):
+                edge_gap = None
+        rows.append(
+            SurfaceGapValue(
+                surface_ids=(first.id, second.id),
+                medium_id=first.material_after or "AIR",
+                radial_height_mm=radial_height,
+                vertex_gap_mm=vertex_gap,
+                edge_gap_mm=edge_gap,
+            )
+        )
+    return rows
 
 
 def _group_shift_from_entry(entry: dict[str, Any]) -> tuple[str, np.ndarray]:
@@ -150,6 +215,7 @@ def validate_configuration(
     configuration: dict[str, Any] | None = None,
     *,
     min_air_gap_mm: float = 0.0,
+    min_edge_thickness_mm: float = 0.0,
 ) -> ValidationResult:
     configuration = configuration or {}
     issues: list[ValidationIssue] = []
@@ -198,24 +264,44 @@ def validate_configuration(
                 )
             )
 
-    layout = runtime_layout(compiled, configuration)
-    x_positions = layout.centers_mm[:, 0]
-    for idx in range(len(compiled.surfaces) - 1):
-        if compiled.surfaces[idx].thickness_after_mm < 0.0:
-            continue
-        gap = x_positions[idx + 1] - x_positions[idx]
-        if gap < min_air_gap_mm:
-            surface_ids = [compiled.surfaces[idx].id, compiled.surfaces[idx + 1].id]
+    for row in surface_gap_values(compiled, configuration):
+        if row.vertex_gap_mm < 0.0:
             issues.append(
                 ValidationIssue(
-                    type="negative_air_gap" if gap < 0.0 else "min_air_gap",
-                    params={"surface_ids": surface_ids, "gap_mm": float(gap), "min_air_gap_mm": float(min_air_gap_mm)},
-                    message=(
-                        f"gap between {compiled.surfaces[idx].id!r} and "
-                        f"{compiled.surfaces[idx + 1].id!r} is {gap:.6g} mm"
-                    ),
-                    surface_id=compiled.surfaces[idx].id,
-                    severity="error" if gap < 0.0 else "warning",
+                    code="negative_air_gap",
+                    params={"surface_ids": list(row.surface_ids), "gap_mm": row.vertex_gap_mm, "min_air_gap_mm": 0.0},
+                    message_en="surface vertex order is reversed",
+                    surface_id=row.surface_ids[0],
+                    severity="error",
+                )
+            )
+            continue
+        if row.edge_gap_mm is not None and row.edge_gap_mm < 0.0:
+            issues.append(
+                ValidationIssue(
+                    code="surface_interference",
+                    params={"surface_ids": list(row.surface_ids), "edge_gap_mm": row.edge_gap_mm, "radial_height_mm": row.radial_height_mm},
+                    message_en="adjacent clear apertures intersect after surface sag is applied",
+                    surface_id=row.surface_ids[0],
+                    severity="warning",
+                )
+            )
+        threshold = min_air_gap_mm if row.medium_id == "AIR" else min_edge_thickness_mm
+        code = "min_air_gap" if row.medium_id == "AIR" else "edge_thickness_below_min"
+        value = row.edge_gap_mm if row.edge_gap_mm is not None else row.vertex_gap_mm
+        if value < threshold:
+            issues.append(
+                ValidationIssue(
+                    code=code,
+                    params={
+                        "surface_ids": list(row.surface_ids),
+                        "value_mm": value,
+                        "minimum_mm": float(threshold),
+                        "radial_height_mm": row.radial_height_mm,
+                    },
+                    message_en="surface gap is below the requested minimum",
+                    surface_id=row.surface_ids[0],
+                    severity="warning",
                 )
             )
 

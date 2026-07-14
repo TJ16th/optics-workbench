@@ -17,4 +17,6 @@ SUPPORTED_EVALUATE_METRICS = (
     "effective_focal_length",
     "f_number",
     "ray_loss_ratio",
+    "edge_thickness",
+    "min_air_gap",
 )

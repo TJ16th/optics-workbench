@@ -53,6 +53,7 @@ ERROR_CODES = [
     "missing_terminal_retina_sensor",
     "multiple_aperture_stops",
     "negative_air_gap",
+    "surface_interference",
     "no_valid_rays",
     "optics_value_error",
     "retinal_aperture_stop_not_supported",

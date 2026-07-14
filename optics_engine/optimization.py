@@ -9,7 +9,7 @@ import numpy as np
 from .aberrations import analyze_distortion, analyze_longitudinal_aberration, analyze_ray_fan
 from .analysis import analyze_spot
 from .chromatic import analyze_chromatic_aberration
-from .configuration import validate_configuration
+from .configuration import surface_gap_values, validate_configuration
 from .evaluation_metrics import SUPPORTED_EVALUATE_METRICS
 from .field_curvature import analyze_field_curvature, analyze_ms_image_surface
 from .models import OpticalSystem, StructuredOpticsError
@@ -246,6 +246,14 @@ def _metric_scalar_value(
         trace = trace_forward(compiled, fields, sampling, wavelengths, options)
         loss_statuses = set(evaluation.get("ray_loss_statuses", ["total_internal_reflection", "missed", "aiming_failed"]))
         return float(np.mean(np.isin(trace.status, sorted(loss_statuses)))) if trace.status.size else None
+    if metric in {"edge_thickness", "min_air_gap"}:
+        medium_is_air = metric == "min_air_gap"
+        values = [
+            row.edge_gap_mm if row.edge_gap_mm is not None else row.vertex_gap_mm
+            for row in surface_gap_values(compiled, configuration)
+            if (row.medium_id == "AIR") == medium_is_air
+        ]
+        return None if not values else float(min(values))
     raise AssertionError(f"unhandled evaluate metric: {metric}")
 
 
@@ -302,6 +310,47 @@ def _ray_loss_operands(
                     wavelength_nm=float(wavelength),
                 )
             )
+    return results
+
+
+def _constraint_operands(
+    compiled: CompiledSystem,
+    configuration: dict[str, Any],
+    constraints: dict[str, Any],
+) -> list[OperandResult]:
+    results: list[OperandResult] = []
+    rows = surface_gap_values(compiled, configuration)
+    for metric, key, medium_is_air in (
+        ("min_air_gap", "min_air_gap_mm", True),
+        ("edge_thickness", "min_edge_thickness_mm", False),
+    ):
+        if key not in constraints:
+            continue
+        values = [
+            row.edge_gap_mm if row.edge_gap_mm is not None else row.vertex_gap_mm
+            for row in rows
+            if (row.medium_id == "AIR") == medium_is_air
+        ]
+        value = None if not values else float(min(values))
+        target = float(constraints[key])
+        tolerance = float(constraints.get(f"{key.removesuffix('_mm')}_tolerance_mm", 1.0))
+        if tolerance <= 0.0:
+            raise StructuredOpticsError(
+                "optics_value_error",
+                "Constraint tolerance must be positive.",
+                params={"constraint": key, "tolerance": tolerance, "required": "value > 0"},
+            )
+        residual = None if value is None else max(0.0, target - value) / tolerance
+        results.append(
+            OperandResult(
+                metric=metric,
+                value=value,
+                target=target,
+                tolerance=tolerance,
+                weight=1.0,
+                residual=residual,
+            )
+        )
     return results
 
 
@@ -406,7 +455,14 @@ def evaluate_system(
     system = variable_application.system
     configuration = variable_application.configuration
     compiled = compile_system(system)
-    config_validation = validate_configuration(compiled, configuration)
+    evaluation_data = dict(evaluation or {})
+    constraints = dict(evaluation_data.get("constraints", {}))
+    config_validation = validate_configuration(
+        compiled,
+        configuration,
+        min_air_gap_mm=float(constraints.get("min_air_gap_mm", 0.0)),
+        min_edge_thickness_mm=float(constraints.get("min_edge_thickness_mm", 0.0)),
+    )
     if not config_validation.ok:
         violations = [issue.model_dump(mode="json") for issue in config_validation.issues]
         return EvaluateResult(
@@ -420,7 +476,6 @@ def evaluate_system(
     metrics, weights, sampling, frequencies = _resolve_evaluation(evaluation, ray_sampling)
     fields = _fields_from_evaluation(evaluation)
     wavelengths = _wavelengths_from_evaluation(compiled, evaluation)
-    evaluation_data = dict(evaluation or {})
     requested_operands = list(evaluation_data.get("operands", []))
     _validate_metric_names(metrics, requested_operands)
     invalid_tolerances = [
@@ -497,16 +552,20 @@ def evaluate_system(
     loss_operands = _ray_loss_operands(compiled, fields, sampling, wavelengths, analysis_options, evaluation_data)
     operand_results.extend(loss_operands)
     loss_penalty = sum(float(operand.residual or 0.0) ** 2 for operand in loss_operands)
+    constraint_operands = _constraint_operands(compiled, configuration, constraints)
+    operand_results.extend(constraint_operands)
+    constraint_penalty = sum(float(operand.residual or 0.0) ** 2 for operand in constraint_operands)
     if merit is not None:
         merit_metrics = dict(merit.metrics)
         merit_metrics["ray_loss_penalty"] = loss_penalty
-        merit_metrics["score"] = merit.score + loss_penalty
-        merit = MeritResult(score=merit.score + loss_penalty, metrics=merit_metrics, weights=dict(merit.weights))
+        merit_metrics["continuous_constraint_penalty"] = constraint_penalty
+        merit_metrics["score"] = merit.score + loss_penalty + constraint_penalty
+        merit = MeritResult(score=merit.score + loss_penalty + constraint_penalty, metrics=merit_metrics, weights=dict(merit.weights))
     return EvaluateResult(
         status="ok",
         merit=merit,
         metrics=metric_values,
-        violations=[],
+        violations=[issue.model_dump(mode="json") for issue in config_validation.issues if issue.severity != "error"],
         metadata={
             "stage": "evaluation",
             "system_hash": compiled.system_hash,
