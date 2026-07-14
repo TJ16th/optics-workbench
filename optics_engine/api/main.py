@@ -587,6 +587,7 @@ def optics_evaluate(payload: dict):
             configuration=payload.get("configuration"),
             variables=payload.get("variables"),
             ray_sampling=payload.get("ray_sampling"),
+            jacobian=payload.get("jacobian"),
         )
     )
 

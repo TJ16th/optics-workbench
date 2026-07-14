@@ -775,7 +775,22 @@ def _aim_origin_to_stop(
             delta = np.linalg.solve(jac, res)
         except np.linalg.LinAlgError:
             return np.array([launch_x, p[0], p[1]], dtype=float), False, iterations
-        p -= delta
+        if initial_param is None:
+            p -= delta
+            continue
+        if not np.all(np.isfinite(delta)) or np.linalg.norm(delta) > 100.0:
+            return np.array([launch_x, p[0], p[1]], dtype=float), False, iterations
+        accepted = False
+        current_norm = float(np.linalg.norm(res))
+        for damping in (1.0, 0.5, 0.25, 0.125, 0.0625):
+            candidate = p - damping * delta
+            candidate_residual = residual(candidate)
+            if candidate_residual is not None and float(np.linalg.norm(candidate_residual)) < current_norm:
+                p = candidate
+                accepted = True
+                break
+        if not accepted:
+            return np.array([launch_x, p[0], p[1]], dtype=float), False, iterations
 
     return np.array([launch_x, p[0], p[1]], dtype=float), False, iterations
 
@@ -799,11 +814,13 @@ def _exact_aim_origins(
     max_iterations: int,
     configuration: dict[str, Any] | None,
     initial_params: dict[int, np.ndarray] | None = None,
+    fallback_flags: list[bool] | None = None,
 ) -> tuple[list[np.ndarray], list[bool], list[int]]:
     origins: list[np.ndarray] = []
     ok: list[bool] = []
     iterations: list[int] = []
     for target_idx, target in enumerate(targets):
+        used_fallback = False
         origin, origin_ok, origin_iterations = _aim_origin_to_stop(
             compiled,
             launch_x,
@@ -817,6 +834,24 @@ def _exact_aim_origins(
             configuration=configuration,
             initial_param=None if initial_params is None else initial_params.get(target_idx),
         )
+        if initial_params is not None and not origin_ok:
+            used_fallback = True
+            origin, origin_ok, cold_iterations = _aim_origin_to_stop(
+                compiled,
+                launch_x,
+                direction,
+                wavelength_nm,
+                target,
+                centers_mm,
+                rotations,
+                tolerance_mm=tolerance_mm,
+                max_iterations=max_iterations,
+                configuration=configuration,
+                initial_param=None,
+            )
+            origin_iterations += cold_iterations
+        if fallback_flags is not None:
+            fallback_flags.append(used_fallback)
         origins.append(origin)
         ok.append(origin_ok)
         iterations.append(origin_iterations)
@@ -925,9 +960,18 @@ def _aim_origins_for_field_wavelength(
     tolerance_mm: float,
     max_iterations: int,
     configuration: dict[str, Any] | None,
+    workspace_key: tuple[Any, ...] | None = None,
 ) -> tuple[list[np.ndarray], list[bool], list[int], dict[str, Any]]:
     strategy = str(aiming.get("strategy", "affine"))
+    workspace = aiming.get("_request_local_workspace")
+    workspace_role = aiming.get("_workspace_role")
     if compiled.aperture_stop_index is None or strategy == "exact" or targets.shape[0] <= 1:
+        initial_params = None
+        if workspace is not None and workspace_role == "candidate" and workspace_key is not None:
+            cached_origins = workspace.get("base_origins", {}).get(workspace_key)
+            if cached_origins is not None and len(cached_origins) == len(targets):
+                initial_params = {index: np.asarray(origin, dtype=float)[1:3] for index, origin in enumerate(cached_origins)}
+        fallback_flags: list[bool] = []
         origins, ok, iterations = _exact_aim_origins(
             compiled,
             launch_x,
@@ -939,13 +983,32 @@ def _aim_origins_for_field_wavelength(
             tolerance_mm=tolerance_mm,
             max_iterations=max_iterations,
             configuration=configuration,
+            initial_params=initial_params,
+            fallback_flags=fallback_flags,
         )
+        if workspace is not None and workspace_role == "base" and workspace_key is not None:
+            workspace.setdefault("base_origins", {})[workspace_key] = np.asarray(origins, dtype=float).copy()
+        if workspace is not None:
+            workspace.setdefault("diagnostics", []).append(
+                {
+                    "role": workspace_role,
+                    "candidate_id": aiming.get("_candidate_id"),
+                    "key": workspace_key,
+                    "warm_seeded": initial_params is not None,
+                    "origins": np.asarray(origins, dtype=float).copy(),
+                    "ok": np.asarray(ok, dtype=bool).copy(),
+                    "iterations": np.asarray(iterations, dtype=int).copy(),
+                    "cold_fallback": np.asarray(fallback_flags, dtype=bool).copy(),
+                    "targets": np.asarray(targets, dtype=float).copy(),
+                }
+            )
         return origins, ok, iterations, {
             "strategy": "exact",
             "cache_hit": False,
             "affine_refined_count": 0,
             "affine_seed_count": 0,
             "exact_solved_count": targets.shape[0],
+            "request_local_warm_start": initial_params is not None,
         }
 
     cache_key = _aiming_cache_key(
@@ -1080,6 +1143,14 @@ def trace_forward(
                     tolerance_mm=tolerance_mm,
                     max_iterations=max_iterations,
                     configuration=configuration,
+                    workspace_key=(
+                        str(distribution),
+                        int(samples_per_field),
+                        str(field.get("id", "field")),
+                        round(float(field.get("theta_y_deg", 0.0)), 12),
+                        round(float(field.get("theta_z_deg", 0.0)), 12),
+                        round(float(wavelength), 9),
+                    ),
                 )
                 if field_meta.get("cache_hit"):
                     aiming_cache_hits += 1

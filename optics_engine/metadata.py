@@ -145,6 +145,7 @@ def meta_payload() -> dict[str, Any]:
             "diffraction_psf": False,
             "async_jobs": False,
             "artifact_store": True,
+            "jacobian_modes": ["forward_diff", "central_diff"],
             "artifacts": {
                 "enabled": True,
                 "ttl_seconds": float(os.environ.get("OPTICS_ARTIFACT_TTL_SECONDS", "1800.0")),

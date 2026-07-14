@@ -46,7 +46,8 @@ class VariableBinding:
     default_step_floor: float
 
     def default_step(self, value: float) -> float:
-        return max(abs(float(value)) * 1.0e-4, self.default_step_floor)
+        relative = 1.0e-3 if self.kind == "asphere_coefficient" else 1.0e-4
+        return max(abs(float(value)) * relative, self.default_step_floor)
 
 
 @dataclass(frozen=True)
@@ -181,3 +182,38 @@ def apply_variable_bindings(
         else:
             setattr(surface, binding.parameter, value)
     return VariableApplication(updated, config, warnings)
+
+
+def variable_value(
+    system: OpticalSystem,
+    configuration: dict[str, Any] | None,
+    binding: VariableBinding,
+) -> float:
+    config = configuration or {}
+    if binding.kind == "iris":
+        configured = (config.get("variables") or {}).get("iris_radius_mm")
+        if configured is not None:
+            return float(configured)
+        stop = next(surface for surface in system.surfaces if surface.kind == "aperture_stop")
+        aperture = stop.aperture
+        if aperture is not None:
+            radius = aperture.outer_semi_diameter_mm if aperture.shape == "annulus" else aperture.semi_diameter_mm
+            if radius is not None:
+                return float(radius)
+        if stop.semi_diameter_mm is not None:
+            return float(stop.semi_diameter_mm)
+        raise _unknown_variable(binding.key)
+    if binding.kind == "group_shift":
+        return float(
+            ((config.get("group_positions") or {}).get(binding.target_id, {}) or {}).get(binding.parameter, 0.0)
+        )
+    surface = next(surface for surface in system.surfaces if surface.id == binding.target_id)
+    if binding.kind == "curvature":
+        return 0.0 if surface.radius_mm == 0.0 else 1.0 / float(surface.radius_mm)
+    if binding.kind == "radius":
+        return float(surface.radius_mm)
+    if binding.kind == "conic":
+        return float(surface.conic)
+    if binding.kind == "asphere_coefficient":
+        return float(surface.asphere_coefficients.get(binding.parameter, 0.0))
+    return float(getattr(surface, binding.parameter))

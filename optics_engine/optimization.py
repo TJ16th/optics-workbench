@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field as dataclass_field
+from dataclasses import dataclass, field as dataclass_field, replace
+import hashlib
+import io
+import json
+import math
 from typing import Any
 
 import numpy as np
 
 from .aberrations import analyze_distortion, analyze_longitudinal_aberration, analyze_ray_fan
 from .analysis import analyze_spot
+from .artifacts import ARTIFACT_STORE, artifact_uri
 from .chromatic import analyze_chromatic_aberration
 from .configuration import surface_gap_values, validate_configuration
 from .evaluation_metrics import SUPPORTED_EVALUATE_METRICS
@@ -18,7 +23,7 @@ from .psf_mtf import analyze_geometric_mtf, analyze_relative_illumination, analy
 from .solves import resolve_configuration_solves
 from .system import CompiledSystem, compile_system
 from .tracing import trace_forward
-from .variables import apply_variable_bindings
+from .variables import apply_variable_bindings, resolve_variable_binding, variable_value
 
 
 @dataclass(frozen=True)
@@ -43,6 +48,27 @@ class OperandResult:
 
 
 @dataclass(frozen=True)
+class JacobianColumnResult:
+    variable: str
+    scheme_used: str
+    step: float
+    violations: list[dict[str, Any]] = dataclass_field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class JacobianResult:
+    status: str
+    mode: str
+    variables: list[str]
+    residuals: list[float]
+    matrix_shape: list[int]
+    matrix: list[list[float | None]] | str
+    steps_used: dict[str, float]
+    columns: list[JacobianColumnResult]
+    metadata: dict[str, Any]
+
+
+@dataclass(frozen=True)
 class EvaluateResult:
     status: str
     merit: MeritResult | None
@@ -52,6 +78,7 @@ class EvaluateResult:
     operands: list[OperandResult] = dataclass_field(default_factory=list)
     configuration_resolved: dict[str, Any] | None = None
     legacy_merit: MeritResult | None = None
+    jacobian: JacobianResult | None = None
 
 
 @dataclass(frozen=True)
@@ -529,7 +556,18 @@ def evaluate_system(
     configuration: dict[str, Any] | None = None,
     variables: dict[str, Any] | None = None,
     ray_sampling: dict[str, Any] | None = None,
+    jacobian: dict[str, Any] | None = None,
 ) -> EvaluateResult:
+    if jacobian is not None:
+        return _evaluate_with_jacobian(
+            system_or_compiled,
+            evaluation,
+            configuration=configuration,
+            variables=variables,
+            ray_sampling=ray_sampling,
+            jacobian=jacobian,
+            warm_refinement=True,
+        )
     base_system = system_or_compiled.system if isinstance(system_or_compiled, CompiledSystem) else system_or_compiled
     variable_application = apply_variable_bindings(base_system, variables, configuration)
     system = variable_application.system
@@ -647,6 +685,268 @@ def evaluate_system(
         configuration_resolved=configuration if solve_results else None,
         legacy_merit=legacy_merit,
     )
+
+
+def _jacobian_error(message_en: str, params: dict[str, Any]) -> StructuredOpticsError:
+    return StructuredOpticsError("optics_value_error", message_en, params={"location": "jacobian", **params})
+
+
+def _resolve_jacobian_plan(
+    base_system: OpticalSystem,
+    configuration: dict[str, Any] | None,
+    variables: dict[str, Any] | None,
+    request: dict[str, Any],
+) -> tuple[str, list[str], dict[str, float], dict[str, float], list[dict[str, Any]]]:
+    unknown_fields = sorted(set(request) - {"mode", "variables", "steps"})
+    if unknown_fields:
+        raise _jacobian_error("Unknown jacobian request field.", {"unknown_fields": unknown_fields})
+    mode = str(request.get("mode", "forward_diff"))
+    if mode not in {"forward_diff", "central_diff"}:
+        raise _jacobian_error(
+            "Unknown jacobian mode.",
+            {"mode": mode, "supported_modes": ["forward_diff", "central_diff"]},
+        )
+    requested_variables = request.get("variables")
+    if not isinstance(requested_variables, list) or not requested_variables or not all(
+        isinstance(key, str) and key for key in requested_variables
+    ):
+        raise _jacobian_error("jacobian.variables must be a non-empty string array.", {"variables": requested_variables})
+    variable_keys = list(requested_variables)
+    duplicates = sorted({key for key in variable_keys if variable_keys.count(key) > 1})
+    if duplicates:
+        raise _jacobian_error("jacobian.variables must not contain duplicates.", {"duplicate_variables": duplicates})
+    request_steps = request.get("steps", {})
+    if not isinstance(request_steps, dict):
+        raise _jacobian_error("jacobian.steps must be an object.", {"steps": request_steps})
+    unknown_steps = sorted(set(request_steps) - set(variable_keys))
+    if unknown_steps:
+        raise _jacobian_error("jacobian.steps contains an unrequested variable.", {"variables": unknown_steps})
+
+    application = apply_variable_bindings(base_system, variables, configuration)
+    base_values: dict[str, float] = {}
+    steps_used: dict[str, float] = {}
+    adjustments: list[dict[str, Any]] = []
+    for key in variable_keys:
+        try:
+            binding = resolve_variable_binding(application.system, key)
+            base = variable_value(application.system, application.configuration, binding)
+        except StructuredOpticsError as exc:
+            raise _jacobian_error(exc.message_en, {"variable": key, **exc.params}) from exc
+        if key in request_steps:
+            try:
+                step = float(request_steps[key])
+            except (TypeError, ValueError) as exc:
+                raise _jacobian_error("Jacobian step must be a finite positive number.", {"variable": key, "step": request_steps[key]}) from exc
+        else:
+            step = binding.default_step(base)
+        if not math.isfinite(step) or step <= 0.0:
+            raise _jacobian_error("Jacobian step must be a finite positive number.", {"variable": key, "step": step})
+        if base + step == base:
+            raised = float(np.nextafter(base, math.inf) - base)
+            if raised <= 0.0 or not math.isfinite(raised):
+                raise _jacobian_error("Jacobian step cannot perturb the base value.", {"variable": key, "base": base, "step": step})
+            adjustments.append({"variable": key, "requested_step": step, "used_step": raised, "reason": "machine_spacing"})
+            step = raised
+        base_values[key] = base
+        steps_used[key] = step
+    return mode, variable_keys, base_values, steps_used, adjustments
+
+
+def _jacobian_sampling(
+    ray_sampling: dict[str, Any] | None,
+    workspace: dict[str, Any] | None,
+    role: str,
+    candidate_id: str,
+) -> dict[str, Any]:
+    sampling = dict(ray_sampling or {})
+    aiming = dict(sampling.get("ray_aiming", {}))
+    if aiming.get("mode", "paraxial") == "full":
+        aiming["strategy"] = "exact"
+        if workspace is not None:
+            aiming["_request_local_workspace"] = workspace
+            aiming["_workspace_role"] = role
+            aiming["_candidate_id"] = candidate_id
+    sampling["ray_aiming"] = aiming
+    return sampling
+
+
+def _residual_vector(result: EvaluateResult) -> list[float] | None:
+    if result.status != "ok":
+        return None
+    values: list[float] = []
+    for operand in result.operands:
+        if operand.residual is None or not math.isfinite(float(operand.residual)):
+            return None
+        values.append(float(operand.residual))
+    return values
+
+
+def _candidate_violation(exc: Exception) -> list[dict[str, Any]]:
+    if isinstance(exc, StructuredOpticsError):
+        return [{"severity": "error", "code": exc.code, "params": dict(exc.params), "message_en": exc.message_en}]
+    return [
+        {
+            "severity": "error",
+            "code": "infeasible",
+            "params": {"exception_type": type(exc).__name__, "message": str(exc)},
+            "message_en": "Jacobian perturbation is infeasible.",
+        }
+    ]
+
+
+def _matrix_payload(
+    matrix: list[list[float | None]],
+    signature: dict[str, Any],
+) -> tuple[list[list[float | None]] | str, dict[str, Any]]:
+    rows = len(matrix)
+    columns = 0 if rows == 0 else len(matrix[0])
+    if rows * columns <= 1000 or any(value is None for row in matrix for value in row):
+        return matrix, {"storage": "inline_json", "dtype": "float64"}
+    array = np.asarray(matrix, dtype=np.float64)
+    stream = io.BytesIO()
+    np.save(stream, array, allow_pickle=False)
+    content = stream.getvalue()
+    canonical = json.dumps(signature, sort_keys=True, separators=(",", ":"), ensure_ascii=True, default=str).encode("utf-8")
+    artifact_id = "jac_" + hashlib.sha256(content + canonical).hexdigest()
+    artifact = ARTIFACT_STORE.put("jacobian", content, content_type="application/x-npy", id=artifact_id)
+    return artifact_uri(artifact), {"storage": "artifact_npy", "dtype": "float64", "artifact_id": artifact_id}
+
+
+def _evaluate_with_jacobian(
+    system_or_compiled: OpticalSystem | CompiledSystem,
+    evaluation: dict[str, Any] | None,
+    *,
+    configuration: dict[str, Any] | None,
+    variables: dict[str, Any] | None,
+    ray_sampling: dict[str, Any] | None,
+    jacobian: dict[str, Any],
+    warm_refinement: bool,
+) -> EvaluateResult:
+    if not isinstance(jacobian, dict):
+        raise _jacobian_error("jacobian must be an object.", {"jacobian": jacobian})
+    base_system = system_or_compiled.system if isinstance(system_or_compiled, CompiledSystem) else system_or_compiled
+    mode, variable_keys, base_values, steps_used, step_adjustments = _resolve_jacobian_plan(
+        base_system, configuration, variables, jacobian
+    )
+    workspace: dict[str, Any] | None = {} if warm_refinement else None
+    base_result = evaluate_system(
+        base_system,
+        evaluation,
+        configuration=configuration,
+        variables=variables,
+        ray_sampling=_jacobian_sampling(ray_sampling, workspace, "base", "base"),
+    )
+    base_residuals = _residual_vector(base_result)
+    if base_residuals is None:
+        return base_result
+
+    matrix: list[list[float | None]] = [[None for _ in variable_keys] for _ in base_residuals]
+    columns: list[JacobianColumnResult] = []
+    candidate_count = 0
+
+    def candidate(key: str, value: float, candidate_id: str) -> tuple[list[float] | None, list[dict[str, Any]]]:
+        nonlocal candidate_count
+        candidate_count += 1
+        candidate_variables = {**(variables or {}), key: value}
+        try:
+            result = evaluate_system(
+                base_system,
+                evaluation,
+                configuration=configuration,
+                variables=candidate_variables,
+                ray_sampling=_jacobian_sampling(ray_sampling, workspace, "candidate", candidate_id),
+            )
+        except (StructuredOpticsError, ValueError, TypeError) as exc:
+            return None, _candidate_violation(exc)
+        residuals = _residual_vector(result)
+        if residuals is None or len(residuals) != len(base_residuals):
+            return None, list(result.violations) or [
+                {
+                    "severity": "error",
+                    "code": "infeasible",
+                    "params": {"candidate_id": candidate_id},
+                    "message_en": "Jacobian candidate did not produce the base residual layout.",
+                }
+            ]
+        return residuals, []
+
+    for column_index, key in enumerate(variable_keys):
+        base_value = base_values[key]
+        step = steps_used[key]
+        plus, plus_violations = candidate(key, base_value + step, f"{key}:+")
+        minus = None
+        minus_violations: list[dict[str, Any]] = []
+        scheme = "failed"
+        values: list[float] | None = None
+        violations: list[dict[str, Any]] = []
+        if mode == "forward_diff":
+            if plus is not None:
+                values = [(plus[row] - base_residuals[row]) / step for row in range(len(base_residuals))]
+                scheme = "forward"
+            else:
+                minus, minus_violations = candidate(key, base_value - step, f"{key}:-fallback")
+                if minus is not None:
+                    values = [(base_residuals[row] - minus[row]) / step for row in range(len(base_residuals))]
+                    scheme = "backward_fallback"
+                else:
+                    violations = plus_violations + minus_violations
+        else:
+            minus, minus_violations = candidate(key, base_value - step, f"{key}:-")
+            if plus is not None and minus is not None:
+                values = [(plus[row] - minus[row]) / (2.0 * step) for row in range(len(base_residuals))]
+                scheme = "central"
+            elif plus is not None:
+                values = [(plus[row] - base_residuals[row]) / step for row in range(len(base_residuals))]
+                scheme = "forward_fallback"
+                violations = minus_violations
+            elif minus is not None:
+                values = [(base_residuals[row] - minus[row]) / step for row in range(len(base_residuals))]
+                scheme = "backward_fallback"
+                violations = plus_violations
+            else:
+                violations = plus_violations + minus_violations
+        if values is not None:
+            for row_index, value in enumerate(values):
+                matrix[row_index][column_index] = float(value)
+        columns.append(JacobianColumnResult(key, scheme, step, violations))
+
+    status = "ok" if all(column.scheme_used != "failed" for column in columns) else "partial"
+    signature = {
+        "system_hash": base_result.metadata.get("system_hash"),
+        "evaluation": evaluation or {},
+        "configuration": configuration or {},
+        "variables": variables or {},
+        "ray_sampling": ray_sampling or {},
+        "jacobian": jacobian,
+    }
+    matrix_value, storage_metadata = _matrix_payload(matrix, signature)
+    diagnostics = [] if workspace is None else workspace.get("diagnostics", [])
+    warm_seeded = sum(1 for row in diagnostics if row.get("warm_seeded"))
+    cold_fallbacks = sum(
+        int(np.sum(np.asarray(row.get("cold_fallback", []), dtype=bool)))
+        for row in diagnostics
+        if row.get("warm_seeded")
+    )
+    jacobian_result = JacobianResult(
+        status=status,
+        mode=mode,
+        variables=variable_keys,
+        residuals=base_residuals,
+        matrix_shape=[len(base_residuals), len(variable_keys)],
+        matrix=matrix_value,
+        steps_used=steps_used,
+        columns=columns,
+        metadata={
+            "strategy": "request_local_warm_refinement" if warm_refinement else "independent_exact",
+            "candidate_evaluations": candidate_count,
+            "warm_seeded_solves": warm_seeded,
+            "cold_fallbacks": cold_fallbacks,
+            "global_cache_write": False,
+            "step_adjustments": step_adjustments,
+            **storage_metadata,
+        },
+    )
+    return replace(base_result, jacobian=jacobian_result)
 
 
 def evaluate_batch(
