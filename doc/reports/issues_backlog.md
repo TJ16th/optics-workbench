@@ -858,3 +858,22 @@ R91でJ2独立exact有限差分とJ3 request-local warm refinementを実装し�
 - warmを選んだcandidateは代表プリセット全体で独立exactより遅くならないか、遅くなる場合は規定閾値でcoldへ切り替わる。
 - response metadataから候補別の反復・fallback・時間内訳を再現できる。
 - R83条件の複数回測定で中央値と分散を報告し、`1.25 x cold`目標に対する達否を安定して判定できる。
+
+## Issue: Layout Viewでaiming_failed baseline光線を明示する
+
+ラベル案: `ui` / `good-first-issue`
+
+### 背景
+
+R94でP011のPreviewを調査したところ、UI既定のmain traceは`alive 81`だが、Layout View用baseline rayは`alive 15 / aiming_failed 12 / blocked 0`だった。`aiming_failed`のうちpathが2点ある9本は、通常の波長色・marginal ray破線のままS2で終端して描画される。pathがS1の1点だけの3本は現行filterで表示されない。`blocked`にはgray短破線と終端×マーカーがある一方、`aiming_failed`には専用class、終端マーカー、Preview内warningがなく、正常な光線が途中で切れたように見える。R73のCarbon warningはAnalysisのray fan/longitudinal向けであり、Preview baselineには表示されない。
+
+### 対応案
+
+`ray-baseline-aiming-failed`の専用意匠と終端マーカーを追加し、Previewの追跡サマリーまたはLayout View付近へbaselineの`aiming_failed`件数をCarbon warningとして表示する。main traceとbaseline traceのstatus件数を混同しない文言にする。P011のaiming収束自体は既存Issue「P011の周辺fieldでfull aiming収束失敗を解消する」で扱う。
+
+### 受け入れ条件
+
+- `aiming_failed` baseline rayが`alive`および`blocked`と視覚的に区別できる。
+- pathが2点以上ある失敗光線には、失敗終端だと分かるマーカーが表示される。
+- Previewでbaselineの`aiming_failed`件数と、main traceのaiming mode/statusを区別して確認できる。
+- P011既定条件を使うE2Eで、9本の描画対象と3本の1点path非表示の扱いが明示的に固定される。
