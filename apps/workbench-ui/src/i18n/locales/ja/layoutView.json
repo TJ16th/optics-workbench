@@ -33,6 +33,9 @@
     "aiming_failed_warning_detail": "Layout baseline光線のexact aimingが{{count}}本失敗しました。部分経路はamberのdiamondマーカーで示します。",
     "show_density_rays": "サンプル光線を表示",
     "spot_diagram": "スポットダイアグラム",
-    "spot_diagram_aria": "スポットダイアグラム"
+    "spot_diagram_aria": "スポットダイアグラム",
+    "expand_spot": "スポットダイアグラムを拡大",
+    "expanded_spot_heading": "スポットダイアグラム拡大表示",
+    "spot_fields": "Fields"
   }
 }

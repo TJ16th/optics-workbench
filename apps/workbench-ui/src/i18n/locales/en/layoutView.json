@@ -33,6 +33,9 @@
     "aiming_failed_warning_detail": "Exact aiming failed for {{count}} layout baseline ray(s). Partial paths use amber diamond markers.",
     "show_density_rays": "Show sampled rays",
     "spot_diagram": "Spot Diagram",
-    "spot_diagram_aria": "Spot diagram"
+    "spot_diagram_aria": "Spot diagram",
+    "expand_spot": "Expand spot diagram",
+    "expanded_spot_heading": "Expanded Spot Diagram",
+    "spot_fields": "Fields"
   }
 }

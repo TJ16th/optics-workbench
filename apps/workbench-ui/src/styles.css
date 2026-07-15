@@ -955,6 +955,73 @@ body {
   border: 1px solid var(--ow-glass-stroke);
 }
 
+.compact-spot-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.compact-spot-heading .cds--btn {
+  flex: 0 0 auto;
+}
+
+.spot-expanded-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 1rem;
+  align-items: start;
+  padding-bottom: 1rem;
+}
+
+.spot-strip.spot-strip--expanded {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.spot-expanded-legend {
+  display: grid;
+  gap: 1.25rem;
+  color: var(--ow-text-secondary);
+  font-size: 0.875rem;
+}
+
+.spot-legend-items {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.spot-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.spot-field-symbol,
+.spot-wavelength-symbol {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  background: var(--ow-text-secondary);
+}
+
+.spot-field-symbol-0 {
+  border-radius: 50%;
+}
+
+.spot-field-symbol-2 {
+  clip-path: polygon(50% 0, 0 100%, 100% 100%);
+}
+
+.spot-wavelength-symbol {
+  width: 18px;
+  height: 3px;
+}
+
 .legend-glass {
   background: var(--ow-glass-fill);
 }
@@ -1211,6 +1278,11 @@ body {
 .spot-point {
   fill: var(--ow-blue);
   opacity: 0.78;
+}
+
+.spot-marker {
+  stroke: var(--ow-marker-fill);
+  stroke-width: 0.7;
 }
 
 .button-column {

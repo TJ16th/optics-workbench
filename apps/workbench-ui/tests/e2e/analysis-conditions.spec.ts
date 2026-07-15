@@ -678,6 +678,35 @@ test('R103 snapshot save stays in place and toast action opens Compare', async (
   await expect(page.locator('.snapshot-row').filter({ hasText: 'snapshot-1' })).toBeVisible()
 })
 
+test('R110 expanded spot modal preserves layout size and distinguishes fields and wavelengths', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en&fixture=all-presets')
+  await selectPresetOption(page, 'P003 Achromat Doublet 100mm Demo')
+  await page.getByRole('button', { name: 'Run Preview' }).click()
+
+  const layout = page.locator('#layout-svg')
+  const compactSpot = page.locator('#spot-svg')
+  const before = await layout.boundingBox()
+  const compactBox = await compactSpot.boundingBox()
+  await page.getByTestId('expand-spot-button').click()
+
+  const expanded = page.getByTestId('spot-expanded-content')
+  await expect(expanded).toBeVisible()
+  const expandedBox = await page.locator('#spot-svg-expanded').boundingBox()
+  expect(expandedBox?.width ?? 0).toBeGreaterThan((compactBox?.width ?? 0) * 2)
+  expect(expandedBox?.width ?? 0).toBeGreaterThan(500)
+  await expect(expanded.getByTestId('spot-field-legend-item')).toHaveCount(3)
+  await expect(expanded.getByTestId('spot-wavelength-legend-item')).toHaveCount(3)
+  await expect(expanded.locator('#spot-svg-expanded .spot-field-0')).not.toHaveCount(0)
+  await expect(expanded.locator('#spot-svg-expanded .spot-field-1')).not.toHaveCount(0)
+  await expect(expanded.locator('#spot-svg-expanded .spot-field-2')).not.toHaveCount(0)
+  expect(await layout.boundingBox()).toEqual(before)
+
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
+  await expect(expanded).toBeHidden()
+  expect(await layout.boundingBox()).toEqual(before)
+})
+
 test('shipped preset selection resets fields to recommended values', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en&fixture=all-presets')

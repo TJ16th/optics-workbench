@@ -10,6 +10,7 @@ import {
   Header,
   HeaderName,
   InlineNotification,
+  Modal,
   NumberInput,
   Select,
   SelectItem,
@@ -22,7 +23,7 @@ import {
   ToggletipContent,
   Theme,
 } from '@carbon/react'
-import { Add, ChartLine, Checkmark, Code, Compare, Download, Information, Menu, Play, Renew, Save, Settings, SidePanelOpen, TrashCan, View } from '@carbon/icons-react'
+import { Add, ChartLine, Checkmark, Code, Compare, Download, Information, Maximize, Menu, Play, Renew, Save, Settings, SidePanelOpen, TrashCan, View } from '@carbon/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { DEFAULT_MTF_FREQUENCIES_LP_PER_MM, defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, runThroughFocusMtf, runVisualComposite, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
@@ -1736,7 +1737,7 @@ function markerAppearance(pointCount: number) {
   return { radius: 1.3, opacity: 0.58 }
 }
 
-function SpotStrip({ trace }: { trace?: TraceResponse }) {
+function SpotStrip({ trace, id = 'spot-svg', expanded = false }: { trace?: TraceResponse; id?: string; expanded?: boolean }) {
   const { t } = useTranslation(['layoutView'])
   const samples = Math.max(1, Number(trace?.metadata.samples_per_field ?? 1))
   const wavelengths = trace?.metadata.wavelengths_nm?.length ? trace.metadata.wavelengths_nm : [undefined]
@@ -1744,17 +1745,18 @@ function SpotStrip({ trace }: { trace?: TraceResponse }) {
     ?.map((y, index) => {
       const wavelengthIndex = Math.floor(index / samples) % wavelengths.length
       const wavelength = wavelengths[wavelengthIndex]
-      return { y, z: trace.sensor_z_mm[index], status: trace.status[index], wavelength, wavelengthIndex }
+      const fieldIndex = Math.floor(index / (samples * wavelengths.length))
+      return { y, z: trace.sensor_z_mm[index], status: trace.status[index], wavelength, wavelengthIndex, fieldIndex }
     })
-    .filter((point): point is { y: number; z: number; status: string; wavelength: number | undefined; wavelengthIndex: number } => Number.isFinite(point.y) && Number.isFinite(point.z))
+    .filter((point): point is { y: number; z: number; status: string; wavelength: number | undefined; wavelengthIndex: number; fieldIndex: number } => Number.isFinite(point.y) && Number.isFinite(point.z))
     .slice(0, 120)
   const pointCount = points?.length ?? 0
   const marker = markerAppearance(pointCount)
 
   return (
     <svg
-      id="spot-svg"
-      className="spot-strip"
+      id={id}
+      className={`spot-strip${expanded ? ' spot-strip--expanded' : ''}`}
       viewBox="0 0 260 220"
       role="img"
       aria-label={t('layoutView.spot_diagram_aria')}
@@ -1775,6 +1777,20 @@ function SpotStrip({ trace }: { trace?: TraceResponse }) {
         const x = 130 + Math.max(-96, Math.min(96, point.y * 16))
         const y = 110 - Math.max(-86, Math.min(86, point.z * 16))
         const color = point.wavelength === undefined ? undefined : wavelengthColor(point.wavelength)
+        const markerClass = `${point.status === 'alive' ? 'spot-point' : 'spot-blocked'} spot-marker spot-field-${point.fieldIndex % 3}`
+        const markerStyle = point.status === 'alive' && color ? { fill: color } : undefined
+        const markerData = {
+          'data-field-index': point.fieldIndex,
+          'data-wavelength-index': point.wavelengthIndex,
+          'data-wavelength-nm': point.wavelength,
+        }
+        if (point.fieldIndex % 3 === 1) {
+          return <rect key={index} x={x - marker.radius} y={y - marker.radius} width={marker.radius * 2} height={marker.radius * 2} className={markerClass} style={markerStyle} {...markerData} />
+        }
+        if (point.fieldIndex % 3 === 2) {
+          const triangle = `${x},${y - marker.radius * 1.2} ${x - marker.radius * 1.1},${y + marker.radius} ${x + marker.radius * 1.1},${y + marker.radius}`
+          return <polygon key={index} points={triangle} className={markerClass} style={markerStyle} {...markerData} />
+        }
         return (
           <circle
             key={index}
@@ -1782,14 +1798,45 @@ function SpotStrip({ trace }: { trace?: TraceResponse }) {
             cy={y}
             r={marker.radius}
             opacity={marker.opacity}
-            className={point.status === 'alive' ? 'spot-point' : 'spot-blocked'}
-            style={point.status === 'alive' && color ? { fill: color } : undefined}
-            data-wavelength-index={point.wavelengthIndex}
-            data-wavelength-nm={point.wavelength}
+            className={markerClass}
+            style={markerStyle}
+            {...markerData}
           />
         )
       })}
     </svg>
+  )
+}
+
+function ExpandedSpotLegend({ trace }: { trace?: TraceResponse }) {
+  const { t } = useTranslation(['layoutView'])
+  const fields = trace?.metadata.evaluated_fields ?? []
+  const wavelengths = trace?.metadata.wavelengths_nm ?? []
+  return (
+    <div className="spot-expanded-legend" data-testid="spot-expanded-legend">
+      <div>
+        <strong>{t('layoutView.spot_fields')}</strong>
+        <div className="spot-legend-items">
+          {fields.map((field, index) => (
+            <span className="spot-legend-item" data-testid="spot-field-legend-item" key={field.id}>
+              <span className={`spot-field-symbol spot-field-symbol-${index % 3}`} aria-hidden="true" />
+              <span>{field.id}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+      <div>
+        <strong>{t('layoutView.legend.wavelengths')}</strong>
+        <div className="spot-legend-items">
+          {wavelengths.map((wavelength) => (
+            <span className="spot-legend-item" data-testid="spot-wavelength-legend-item" key={wavelength}>
+              <span className="spot-wavelength-symbol" style={{ background: wavelengthColor(wavelength) }} aria-hidden="true" />
+              <span>{formatFixed(wavelength, 2)} nm</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -2772,6 +2819,7 @@ export function App() {
     const saved = window.localStorage.getItem(themeStorageKey)
     return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system'
   })()
+  const [spotExpanded, setSpotExpanded] = useState(false)
   const {
     themePreference, setThemePreference, systemDark, setSystemDark, apiBase, setApiBase,
     selectedPresetId, setSelectedPresetId, activeTab, setActiveTab, analysisView, setAnalysisView,
@@ -3633,7 +3681,19 @@ export function App() {
               </div>
               <div className="result-band compact-result-strip" data-testid="compact-result-strip">
                 <div className="panel compact-spot-result">
-                  <h2>{termLabel('spot_diagram', i18n.language)}</h2>
+                  <div className="compact-spot-heading">
+                    <h2>{termLabel('spot_diagram', i18n.language)}</h2>
+                    <Button
+                      size="sm"
+                      kind="ghost"
+                      hasIconOnly
+                      renderIcon={Maximize}
+                      iconDescription={t('layoutView:layoutView.expand_spot')}
+                      data-testid="expand-spot-button"
+                      disabled={!trace}
+                      onClick={() => setSpotExpanded(true)}
+                    />
+                  </div>
                   <SpotStrip trace={trace} />
                 </div>
                 <div className="panel compact-trace-summary">
@@ -3660,6 +3720,18 @@ export function App() {
                   </div>
                 </div>
               </div>
+              <Modal
+                open={spotExpanded}
+                passiveModal
+                size="lg"
+                modalHeading={t('layoutView:layoutView.expanded_spot_heading')}
+                onRequestClose={() => setSpotExpanded(false)}
+              >
+                <div className="spot-expanded-content" data-testid="spot-expanded-content">
+                  <SpotStrip id="spot-svg-expanded" trace={trace} expanded />
+                  <ExpandedSpotLegend trace={trace} />
+                </div>
+              </Modal>
             </div>
           ) : null}
 
