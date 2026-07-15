@@ -135,6 +135,23 @@ type WhiteMtfResponse = {
   metadata?: Record<string, unknown>
 }
 
+export type ParaxialAnalysisResponse = {
+  effective_focal_length_mm: number | null
+  back_focal_length_mm: number | null
+  paraxial_image_position_mm: number | null
+  [key: string]: unknown
+}
+
+export type ParaxialImageDistanceSolveResponse = {
+  type: 'paraxial_image_distance'
+  thickness_of: string
+  previous_thickness_after_mm: number
+  thickness_after_mm: number
+  paraxial_image_position_mm: number
+  sensor_position_mm: number
+  converged: boolean
+}
+
 async function postAnalysis<T>(apiBase: string, endpoint: string, request: object, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${apiBase}${endpoint}`, {
     method: 'POST',
@@ -143,6 +160,20 @@ async function postAnalysis<T>(apiBase: string, endpoint: string, request: objec
     signal,
   })
   return readJson(response, 'api_error')
+}
+
+export async function runParaxialAnalysis(
+  apiBase: string,
+  request: { system_id: string; configuration?: RuntimeConfiguration },
+): Promise<ParaxialAnalysisResponse> {
+  return postAnalysis<ParaxialAnalysisResponse>(apiBase, '/v1/analysis/paraxial', request)
+}
+
+export async function solveParaxialImageDistance(
+  apiBase: string,
+  request: { system_id: string; thickness_of: string; configuration?: RuntimeConfiguration },
+): Promise<ParaxialImageDistanceSolveResponse> {
+  return postAnalysis<ParaxialImageDistanceSolveResponse>(apiBase, '/v1/solve/paraxial-image-distance', request)
 }
 
 const CURVE_ANALYSIS_SAMPLE_COUNT = 15

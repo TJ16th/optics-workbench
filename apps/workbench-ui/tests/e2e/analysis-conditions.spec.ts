@@ -12,6 +12,7 @@ async function mockEngine(
   options: { failArtifacts?: boolean; previewRequests?: unknown[]; registerRequests?: unknown[] } = {},
 ) {
   let registeredSurfaceIds = ['STOP', 'S1', 'S2', 'IMG']
+  let registeredSystem: { surfaces?: Array<{ id?: string; kind?: string; thickness_after_mm?: number }> } = {}
   await page.route('http://127.0.0.1:8000/v1/health', async (route) => {
     await route.fulfill({ json: { status: 'ok' } })
   })
@@ -34,10 +35,36 @@ async function mockEngine(
   })
   await page.route('http://127.0.0.1:8000/v1/systems/register', async (route) => {
     const request = route.request().postDataJSON()
+    registeredSystem = request
     options.registerRequests?.push(request)
     const surfaceIds = request.surfaces?.map((surface: { id?: string }) => surface.id).filter(Boolean)
     if (surfaceIds?.length) registeredSurfaceIds = surfaceIds
     await route.fulfill({ json: { system_id: 'system-test', system_hash: 'hash-test' } })
+  })
+  await page.route('http://127.0.0.1:8000/v1/solve/paraxial-image-distance', async (route) => {
+    const request = route.request().postDataJSON()
+    const gap = registeredSystem.surfaces?.find((surface) => surface.id === request.thickness_of)
+    const previous = gap?.thickness_after_mm ?? 40
+    await route.fulfill({
+      json: {
+        type: 'paraxial_image_distance',
+        thickness_of: request.thickness_of,
+        previous_thickness_after_mm: previous,
+        thickness_after_mm: previous + 2,
+        paraxial_image_position_mm: 102,
+        sensor_position_mm: 102,
+        converged: true,
+      },
+    })
+  })
+  await page.route('http://127.0.0.1:8000/v1/analysis/paraxial', async (route) => {
+    await route.fulfill({
+      json: {
+        effective_focal_length_mm: 50,
+        back_focal_length_mm: 50,
+        paraxial_image_position_mm: 102,
+      },
+    })
   })
   await page.route('http://127.0.0.1:8000/v1/solve/best-focus', async (route) => {
     const request = route.request().postDataJSON()
@@ -2182,4 +2209,55 @@ test('R126 keeps navigation responsive while chart panels report progress and ca
   await page.getByTestId('cancel-analysis-run').click()
   await expect(page.getByTestId(/^analysis-panel-loading-/)).toHaveCount(0)
   await expect(page.getByTestId('cancel-analysis-run')).toHaveCount(0)
+})
+
+test('R123 previews and applies focus alignment with preserved or Y/Z-fitted fields', async ({ page }) => {
+  const registerRequests: unknown[] = []
+  await mockEngine(page, { registerRequests })
+  await page.goto('/?lng=en&fixture=all-presets')
+  await page.getByRole('button', { name: 'Run Preview' }).click()
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
+  await page.locator('#field-1-theta-z').fill('5')
+  await page.locator('#field-2-theta-z').fill('10')
+  const initialY = [Number(await page.locator('#field-1-theta-y').inputValue()), Number(await page.locator('#field-2-theta-y').inputValue())]
+  const initialZ = [Number(await page.locator('#field-1-theta-z').inputValue()), Number(await page.locator('#field-2-theta-z').inputValue())]
+  const registrationBeforePreserve = registerRequests.length
+
+  await page.getByTestId('align-preview-button').click()
+  const preview = page.getByTestId('alignment-preview')
+  await expect(preview).toBeVisible()
+  await expect(page.getByTestId('alignment-focus-row')).toContainText('converged')
+  await expect(page.getByTestId('alignment-field-fit-row')).toContainText('Y:')
+  await expect(page.getByTestId('alignment-field-fit-row')).toContainText('Z:')
+  await expect(page.getByTestId('alignment-real-image-row')).toBeVisible()
+  await expect(page.getByTestId('system-dirty-status')).toHaveCount(0)
+
+  await page.getByTestId('apply-alignment-button').click()
+  await expect.poll(() => registerRequests.length).toBeGreaterThan(registrationBeforePreserve)
+  expect(Number(await page.locator('#field-1-theta-y').inputValue())).toBeCloseTo(initialY[0])
+  expect(Number(await page.locator('#field-2-theta-y').inputValue())).toBeCloseTo(initialY[1])
+  expect(Number(await page.locator('#field-1-theta-z').inputValue())).toBeCloseTo(initialZ[0])
+  expect(Number(await page.locator('#field-2-theta-z').inputValue())).toBeCloseTo(initialZ[1])
+  await expect(page.getByText('Stale results', { exact: true })).toBeVisible()
+  const preservedSystem = registerRequests.at(-1) as { surfaces: Array<{ kind?: string; thickness_after_mm?: number }> }
+  expect(preservedSystem.surfaces.at(-2)?.thickness_after_mm).toBeCloseTo(52)
+
+  const registrationBeforeFit = registerRequests.length
+  await page.getByTestId('align-preview-button').click()
+  await expect(page.getByTestId('alignment-preview')).toBeVisible()
+  await page.getByText('Fit fields to sensor', { exact: true }).click()
+  await page.getByTestId('apply-alignment-button').click()
+  await expect.poll(() => registerRequests.length).toBeGreaterThan(registrationBeforeFit)
+  const fittedY = [Number(await page.locator('#field-1-theta-y').inputValue()), Number(await page.locator('#field-2-theta-y').inputValue())]
+  const fittedZ = [Number(await page.locator('#field-1-theta-z').inputValue()), Number(await page.locator('#field-2-theta-z').inputValue())]
+  expect(fittedY[1]).not.toBeCloseTo(initialY[1])
+  expect(fittedZ[1]).not.toBeCloseTo(initialZ[1])
+  expect(fittedY[0] / fittedY[1]).toBeCloseTo(initialY[0] / initialY[1], 6)
+  expect(fittedZ[0] / fittedZ[1]).toBeCloseTo(initialZ[0] / initialZ[1], 6)
+  const fittedSystem = registerRequests.at(-1) as { surfaces: Array<{ kind?: string; sensor?: { width_mm: number; height_mm: number } }> }
+  expect(fittedSystem.surfaces.find((surface) => surface.kind === 'sensor')?.sensor).toEqual({ width_mm: 36, height_mm: 24 })
+
+  await selectPresetOption(page, 'P006 Keplerian Afocal Telescope Demo')
+  await expect(page.getByTestId('image-plane-policy-panel')).toContainText('Image-plane policy applies only to focal systems with a sensor.')
+  await expect(page.getByTestId('align-preview-button')).toBeDisabled()
 })

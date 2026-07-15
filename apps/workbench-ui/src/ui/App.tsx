@@ -28,7 +28,7 @@ import { Add, ArrowDown, ArrowUp, ChartLine, Checkmark, Code, Compare, Copy, Dow
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { dump as dumpYaml, load as loadYaml } from 'js-yaml'
-import { chartAnalysisRequestCount, DEFAULT_MTF_FREQUENCIES_LP_PER_MM, defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, runThroughFocusMtf, runVisualComposite, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
+import { chartAnalysisRequestCount, DEFAULT_MTF_FREQUENCIES_LP_PER_MM, defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runParaxialAnalysis, runPreview, runThroughFocusMtf, runVisualComposite, solveParaxialImageDistance, validateSystem, getHealth, getMeta, type AnalysisRequest, type ParaxialAnalysisResponse, type ParaxialImageDistanceSolveResponse } from '../api/engine'
 import { presets, visualFixturePresets } from '../domain/presets'
 import type {
   AnalysisField,
@@ -99,6 +99,25 @@ type SystemViewMode = 'table' | 'split'
 type SurfaceNumberField = 'radius_mm' | 'thickness_after_mm' | 'semi_diameter_mm' | 'conic'
 type ZoomPosition = NonNullable<OpticalSystem['zoom_positions']>[number]
 type AnalysisRunProgress = { completed: number; total: number; startedAt: number; active: boolean }
+type AlignAuthority = 'preserve_fields' | 'fit_sensor'
+type AlignmentPreview = {
+  solve: ParaxialImageDistanceSolveResponse
+  paraxial: ParaxialAnalysisResponse
+  focusThresholdMm: number
+  fieldThresholdRatio: number
+  maxFieldYDeg: number
+  maxFieldZDeg: number
+  fittedMaxFieldYDeg: number
+  fittedMaxFieldZDeg: number
+  paraxialHeightYmm: number
+  paraxialHeightZmm: number
+  sensorHalfWidthMm: number
+  sensorHalfHeightMm: number
+  coverageRatioY: number
+  coverageRatioZ: number
+  realImageYmm: number | null
+  realImageZmm: number | null
+}
 
 type Snapshot = {
   id: string
@@ -1513,6 +1532,72 @@ function SurfaceTable({
       </table>
     </div>
   )
+}
+
+function fitFieldsToSensor(fields: AnalysisField[], eflMm: number, widthMm: number, heightMm: number) {
+  const maxY = Math.max(0, ...fields.map((field) => Math.abs(field.theta_y_deg)))
+  const maxZ = Math.max(0, ...fields.map((field) => Math.abs(field.theta_z_deg)))
+  const targetY = Math.atan((widthMm / 2) / Math.abs(eflMm)) * 180 / Math.PI
+  const targetZ = Math.atan((heightMm / 2) / Math.abs(eflMm)) * 180 / Math.PI
+  return {
+    fields: fields.map((field) => ({
+      ...field,
+      theta_y_deg: maxY > Number.EPSILON ? field.theta_y_deg / maxY * targetY : field.theta_y_deg,
+      theta_z_deg: maxZ > Number.EPSILON ? field.theta_z_deg / maxZ * targetZ : field.theta_z_deg,
+    })),
+    maxY,
+    maxZ,
+    targetY,
+    targetZ,
+  }
+}
+
+function chiefRayImageExtents(trace?: TraceResponse) {
+  const points = (trace?.metadata.layout_baseline_rays ?? [])
+    .filter((ray) => ray.role === 'chief' && ray.path.length)
+    .map((ray) => ray.path[ray.path.length - 1]?.point_mm)
+    .filter((point): point is number[] => Array.isArray(point) && point.length >= 3)
+  if (!points.length) return { y: null, z: null }
+  return {
+    y: Math.max(...points.map((point) => Math.abs(point[1]))),
+    z: Math.max(...points.map((point) => Math.abs(point[2]))),
+  }
+}
+
+function makeAlignmentPreview(
+  system: OpticalSystem,
+  fields: AnalysisField[],
+  trace: TraceResponse | undefined,
+  solve: ParaxialImageDistanceSolveResponse,
+  paraxial: ParaxialAnalysisResponse,
+): AlignmentPreview {
+  const sensor = system.surfaces.find((surface) => surface.kind === 'sensor')?.sensor
+  const efl = paraxial.effective_focal_length_mm
+  if (!sensor || !Number.isFinite(efl) || Math.abs(efl as number) <= Number.EPSILON) throw new Error('Sensor dimensions and a finite EFL are required for alignment.')
+  const fitted = fitFieldsToSensor(fields, efl as number, sensor.width_mm, sensor.height_mm)
+  const paraxialHeightYmm = Math.abs((efl as number) * Math.tan(fitted.maxY * Math.PI / 180))
+  const paraxialHeightZmm = Math.abs((efl as number) * Math.tan(fitted.maxZ * Math.PI / 180))
+  const sensorHalfWidthMm = sensor.width_mm / 2
+  const sensorHalfHeightMm = sensor.height_mm / 2
+  const real = chiefRayImageExtents(trace)
+  return {
+    solve,
+    paraxial,
+    focusThresholdMm: 0.001,
+    fieldThresholdRatio: 0.001,
+    maxFieldYDeg: fitted.maxY,
+    maxFieldZDeg: fitted.maxZ,
+    fittedMaxFieldYDeg: fitted.targetY,
+    fittedMaxFieldZDeg: fitted.targetZ,
+    paraxialHeightYmm,
+    paraxialHeightZmm,
+    sensorHalfWidthMm,
+    sensorHalfHeightMm,
+    coverageRatioY: sensorHalfWidthMm > 0 ? paraxialHeightYmm / sensorHalfWidthMm : Number.POSITIVE_INFINITY,
+    coverageRatioZ: sensorHalfHeightMm > 0 ? paraxialHeightZmm / sensorHalfHeightMm : Number.POSITIVE_INFINITY,
+    realImageYmm: real.y,
+    realImageZmm: real.z,
+  }
 }
 
 function SurfaceInspector({
@@ -3381,14 +3466,31 @@ function ImagePlanePolicyPanel({
   onUpdatePolicy,
   onSolve,
   isSolving,
+  alignmentPreview,
+  alignmentAuthority,
+  alignmentIssue,
+  isAligning,
+  onSetAlignmentAuthority,
+  onPreviewAlignment,
+  onApplyAlignment,
 }: {
   policy: ImagePlanePolicyDraft
   disabled: boolean
   onUpdatePolicy: (patch: Partial<ImagePlanePolicyDraft>) => void
   onSolve: () => void
   isSolving: boolean
+  alignmentPreview: AlignmentPreview | null
+  alignmentAuthority: AlignAuthority
+  alignmentIssue: EngineIssue | null
+  isAligning: boolean
+  onSetAlignmentAuthority: (authority: AlignAuthority) => void
+  onPreviewAlignment: () => void
+  onApplyAlignment: () => void
 }) {
-  const { t } = useTranslation(['settings'])
+  const { t, i18n } = useTranslation(['settings'])
+  const focusDelta = alignmentPreview ? alignmentPreview.solve.thickness_after_mm - alignmentPreview.solve.previous_thickness_after_mm : 0
+  const fieldDeltaY = alignmentPreview ? alignmentPreview.paraxialHeightYmm - alignmentPreview.sensorHalfWidthMm : 0
+  const fieldDeltaZ = alignmentPreview ? alignmentPreview.paraxialHeightZmm - alignmentPreview.sensorHalfHeightMm : 0
   return (
     <section className="panel image-plane-policy" data-testid="image-plane-policy-panel">
       <div className="panel-title-row">
@@ -3463,6 +3565,64 @@ function ImagePlanePolicyPanel({
           {t('settings:settings.solve_image_plane')}
         </Button>
       </div>
+      <div className="alignment-command" data-testid="alignment-command">
+        <div className="panel-title-row">
+          <h3>{t('settings:settings.alignment_title')}</h3>
+          <Button size="sm" kind="secondary" renderIcon={Renew} disabled={disabled || isAligning} onClick={onPreviewAlignment} data-testid="align-preview-button">
+            {t('settings:settings.align')}
+          </Button>
+        </div>
+        {alignmentIssue ? (
+          <InlineNotification
+            lowContrast
+            kind={alignmentIssue.severity === 'warning' ? 'warning' : 'error'}
+            title={alignmentIssue.code}
+            subtitle={renderEngineIssue(alignmentIssue, i18n.language).message}
+            data-testid="alignment-issue"
+          />
+        ) : null}
+        {alignmentPreview ? (
+          <div className="alignment-preview" data-testid="alignment-preview">
+            <div className="alignment-preview-section" data-testid="alignment-focus-row">
+              <div className="panel-title-row">
+                <strong>{t('settings:settings.alignment_focus')}</strong>
+                <Tag type={Math.abs(focusDelta) <= alignmentPreview.focusThresholdMm ? 'green' : 'magenta'}>{alignmentPreview.solve.converged ? 'converged' : 'failed'}</Tag>
+              </div>
+              <div className="alignment-values">
+                <span>{t('settings:settings.current')}: {formatFixed(alignmentPreview.solve.previous_thickness_after_mm, 6)} mm</span>
+                <span>{t('settings:settings.solve')}: {formatFixed(alignmentPreview.solve.thickness_after_mm, 6)} mm</span>
+                <span>{t('settings:settings.difference')}: {formatFixed(focusDelta, 6)} mm</span>
+              </div>
+            </div>
+            <div className="alignment-preview-section" data-testid="alignment-field-fit-row">
+              <strong>{t('settings:settings.alignment_field_fit')}</strong>
+              <div className="alignment-values">
+                <span>Y: {formatFixed(alignmentPreview.maxFieldYDeg, 4)} deg → {formatFixed(alignmentPreview.fittedMaxFieldYDeg, 4)} deg</span>
+                <span>Y: {formatFixed(alignmentPreview.paraxialHeightYmm, 4)} / {formatFixed(alignmentPreview.sensorHalfWidthMm, 4)} mm ({formatFixed(alignmentPreview.coverageRatioY * 100, 2)}%)</span>
+                <span>Y {t('settings:settings.difference')}: {formatFixed(fieldDeltaY, 4)} mm</span>
+                <span>Z: {formatFixed(alignmentPreview.maxFieldZDeg, 4)} deg → {formatFixed(alignmentPreview.fittedMaxFieldZDeg, 4)} deg</span>
+                <span>Z: {formatFixed(alignmentPreview.paraxialHeightZmm, 4)} / {formatFixed(alignmentPreview.sensorHalfHeightMm, 4)} mm ({formatFixed(alignmentPreview.coverageRatioZ * 100, 2)}%)</span>
+                <span>Z {t('settings:settings.difference')}: {formatFixed(fieldDeltaZ, 4)} mm</span>
+              </div>
+            </div>
+            <div className="alignment-preview-section" data-testid="alignment-real-image-row">
+              <strong>{t('settings:settings.alignment_real_image')}</strong>
+              <div className="alignment-values">
+                <span>Y: {alignmentPreview.realImageYmm == null ? t('settings:settings.unavailable') : `${formatFixed(alignmentPreview.realImageYmm, 4)} mm (${formatFixed(alignmentPreview.realImageYmm - alignmentPreview.paraxialHeightYmm, 4)} mm)`}</span>
+                <span>Z: {alignmentPreview.realImageZmm == null ? t('settings:settings.unavailable') : `${formatFixed(alignmentPreview.realImageZmm, 4)} mm (${formatFixed(alignmentPreview.realImageZmm - alignmentPreview.paraxialHeightZmm, 4)} mm)`}</span>
+              </div>
+            </div>
+            <p className="muted">{t('settings:settings.alignment_thresholds', { focus: formatFixed(alignmentPreview.focusThresholdMm, 3), field: formatFixed(alignmentPreview.fieldThresholdRatio * 100, 1) })}</p>
+            <ContentSwitcher selectedIndex={alignmentAuthority === 'preserve_fields' ? 0 : 1} onChange={({ name }) => onSetAlignmentAuthority(name as AlignAuthority)}>
+              <Switch name="preserve_fields" text={t('settings:settings.preserve_field_angles')} />
+              <Switch name="fit_sensor" text={t('settings:settings.fit_fields_to_sensor')} />
+            </ContentSwitcher>
+            <Button size="sm" renderIcon={Checkmark} disabled={isAligning || !alignmentPreview.solve.converged} onClick={onApplyAlignment} data-testid="apply-alignment-button">
+              {t('settings:settings.apply_alignment')}
+            </Button>
+          </div>
+        ) : <p className="muted">{t('settings:settings.alignment_empty')}</p>}
+      </div>
     </section>
   )
 }
@@ -3496,6 +3656,10 @@ export function App() {
   const [chartRenderPending, startChartTransition] = useTransition()
   const chartAbortControllerRef = useRef<AbortController | null>(null)
   const analysisProgressTimerRef = useRef<number | undefined>()
+  const [alignmentPreview, setAlignmentPreview] = useState<AlignmentPreview | null>(null)
+  const [alignmentAuthority, setAlignmentAuthority] = useState<AlignAuthority>('preserve_fields')
+  const [alignmentIssue, setAlignmentIssue] = useState<EngineIssue | null>(null)
+  const [alignmentBusy, setAlignmentBusy] = useState(false)
   const [analysisPanels, setAnalysisPanels] = useState<AnalysisChartKey[]>(() => {
     try {
       const saved = JSON.parse(window.localStorage.getItem(analysisPanelsStorageKey) ?? 'null')
@@ -3610,7 +3774,11 @@ export function App() {
   const health = useQuery({ queryKey: ['health', apiBase], queryFn: () => getHealth(apiBase), retry: false })
   const meta = useQuery({ queryKey: ['meta', apiBase], queryFn: () => getMeta(apiBase), retry: false })
 
-  const markAnalysisDirty = () => setAnalysisDirty(true)
+  const markAnalysisDirty = () => {
+    setAnalysisDirty(true)
+    setAlignmentPreview(null)
+    setAlignmentIssue(null)
+  }
 
   const updateField = (index: number, patch: Partial<AnalysisField>) => {
     setAnalysisFields((current) => current.map((field, fieldIndex) => (fieldIndex === index ? { ...field, ...patch } : field)))
@@ -3736,6 +3904,8 @@ export function App() {
     setFocusCurve([])
     setFocusResult(undefined)
     setAnalysisDirty(true)
+    setAlignmentPreview(null)
+    setAlignmentIssue(null)
   }
 
   const addGroup = () => {
@@ -3987,6 +4157,87 @@ export function App() {
     ...(policyDisabled ? {} : { image_plane_policy: makePolicy(readImagePlanePolicyForm(), analysisFields, wavelengths) }),
     options: { store_path: true, profiling: true, include_layout_baseline_rays: true },
   })
+
+  const previewAlignment = async () => {
+    setAlignmentBusy(true)
+    setAlignmentIssue(null)
+    setAlignmentPreview(null)
+    try {
+      if (system.system_type === 'afocal') throw new Error('Alignment is not applicable to afocal systems.')
+      const index = sensorIndex(system)
+      if (index <= 0) throw new Error('Alignment requires a sensor and a final gap surface.')
+      const finalGap = system.surfaces[index - 1]
+      const id = await ensureRegisteredSystem()
+      const solve = await solveParaxialImageDistance(apiBase, {
+        system_id: id,
+        thickness_of: finalGap.id,
+        configuration: runtimeConfiguration,
+      })
+      const paraxial = await runParaxialAnalysis(apiBase, { system_id: id, configuration: runtimeConfiguration })
+      if (!solve.converged) throw new Error('Paraxial image-distance solve did not converge.')
+      setAlignmentPreview(makeAlignmentPreview(system, analysisFields, trace, solve, paraxial))
+      setLastRequest({ system_id: id, solve: { type: 'paraxial_image_distance', thickness_of: finalGap.id }, configuration: runtimeConfiguration })
+      setLastResponse({ solve, paraxial })
+    } catch (error) {
+      setAlignmentIssue(getApiIssue(error) ?? {
+        code: 'optics_value_error',
+        params: { operation: 'align' },
+        message_en: 'Alignment preview is unavailable.',
+        severity: 'error',
+      })
+    } finally {
+      setAlignmentBusy(false)
+    }
+  }
+
+  const applyAlignment = async () => {
+    if (!alignmentPreview) return
+    setAlignmentBusy(true)
+    setAlignmentIssue(null)
+    const nextSystem = cloneSystem(system)
+    const gapIndex = nextSystem.surfaces.findIndex((surface) => surface.id === alignmentPreview.solve.thickness_of)
+    if (gapIndex < 0) {
+      setAlignmentIssue({ code: 'optics_value_error', params: { thickness_of: alignmentPreview.solve.thickness_of }, message_en: 'Alignment gap surface is unavailable.', severity: 'error' })
+      setAlignmentBusy(false)
+      return
+    }
+    nextSystem.surfaces[gapIndex].thickness_after_mm = alignmentPreview.solve.thickness_after_mm
+    const sensor = nextSystem.surfaces.find((surface) => surface.kind === 'sensor')?.sensor
+    const efl = alignmentPreview.paraxial.effective_focal_length_mm
+    const nextFields = alignmentAuthority === 'fit_sensor' && sensor && Number.isFinite(efl)
+      ? fitFieldsToSensor(analysisFields, efl as number, sensor.width_mm, sensor.height_mm).fields
+      : cloneFields(analysisFields)
+
+    setSystem(nextSystem)
+    setSystemDirty(true)
+    setSystemId(null)
+    setSystemHash(null)
+    setValidation(null)
+    setAnalysisFields(nextFields)
+    setAnalysisDirty(true)
+    setLastRequest({ operation: 'apply_alignment', authority: alignmentAuthority, system: nextSystem, fields: nextFields })
+    setLastResponse({ status: 'result_stale', reason: 'alignment_applied' })
+    try {
+      const nextValidation = await validateSystem(apiBase, nextSystem)
+      setValidation(nextValidation)
+      if (nextValidation.status === 'error') {
+        setAlignmentIssue(nextValidation.issues.find((issue) => issue.severity === 'error') ?? nextValidation.issues[0] ?? null)
+        return
+      }
+      const registered = await registerSystem(apiBase, nextSystem)
+      setSystemId(registered.system_id)
+      setSystemHash(registered.system_hash)
+      setSystemDirty(false)
+      setLastResponse({ status: 'alignment_applied', authority: alignmentAuthority, system_id: registered.system_id, result_stale: true })
+      setAlignmentPreview(null)
+    } catch (error) {
+      setAlignmentIssue(getApiIssue(error) ?? {
+        code: 'api_error', params: { operation: 'apply_alignment' }, message_en: 'Alignment apply failed.', severity: 'error',
+      })
+    } finally {
+      setAlignmentBusy(false)
+    }
+  }
 
   const applyPreviewResult = (result: TraceResponse, clean: boolean, navigateToPreview = true) => {
     setTrace(result)
@@ -5162,6 +5413,13 @@ export function App() {
             isSolving={focusMutation.isPending}
             onUpdatePolicy={updateImagePlanePolicy}
             onSolve={() => focusMutation.mutate()}
+            alignmentPreview={alignmentPreview}
+            alignmentAuthority={alignmentAuthority}
+            alignmentIssue={alignmentIssue}
+            isAligning={alignmentBusy}
+            onSetAlignmentAuthority={setAlignmentAuthority}
+            onPreviewAlignment={() => void previewAlignment()}
+            onApplyAlignment={() => void applyAlignment()}
           /> : null}
 
           {activeTab === 'preview' ? (
