@@ -82,6 +82,14 @@
     "chart_picker": "Chart",
     "add_panel": "Add panel",
     "remove_panel": "Remove panel",
-    "run_through_focus": "Run through-focus MTF"
+    "run_through_focus": "Run through-focus MTF",
+    "geometric_psf_title": "PSF (Geometric)",
+    "geometric_mode": "Geometric",
+    "diffraction_not_included": "diffraction included: false",
+    "psf_grid": "Grid",
+    "psf_pixel_size": "Pixel size",
+    "psf_normalization": "Normalization",
+    "psf_centroid": "Centroid",
+    "psf_ray_loss": "Ray loss"
   }
 }

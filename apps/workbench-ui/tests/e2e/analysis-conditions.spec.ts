@@ -294,6 +294,37 @@ async function mockEngine(
       },
     })
   })
+  await page.route('http://127.0.0.1:8000/v1/analysis/psf', async (route) => {
+    const grid = Array.from({ length: 8 }, (_, row) =>
+      Array.from({ length: 8 }, (_, column) => (row === 3 && column === 4 ? 0.5 : row === 4 && column === 3 ? 0.5 : 0)),
+    )
+    await route.fulfill({
+      json: {
+        grid,
+        y_edges_mm: Array.from({ length: 9 }, (_, index) => -0.04 + index * 0.01),
+        z_edges_mm: Array.from({ length: 9 }, (_, index) => -0.04 + index * 0.01),
+        centroid_y_mm: 0.001,
+        centroid_z_mm: -0.002,
+        total_energy: 45,
+        encircled_energy: [{ radius_mm: 0.01, energy_fraction: 1 }],
+        mode: 'geometric',
+        diffraction_included: false,
+        metadata: {
+          normalization: 'sum_to_one',
+          coordinate_unit: 'mm',
+          grid_value_unit: 'relative_energy',
+          grid_shape: [8, 8],
+          pixel_size_y_mm: 0.01,
+          pixel_size_z_mm: 0.01,
+          traced_ray_count: 49,
+          arrived_count: 45,
+          lost_ray_count: 4,
+          ray_loss_fraction: 4 / 49,
+        },
+        artifacts: { psf_array: 'artifact://psf/mock' },
+      },
+    })
+  })
   await page.route('http://127.0.0.1:8000/v1/analysis/mtf', async (route) => {
     const frequencies = route.request().postDataJSON().frequencies_lp_per_mm ?? [0, 10, 20]
     await route.fulfill({
@@ -2260,4 +2291,23 @@ test('R123 previews and applies focus alignment with preserved or Y/Z-fitted fie
   await selectPresetOption(page, 'P006 Keplerian Afocal Telescope Demo')
   await expect(page.getByTestId('image-plane-policy-panel')).toContainText('Image-plane policy applies only to focal systems with a sensor.')
   await expect(page.getByTestId('align-preview-button')).toBeDisabled()
+})
+
+test('R124 exposes the geometric PSF contract in the analysis chart picker', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
+  await page.getByRole('button', { name: 'Run Charts' }).click()
+  await page.getByTestId('analysis-chart-picker-0').selectOption('psf_geometric')
+
+  const panel = page.getByTestId('analysis-workspace-panel-0')
+  await expect(panel.getByRole('heading', { name: 'PSF (Geometric)' })).toBeVisible()
+  await expect(panel.getByText('Geometric', { exact: true })).toBeVisible()
+  await expect(panel.getByText('diffraction included: false', { exact: true })).toBeVisible()
+  const heatmap = panel.getByTestId('geometric-psf-heatmap')
+  await expect(heatmap).toHaveAttribute('data-grid-rows', '8')
+  await expect(heatmap).toHaveAttribute('data-grid-columns', '8')
+  await expect(heatmap).toHaveAttribute('data-normalization', 'sum_to_one')
+  await expect(panel.getByTestId('geometric-psf-contract')).toContainText('4 / 49')
+  await expect(panel.getByTestId('geometric-psf-contract')).toContainText('10.000 x 10.000 µm')
 })

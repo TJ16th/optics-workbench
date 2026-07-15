@@ -32,6 +32,9 @@ class GeometricPSFResult:
     centroid_z_mm: float | None
     total_energy: float
     encircled_energy: list[EncircledEnergyPoint]
+    mode: str = "geometric"
+    diffraction_included: bool = False
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -90,6 +93,30 @@ def _arrived_weights(trace_result: TraceResult) -> np.ndarray:
     return weights / total if total > 0.0 else weights
 
 
+def _geometric_psf_metadata(trace_result: TraceResult, y: np.ndarray, *, grid_size: int, extent_mm: float | None) -> dict[str, Any]:
+    traced_count = int(trace_result.status.size)
+    arrived_count = int(y.size)
+    unique_status, status_counts = np.unique(trace_result.status.astype(str), return_counts=True)
+    metadata: dict[str, Any] = {
+        "mode": "geometric",
+        "diffraction_included": False,
+        "normalization": "sum_to_one",
+        "coordinate_system": "sensor_y_z",
+        "coordinate_unit": "mm",
+        "grid_value_unit": "relative_energy",
+        "grid_shape": [grid_size, grid_size] if arrived_count else [0, 0],
+        "extent_mm": extent_mm,
+        "traced_ray_count": traced_count,
+        "arrived_count": arrived_count,
+        "lost_ray_count": traced_count - arrived_count,
+        "ray_loss_fraction": (traced_count - arrived_count) / traced_count if traced_count else 0.0,
+        "status_counts": {status: int(count) for status, count in zip(unique_status.tolist(), status_counts.tolist())},
+        "field_ids": sorted(set(trace_result.field_ids)),
+        "wavelengths_nm": sorted(float(value) for value in np.unique(trace_result.wavelengths_nm)),
+    }
+    return metadata
+
+
 def encircled_energy(trace_result: TraceResult, radii_mm: list[float] | None = None) -> list[EncircledEnergyPoint]:
     y, z = _arrived_points(trace_result)
     if y.size == 0:
@@ -113,31 +140,51 @@ def analyze_geometric_psf(
     extent_mm: float | None = None,
     encircled_radii_mm: list[float] | None = None,
 ) -> GeometricPSFResult:
+    if grid_size < 1:
+        raise ValueError("grid_size must be at least 1")
+    if extent_mm is not None and extent_mm <= 0.0:
+        raise ValueError("extent_mm must be positive")
     y, z = _arrived_points(trace_result)
     if y.size == 0:
-        return GeometricPSFResult([], [], [], None, None, 0.0, [])
+        return GeometricPSFResult(
+            [], [], [], None, None, 0.0, [],
+            metadata=_geometric_psf_metadata(trace_result, y, grid_size=grid_size, extent_mm=extent_mm),
+        )
 
     weights = _arrived_weights(trace_result)
     cy = float(np.sum(weights * y))
     cz = float(np.sum(weights * z))
+    relative_y = np.round(y - cy, decimals=12)
+    relative_z = np.round(z - cz, decimals=12)
     if extent_mm is None:
-        half = float(max(np.max(np.abs(y - cy)), np.max(np.abs(z - cz)), 1.0e-9))
+        half = float(max(np.max(np.abs(relative_y)), np.max(np.abs(relative_z)), 1.0e-9))
         extent_mm = 2.0 * half
     half_extent = extent_mm / 2.0
-    y_edges = np.linspace(cy - half_extent, cy + half_extent, grid_size + 1)
-    z_edges = np.linspace(cz - half_extent, cz + half_extent, grid_size + 1)
-    hist, y_edges, z_edges = np.histogram2d(y, z, bins=[y_edges, z_edges], weights=weights * y.size)
-    total = float(np.sum(hist))
-    if total > 0:
-        hist = hist / total
+    relative_edges = np.linspace(-half_extent, half_extent, grid_size + 1)
+    hist, relative_y_edges, relative_z_edges = np.histogram2d(
+        relative_y,
+        relative_z,
+        bins=[relative_edges, relative_edges],
+        weights=weights,
+    )
+    y_edges = relative_y_edges + cy
+    z_edges = relative_z_edges + cz
+    normalized_total = float(np.sum(hist))
+    if normalized_total > 0:
+        hist = hist / normalized_total
+    total_energy = float(y.size)
+    metadata = _geometric_psf_metadata(trace_result, y, grid_size=grid_size, extent_mm=float(extent_mm))
+    metadata["pixel_size_y_mm"] = float(y_edges[1] - y_edges[0])
+    metadata["pixel_size_z_mm"] = float(z_edges[1] - z_edges[0])
     return GeometricPSFResult(
         grid=hist.tolist(),
         y_edges_mm=y_edges.tolist(),
         z_edges_mm=z_edges.tolist(),
         centroid_y_mm=cy,
         centroid_z_mm=cz,
-        total_energy=total,
+        total_energy=total_energy,
         encircled_energy=encircled_energy(trace_result, encircled_radii_mm),
+        metadata=metadata,
     )
 
 

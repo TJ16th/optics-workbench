@@ -82,6 +82,14 @@
     "chart_picker": "チャート",
     "add_panel": "パネルを追加",
     "remove_panel": "パネルを削除",
-    "run_through_focus": "デフォーカスMTFを実行"
+    "run_through_focus": "デフォーカスMTFを実行",
+    "geometric_psf_title": "PSF（幾何）",
+    "geometric_mode": "幾何",
+    "diffraction_not_included": "diffraction included: false",
+    "psf_grid": "グリッド",
+    "psf_pixel_size": "ピクセルサイズ",
+    "psf_normalization": "正規化",
+    "psf_centroid": "重心",
+    "psf_ray_loss": "光線損失"
   }
 }

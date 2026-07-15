@@ -40,6 +40,7 @@ import type {
   EngineMeta,
   FieldCurvatureRow,
   FocusCurvePoint,
+  GeometricPsfResult,
   ImagePlanePolicy,
   ImagePlanePolicyApplyTo,
   ImagePlanePolicyMode,
@@ -82,6 +83,7 @@ type AnalysisChartKey =
   | 'mtf_monochromatic'
   | 'mtf_white'
   | 'through_focus'
+  | 'psf_geometric'
 
 const defaultAnalysisPanels: AnalysisChartKey[] = ['longitudinal', 'field_curvature', 'distortion', 'ray_fan']
 const analysisChartKeys = new Set<AnalysisChartKey>([
@@ -93,6 +95,7 @@ const analysisChartKeys = new Set<AnalysisChartKey>([
   'mtf_monochromatic',
   'mtf_white',
   'through_focus',
+  'psf_geometric',
 ])
 
 type SystemViewMode = 'table' | 'split'
@@ -2818,6 +2821,43 @@ function ChartSvg({
   )
 }
 
+function PsfHeatmap({ result, emptyLabel }: { result?: GeometricPsfResult; emptyLabel: string }) {
+  const rows = result?.grid ?? []
+  const columnCount = rows[0]?.length ?? 0
+  if (!rows.length || !columnCount) return <div className="chart-empty">{emptyLabel}</div>
+  const peak = Math.max(...rows.flat(), 0)
+  const cellWidth = 256 / columnCount
+  const cellHeight = 256 / rows.length
+  return (
+    <div className="psf-heatmap-wrap">
+      <svg
+        className="psf-heatmap"
+        viewBox="0 0 256 256"
+        role="img"
+        data-testid="geometric-psf-heatmap"
+        data-grid-rows={rows.length}
+        data-grid-columns={columnCount}
+        data-normalization={result?.metadata.normalization}
+      >
+        <rect width="256" height="256" className="psf-heatmap-background" />
+        {rows.flatMap((row, rowIndex) => row.map((value, columnIndex) => {
+          const normalized = peak > 0 ? Math.max(0, Math.min(1, value / peak)) : 0
+          return <rect
+            key={`${rowIndex}-${columnIndex}`}
+            x={columnIndex * cellWidth}
+            y={(rows.length - rowIndex - 1) * cellHeight}
+            width={cellWidth + 0.1}
+            height={cellHeight + 0.1}
+            fill={`rgba(15, 98, 254, ${normalized})`}
+          />
+        }))}
+        <line x1="128" x2="128" y1="0" y2="256" className="psf-centroid-guide" />
+        <line x1="0" x2="256" y1="128" y2="128" className="psf-centroid-guide" />
+      </svg>
+    </div>
+  )
+}
+
 function seriesFromLongitudinal(points: LongitudinalAberrationPoint[] | undefined): ChartSeries[] {
   const groups = new Map<string, ChartSeries>()
   for (const point of points ?? []) {
@@ -3101,6 +3141,7 @@ function AnalysisCharts({
       case 'mtf_monochromatic': return `${termLabel('mtf', i18n.language)} - ${t('analysis:analysis.mtf_mode_monochromatic')}`
       case 'mtf_white': return `${termLabel('mtf', i18n.language)} - ${t('analysis:analysis.mtf_mode_white')}`
       case 'through_focus': return t('analysis:analysis.through_focus_mtf_title')
+      case 'psf_geometric': return t('analysis:analysis.geometric_psf_title')
     }
   }
 
@@ -3186,6 +3227,25 @@ function AnalysisCharts({
     }
     if (key === 'through_focus') {
       return <ThroughFocusMtfCharts result={result?.throughFocusMtf} />
+    }
+    if (key === 'psf_geometric') {
+      const psf = result?.psf
+      return <>
+        <div className="analysis-mode-tags">
+          <Tag type="blue">{t('analysis:analysis.geometric_mode')}</Tag>
+          <Tag type="gray">{t('analysis:analysis.diffraction_not_included')}</Tag>
+        </div>
+        <PsfHeatmap result={psf} emptyLabel={empty} />
+        {psf ? (
+          <dl className="psf-contract-summary" data-testid="geometric-psf-contract">
+            <div><dt>{t('analysis:analysis.psf_grid')}</dt><dd>{psf.grid.length} x {psf.grid[0]?.length ?? 0}</dd></div>
+            <div><dt>{t('analysis:analysis.psf_pixel_size')}</dt><dd>{formatFixed(Number(psf.metadata.pixel_size_y_mm ?? 0) * 1000, 3)} x {formatFixed(Number(psf.metadata.pixel_size_z_mm ?? 0) * 1000, 3)} µm</dd></div>
+            <div><dt>{t('analysis:analysis.psf_normalization')}</dt><dd>{psf.metadata.normalization}</dd></div>
+            <div><dt>{t('analysis:analysis.psf_centroid')}</dt><dd>Y {formatFixed(psf.centroid_y_mm ?? 0, 6)} / Z {formatFixed(psf.centroid_z_mm ?? 0, 6)} mm</dd></div>
+            <div><dt>{t('analysis:analysis.psf_ray_loss')}</dt><dd>{formatInteger(psf.metadata.lost_ray_count)} / {formatInteger(psf.metadata.traced_ray_count)}</dd></div>
+          </dl>
+        ) : null}
+      </>
     }
 
     const mode: MtfMode = key === 'mtf_white' ? 'white' : 'monochromatic'

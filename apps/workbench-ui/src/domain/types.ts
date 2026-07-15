@@ -325,6 +325,33 @@ export type ThroughFocusMtfResult = {
   metadata: Record<string, unknown>
 }
 
+export type GeometricPsfResult = {
+  grid: number[][]
+  y_edges_mm: number[]
+  z_edges_mm: number[]
+  centroid_y_mm: number | null
+  centroid_z_mm: number | null
+  total_energy: number
+  encircled_energy: Array<{ radius_mm: number; energy_fraction: number }>
+  mode: 'geometric'
+  diffraction_included: false
+  metadata: {
+    normalization: string
+    coordinate_unit: 'mm'
+    grid_value_unit: string
+    grid_shape: [number, number]
+    pixel_size_y_mm?: number
+    pixel_size_z_mm?: number
+    traced_ray_count: number
+    arrived_count: number
+    lost_ray_count: number
+    ray_loss_fraction: number
+    artifact_manifest?: Record<string, unknown>
+    [key: string]: unknown
+  }
+  artifacts?: ArtifactMap
+}
+
 export type ChartAnalysisResult = {
   rayFan?: {
     points: RayFanPoint[]
@@ -337,6 +364,7 @@ export type ChartAnalysisResult = {
   distortion?: { rows: DistortionRow[]; metadata?: Record<string, unknown>; artifacts?: ArtifactMap }
   fieldCurvature?: { rows: FieldCurvatureRow[]; artifacts?: ArtifactMap }
   relativeIllumination?: { rows: RelativeIlluminationRow[]; metadata?: Record<string, unknown>; artifacts?: ArtifactMap }
+  psf?: GeometricPsfResult
   mtf?: {
     points: MtfPoint[]
     mode?: MtfMode

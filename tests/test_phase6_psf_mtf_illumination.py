@@ -1,6 +1,8 @@
 import math
 import time
+from dataclasses import replace
 
+import numpy as np
 import pytest
 
 from optics_engine import (
@@ -107,6 +109,60 @@ def test_geometric_psf_is_normalized_and_encircled_energy_is_monotonic():
     energies = [point.energy_fraction for point in psf.encircled_energy]
     assert energies == sorted(energies)
     assert energies[-1] == pytest.approx(1.0)
+
+
+def test_geometric_psf_contract_is_deterministic_translation_invariant_and_reports_ray_loss():
+    _, trace = phase6_trace()
+    first = analyze_geometric_psf(trace, grid_size=16)
+    second = analyze_geometric_psf(trace, grid_size=16)
+    assert first == second
+    assert first.mode == "geometric"
+    assert first.diffraction_included is False
+    assert first.metadata["normalization"] == "sum_to_one"
+    assert first.metadata["coordinate_unit"] == "mm"
+    assert first.metadata["grid_value_unit"] == "relative_energy"
+    assert first.metadata["arrived_count"] + first.metadata["lost_ray_count"] == first.metadata["traced_ray_count"]
+    assert first.metadata["ray_loss_fraction"] == pytest.approx(
+        first.metadata["lost_ray_count"] / first.metadata["traced_ray_count"]
+    )
+
+    shifted = replace(
+        trace,
+        sensor_y_mm=np.where(np.isfinite(trace.sensor_y_mm), trace.sensor_y_mm + 2.5, trace.sensor_y_mm),
+        sensor_z_mm=np.where(np.isfinite(trace.sensor_z_mm), trace.sensor_z_mm - 1.25, trace.sensor_z_mm),
+    )
+    translated = analyze_geometric_psf(shifted, grid_size=16)
+    assert translated.grid == first.grid
+    assert translated.centroid_y_mm == pytest.approx(first.centroid_y_mm + 2.5)
+    assert translated.centroid_z_mm == pytest.approx(first.centroid_z_mm - 1.25)
+
+
+def test_geometric_psf_api_exposes_artifact_contract():
+    from fastapi.testclient import TestClient
+    from optics_engine.api.main import app
+
+    client = TestClient(app)
+    system_id = client.post("/v1/systems/register", json=phase6_thin_lens().model_dump(mode="json")).json()["system_id"]
+    payload = {
+        "system_id": system_id,
+        "fields": [{"id": "center", "type": "angular", "theta_y_deg": 0.0, "theta_z_deg": 0.0}],
+        "ray_sampling": {"samples_per_field": 49, "pupil_distribution": "grid", "ray_aiming": {"mode": "paraxial"}},
+        "wavelengths_nm": [587.56],
+        "grid_size": 16,
+    }
+    response = client.post("/v1/analysis/psf", json=payload)
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["mode"] == "geometric"
+    assert data["diffraction_included"] is False
+    assert data["artifacts"]["psf_array"].startswith("artifact://psf/")
+    assert data["metadata"]["artifact_manifest"]["psf_array"] == {
+        "content_type": "application/json",
+        "shape": [16, 16],
+        "normalization": "sum_to_one",
+        "value_unit": "relative_energy",
+        "coordinate_unit": "mm",
+    }
 
 
 def test_geometric_mtf_has_unity_zero_frequency_and_rolls_off_for_blur():

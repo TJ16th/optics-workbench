@@ -221,7 +221,7 @@ export function buildCurveAnalysisFields(fields: AnalysisField[]): AnalysisField
 }
 
 export function chartAnalysisRequestCount(request: AnalysisRequest) {
-  return 7 + Math.max(1, request.fields.length)
+  return 8 + Math.max(1, request.fields.length)
 }
 
 export async function runChartAnalyses(
@@ -253,7 +253,7 @@ export async function runChartAnalyses(
       options.onProgress?.(completed, total)
     }
   }
-  const [rayFanY, rayFanZ, longitudinal, distortion, fieldCurvature, msImageSurface, relativeIllumination, mtfByField] = await Promise.all([
+  const [rayFanY, rayFanZ, longitudinal, distortion, fieldCurvature, msImageSurface, relativeIllumination, psf, mtfByField] = await Promise.all([
     tracked(postAnalysis<ChartAnalysisResult['rayFan']>(apiBase, '/v1/analysis/ray-fan', {
       ...request,
       ray_sampling: { ...request.ray_sampling, pupil_distribution: 'fan_y' },
@@ -273,6 +273,11 @@ export async function runChartAnalyses(
     tracked(postAnalysis<ChartAnalysisResult['relativeIllumination']>(apiBase, '/v1/analysis/relative-illumination', {
       ...curveRequest,
       ray_sampling: request.relative_illumination_sampling ?? DEFAULT_RELATIVE_ILLUMINATION_SAMPLING,
+    }, options.signal)),
+    tracked(postAnalysis<ChartAnalysisResult['psf']>(apiBase, '/v1/analysis/psf', {
+      ...request,
+      fields: axialField ? [axialField] : request.fields,
+      grid_size: 32,
     }, options.signal)),
     Promise.all(
       mtfFields.map((field) =>
@@ -313,6 +318,7 @@ export async function runChartAnalyses(
       artifacts: fieldCurvature.artifacts,
     },
     relativeIllumination,
+    psf,
     mtf: {
       points: mtfPoints,
       mode: mtfMode,

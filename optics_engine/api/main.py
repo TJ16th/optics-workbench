@@ -495,7 +495,19 @@ def psf(payload: dict):
         ),
         evaluation_plane,
     )
-    return _attach_json_artifact(data, "psf", "psf_array", data.get("grid", []))
+    data = _attach_json_artifact(data, "psf", "psf_array", data.get("grid", []))
+    metadata = dict(data.get("metadata", {}))
+    artifact_manifest = dict(metadata.get("artifact_manifest", {}))
+    artifact_manifest["psf_array"] = {
+        "content_type": "application/json",
+        "shape": metadata.get("grid_shape", [0, 0]),
+        "normalization": metadata.get("normalization", "sum_to_one"),
+        "value_unit": metadata.get("grid_value_unit", "relative_energy"),
+        "coordinate_unit": metadata.get("coordinate_unit", "mm"),
+    }
+    metadata["artifact_manifest"] = artifact_manifest
+    data["metadata"] = metadata
+    return data
 
 
 @app.post("/v1/analysis/mtf")

@@ -761,6 +761,63 @@ body {
   min-width: 0;
 }
 
+.analysis-mode-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.psf-heatmap-wrap {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  padding: 0.75rem;
+  border: 1px solid var(--ow-border-soft);
+  background: var(--ow-surface-subtle);
+}
+
+.psf-heatmap {
+  width: min(100%, 256px);
+  aspect-ratio: 1;
+}
+
+.psf-heatmap-background {
+  fill: var(--ow-surface-raised);
+}
+
+.psf-centroid-guide {
+  stroke: var(--ow-text);
+  stroke-width: 0.5;
+  stroke-dasharray: 3 3;
+  opacity: 0.5;
+}
+
+.psf-contract-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem 1rem;
+  margin: 0.75rem 0 0;
+  font-size: 0.75rem;
+}
+
+.psf-contract-summary div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.psf-contract-summary dt {
+  color: var(--ow-muted);
+}
+
+.psf-contract-summary dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
 .analysis-chart {
   width: 100%;
   aspect-ratio: 1.64 / 1;
