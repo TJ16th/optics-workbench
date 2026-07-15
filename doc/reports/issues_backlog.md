@@ -27,13 +27,15 @@ G5時点のGitHub Issue草案です。現在の `doc/work_orders/active/` で直
 
 ### 背景
 
-Phase 2では小容量snapshotの単一JSON exportのみ実装済みです。仕様上の `snapshot.json + artifacts/` zip exportは未実装です。
+R122で小容量snapshotおよびProjectの単一JSON export/import、`versions`、`partial`／`missing_artifacts`の保持まで実装済みです。仕様上の `snapshot.json + artifacts/` zip exportとProject zipは未実装です。ブラウザ上でzip生成・readback・大容量artifactのメモリ上限をまとめて扱う必要があるため、R122のUI MVPから分離しました。
 
 ### 対応案
 
 - snapshot本体を `snapshot.json` として保存する。
 - 埋め込み済みartifactを `artifacts/` 以下へ展開する。
 - artifact欠損時は `partial` と欠損一覧をzip内manifestへ含める。
+- Project zipでは`project.json`と各Snapshotのartifactを衝突しないディレクトリへ格納し、単一JSONと同じ`project_schema_version`互換確認を行う。
+- artifact取得に失敗した場合もexportを中断せず、`partial: true`、`missing_artifacts`、取得失敗URIをmanifestへ残す。
 - zip import/readbackの最小テストを追加する。
 
 ### 受け入れ条件

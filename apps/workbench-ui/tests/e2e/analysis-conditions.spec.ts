@@ -29,6 +29,9 @@ async function mockEngine(
       },
     })
   })
+  await page.route('http://127.0.0.1:8000/v1/systems/validate', async (route) => {
+    await route.fulfill({ json: { status: 'ok', issues: [] } })
+  })
   await page.route('http://127.0.0.1:8000/v1/systems/register', async (route) => {
     const request = route.request().postDataJSON()
     options.registerRequests?.push(request)
@@ -2024,4 +2027,110 @@ test('R121 saves P003 Y/Z shifts and restores new and legacy snapshot JSON', asy
   })
   await openRuntimeControls(page)
   await expect(page.locator('#zoom-position-select')).toHaveValue('infinity')
+})
+
+test('R122 round-trips optical system, project, and versioned snapshot files', async ({ page }) => {
+  const registerRequests: unknown[] = []
+  await mockEngine(page, { registerRequests })
+  await page.goto('/?lng=en')
+  await page.getByRole('button', { name: 'System', exact: true }).click()
+
+  const readDownload = async (buttonName: string) => {
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: buttonName, exact: true }).click()
+    const stream = await (await downloadPromise).createReadStream()
+    const chunks: Buffer[] = []
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk))
+    return Buffer.concat(chunks).toString('utf8')
+  }
+
+  const systemJson = await readDownload('Export JSON')
+  const exportedSystem = JSON.parse(systemJson)
+  expect(exportedSystem.name).toContain('Thin Lens')
+  const systemYaml = await readDownload('Export YAML')
+  expect(systemYaml).toContain('name:')
+  exportedSystem.name = 'R122 Imported System'
+  await page.getByTestId('system-import-file').setInputFiles({
+    name: 'system.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(exportedSystem)),
+  })
+  await expect(page.getByTestId('project-io-status')).toContainText('R122 Imported System')
+  await expect.poll(() => registerRequests.some((request) => (request as { name?: string }).name === 'R122 Imported System')).toBe(true)
+  const importedYaml = systemYaml.replace(/name:.*\r?\n/, 'name: R122 YAML System\n')
+  await page.getByTestId('system-import-file').setInputFiles({
+    name: 'system.yaml',
+    mimeType: 'application/yaml',
+    buffer: Buffer.from(importedYaml),
+  })
+  await expect(page.getByTestId('project-io-status')).toContainText('R122 YAML System')
+  await expect.poll(() => registerRequests.some((request) => (request as { name?: string }).name === 'R122 YAML System')).toBe(true)
+  await page.getByRole('button', { name: 'Preview', exact: true }).click()
+  await page.getByRole('button', { name: 'Run Preview' }).click()
+  await expect(page.locator('.layout-view')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Save Snapshot' }).click()
+  await page.getByTestId('snapshot-toast').getByRole('button', { name: 'Open in Compare' }).click()
+  const snapshotDownload = page.waitForEvent('download')
+  await page.getByTestId('snapshot-list').locator('button').filter({ hasText: 'JSON' }).click()
+  const snapshotStream = await (await snapshotDownload).createReadStream()
+  const snapshotChunks: Buffer[] = []
+  for await (const chunk of snapshotStream) snapshotChunks.push(Buffer.from(chunk))
+  const snapshot = JSON.parse(Buffer.concat(snapshotChunks).toString('utf8'))
+  expect(snapshot.configuration).toBeDefined()
+  expect(snapshot.versions.project_schema_version).toBe('0.1.0')
+
+  await page.getByRole('button', { name: 'System', exact: true }).click()
+  const projectJson = await readDownload('Export project')
+  const project = JSON.parse(projectJson)
+  expect(project.optical_systems).toHaveLength(1)
+  expect(project.configurations).toHaveLength(1)
+  expect(project.analysis_conditions).toHaveLength(1)
+  expect(project.results).toHaveLength(1)
+  expect(project.snapshots).toHaveLength(1)
+  project.name = 'R122 Restored Project'
+  project.optical_systems[0].name = 'R122 Restored System'
+  project.versions.ui_version = '0.1.0'
+  await page.getByTestId('project-import-file').setInputFiles({
+    name: 'project.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(project)),
+  })
+  await expect(page.getByTestId('project-io-status')).toContainText('R122 Restored Project')
+  await expect(page.getByTestId('project-io-issue')).toContainText('project_version_mismatch')
+  await expect(page.getByText('R122 Restored System', { exact: true })).toBeVisible()
+
+  const versionedSnapshot = { ...snapshot, id: 'r122-versioned' }
+  await page.getByRole('button', { name: 'Compare', exact: true }).click()
+  await page.getByTestId('snapshot-import-file').setInputFiles({
+    name: 'versioned.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(versionedSnapshot)),
+  })
+  await expect(page.getByTestId('snapshot-import-status')).toContainText('r122-versioned')
+
+  const legacySnapshot = { ...snapshot, id: 'r122-legacy' }
+  delete legacySnapshot.configuration
+  delete legacySnapshot.versions
+  await page.getByRole('button', { name: 'Compare', exact: true }).click()
+  await page.getByTestId('snapshot-import-file').setInputFiles({
+    name: 'legacy.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(legacySnapshot)),
+  })
+  await expect(page.getByTestId('snapshot-import-status')).toContainText('r122-legacy')
+})
+
+test('R122 reports structured issues for invalid project files', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en')
+  await page.getByRole('button', { name: 'System', exact: true }).click()
+  await page.getByTestId('project-import-file').setInputFiles({
+    name: 'invalid-project.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ project_id: 'broken', name: 'Broken', versions: {} })),
+  })
+  const issue = page.getByTestId('project-io-issue')
+  await expect(issue).toContainText('optics_value_error')
+  await expect(issue).toContainText('optical_systems')
 })

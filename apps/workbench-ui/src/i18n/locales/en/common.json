@@ -116,6 +116,23 @@
       "surfaces": "Surfaces",
       "system_id": "system_id"
     },
+    "project_io": {
+      "title": "Project files",
+      "description": "Export or restore the current optical system and workbench state.",
+      "system": "Optical system",
+      "project": "Project",
+      "export_json": "Export JSON",
+      "export_yaml": "Export YAML",
+      "import_system": "Import system",
+      "export_project": "Export project",
+      "import_project": "Import project",
+      "complete": "File operation complete",
+      "system_exported": "Optical system exported as {{format}}.",
+      "system_imported": "Imported and registered {{name}}.",
+      "project_exported": "Project {{name}} exported.",
+      "project_imported": "Project {{name}} imported.",
+      "snapshot_imported": "Snapshot {{name}} imported."
+    },
     "debug": {
       "build_info": "Build Info",
       "git_commit": "git_commit",

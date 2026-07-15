@@ -26,6 +26,7 @@ import {
 import { Add, ArrowDown, ArrowUp, ChartLine, Checkmark, Code, Compare, Copy, Download, Information, Maximize, Menu, Play, Renew, Save, Settings, SidePanelOpen, TrashCan, View } from '@carbon/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { dump as dumpYaml, load as loadYaml } from 'js-yaml'
 import { DEFAULT_MTF_FREQUENCIES_LP_PER_MM, defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, runThroughFocusMtf, runVisualComposite, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
 import { presets, visualFixturePresets } from '../domain/presets'
 import type {
@@ -35,6 +36,7 @@ import type {
   DistortionRow,
   EngineIssue,
   EvaluationPlaneMetadata,
+  EngineMeta,
   FieldCurvatureRow,
   FocusCurvePoint,
   ImagePlanePolicy,
@@ -125,7 +127,37 @@ type Snapshot = {
   partial: boolean
   metrics: Record<string, string | number | null>
   trace_status: string[]
+  versions?: ProjectVersions
 }
+
+type ProjectVersions = {
+  engine_version: string
+  api_schema_version: string
+  ui_version: string
+  preset_version: string
+  material_catalog_version: string
+  result_schema_version: string
+  design_system_version: string
+  project_schema_version: string
+}
+
+type ProjectArchive = {
+  project_id: string
+  name: string
+  created_at: string
+  updated_at: string
+  optical_systems: OpticalSystem[]
+  configurations: RuntimeConfiguration[]
+  analysis_conditions: Snapshot['analysis'][]
+  results: Snapshot['results'][]
+  snapshots: Snapshot[]
+  compare_sets: Array<{ left_snapshot_id: string; right_snapshot_id: string }>
+  versions: ProjectVersions
+}
+
+const uiVersion = '0.2.0'
+const designSystemVersion = '1.96.0'
+const projectSchemaVersion = '0.1.0'
 
 type ImagePlanePolicyDraft = {
   mode: ImagePlanePolicyMode
@@ -214,6 +246,70 @@ function cloneSystem(system: OpticalSystem): OpticalSystem {
 
 function cloneConfiguration(configuration?: RuntimeConfiguration): RuntimeConfiguration {
   return configuration ? JSON.parse(JSON.stringify(configuration)) : {}
+}
+
+function currentProjectVersions(meta?: EngineMeta): ProjectVersions {
+  return {
+    engine_version: meta?.engine_version ?? 'unknown',
+    api_schema_version: meta?.api_schema_version ?? 'unknown',
+    ui_version: uiVersion,
+    preset_version: meta?.preset_version ?? 'unknown',
+    material_catalog_version: meta?.material_catalog_version ?? 'unknown',
+    result_schema_version: meta?.result_schema_version ?? 'unknown',
+    design_system_version: designSystemVersion,
+    project_schema_version: projectSchemaVersion,
+  }
+}
+
+function compatibilityIssues(saved: Partial<ProjectVersions> | undefined, current: ProjectVersions): EngineIssue[] {
+  if (!saved) return []
+  return (Object.keys(current) as Array<keyof ProjectVersions>).flatMap((key) => {
+    const savedValue = saved[key]
+    return savedValue && savedValue !== current[key]
+      ? [{
+          code: 'project_version_mismatch',
+          params: { version_key: key, saved: savedValue, current: current[key] },
+          message_en: `Saved ${key} ${savedValue} differs from current ${current[key]}.`,
+          severity: 'warning' as const,
+        }]
+      : []
+  })
+}
+
+function requireRecord(value: unknown, expected: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`Expected ${expected}.`)
+  return value as Record<string, unknown>
+}
+
+function parseOpticalSystem(value: unknown): OpticalSystem {
+  const record = requireRecord(value, 'OpticalSystem object')
+  if (typeof record.name !== 'string' || !Array.isArray(record.surfaces) || !Array.isArray(record.materials)) {
+    throw new Error('OpticalSystem requires name, surfaces, and materials.')
+  }
+  return record as OpticalSystem
+}
+
+function parseSnapshot(value: unknown): Snapshot {
+  const record = requireRecord(value, 'Snapshot object')
+  if (typeof record.id !== 'string' || !record.system || !record.analysis || !record.results || !record.metrics) {
+    throw new Error('Snapshot requires id, system, analysis, results, and metrics.')
+  }
+  parseOpticalSystem(record.system)
+  return record as Snapshot
+}
+
+function parseProject(value: unknown): ProjectArchive {
+  const record = requireRecord(value, 'Project object')
+  const arrayKeys = ['optical_systems', 'configurations', 'analysis_conditions', 'results', 'snapshots', 'compare_sets'] as const
+  if (typeof record.project_id !== 'string' || typeof record.name !== 'string' || !record.versions) {
+    throw new Error('Project requires project_id, name, and versions.')
+  }
+  for (const key of arrayKeys) if (!Array.isArray(record[key])) throw new Error(`Project requires ${key} array.`)
+  const project = record as ProjectArchive
+  if (!project.optical_systems.length) throw new Error('Project requires at least one optical system.')
+  project.optical_systems.forEach(parseOpticalSystem)
+  project.snapshots.forEach(parseSnapshot)
+  return project
 }
 
 function uniquePositionId(system: OpticalSystem, base = 'position') {
@@ -2293,6 +2389,88 @@ async function exportChart(chart: ExportChart, language: string, format: 'svg' |
   link.click()
 }
 
+function ProjectIoPanel({
+  issues,
+  status,
+  onExportSystem,
+  onExportProject,
+  onImportSystem,
+  onImportProject,
+}: {
+  issues: EngineIssue[]
+  status: string
+  onExportSystem: (format: 'json' | 'yaml') => void
+  onExportProject: () => void
+  onImportSystem: (file: File) => void
+  onImportProject: (file: File) => void
+}) {
+  const { t } = useTranslation(['common'])
+  return (
+    <div className="project-io" data-testid="project-io">
+      <div className="panel-heading">
+        <div>
+          <h3>{t('common.project_io.title')}</h3>
+          <p className="muted">{t('common.project_io.description')}</p>
+        </div>
+      </div>
+      <div className="project-io-groups">
+        <div>
+          <strong>{t('common.project_io.system')}</strong>
+          <div className="button-row">
+            <Button size="sm" kind="secondary" renderIcon={Download} onClick={() => onExportSystem('json')}>{t('common.project_io.export_json')}</Button>
+            <Button size="sm" kind="ghost" renderIcon={Download} onClick={() => onExportSystem('yaml')}>{t('common.project_io.export_yaml')}</Button>
+            <label className="file-action" htmlFor="system-import-file">
+              <span>{t('common.project_io.import_system')}</span>
+              <input
+                id="system-import-file"
+                data-testid="system-import-file"
+                type="file"
+                accept=".json,.yaml,.yml,application/json,application/yaml,text/yaml"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) onImportSystem(file)
+                  event.target.value = ''
+                }}
+              />
+            </label>
+          </div>
+        </div>
+        <div>
+          <strong>{t('common.project_io.project')}</strong>
+          <div className="button-row">
+            <Button size="sm" kind="secondary" renderIcon={Download} onClick={onExportProject}>{t('common.project_io.export_project')}</Button>
+            <label className="file-action" htmlFor="project-import-file">
+              <span>{t('common.project_io.import_project')}</span>
+              <input
+                id="project-import-file"
+                data-testid="project-import-file"
+                type="file"
+                accept=".json,application/json"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) onImportProject(file)
+                  event.target.value = ''
+                }}
+              />
+            </label>
+          </div>
+        </div>
+      </div>
+      {status ? <InlineNotification lowContrast kind="success" title={t('common.project_io.complete')} subtitle={status} data-testid="project-io-status" /> : null}
+      {issues.map((issue, index) => (
+        <InlineNotification
+          key={`${issue.code}-${index}`}
+          lowContrast
+          kind={issue.severity === 'warning' ? 'warning' : 'error'}
+          title={`${issue.code}`}
+          subtitle={`${issue.message_en} ${JSON.stringify(issue.params)}`}
+          data-testid="project-io-issue"
+        />
+      ))}
+    </div>
+  )
+}
+
 function SnapshotList({
   snapshots,
   onExport,
@@ -3300,6 +3478,8 @@ export function App() {
   const [surfaceEditIssue, setSurfaceEditIssue] = useState<EngineIssue | null>(null)
   const [positionSaveOpen, setPositionSaveOpen] = useState(false)
   const [positionSaveId, setPositionSaveId] = useState('')
+  const [projectIoIssues, setProjectIoIssues] = useState<EngineIssue[]>([])
+  const [projectIoStatus, setProjectIoStatus] = useState('')
   const [analysisPanels, setAnalysisPanels] = useState<AnalysisChartKey[]>(() => {
     try {
       const saved = JSON.parse(window.localStorage.getItem(analysisPanelsStorageKey) ?? 'null')
@@ -3479,6 +3659,40 @@ export function App() {
     irisRadiusRef.current = nextIris
     setIrisRadiusMm(nextIris)
     setIrisMaxRadiusMm(nextIris)
+  }
+
+  const restoreRuntimeConfiguration = (nextSystem: OpticalSystem, saved?: RuntimeConfiguration) => {
+    if (!saved) {
+      resetMotionControls(nextSystem)
+      return
+    }
+    const configuration = cloneConfiguration(saved)
+    const nextZoom = configuration.zoom_position ?? nextSystem.zoom_positions?.[0]?.id ?? ''
+    const nextGroup = Object.keys(configuration.group_positions ?? {})[0] ?? motionGroupIds(nextSystem)[0] ?? ''
+    const baseShift = zoomBaseShift(nextSystem, nextZoom, nextGroup)
+    const nextFocusShift = (configuration.group_positions?.[nextGroup]?.shift_x_mm ?? baseShift) - baseShift
+    const decenter = configuration.decenters?.[0]
+    const tilt = configuration.tilts?.[0]
+    const nextDraft: DecenterTiltDraft = {
+      targetGroupId: decenter?.group ?? tilt?.group ?? decenterTiltGroupIds(nextSystem)[0] ?? '',
+      shiftY: decenter?.shift_y_mm ?? 0,
+      shiftZ: decenter?.shift_z_mm ?? 0,
+      tiltY: tilt?.tilt_y_deg ?? 0,
+      tiltZ: tilt?.tilt_z_deg ?? 0,
+      rollX: tilt?.roll_x_deg ?? 0,
+      rotationReference: tilt?.rotation_center?.reference === 'to_surface_vertex' ? 'to_surface_vertex' : 'from_surface_vertex',
+    }
+    const nextIris = configuration.variables?.iris_radius_mm ?? apertureStopRadius(nextSystem) ?? 1
+    setZoomPositionId(nextZoom)
+    setFocusGroupId(nextGroup)
+    setFocusShiftMm(nextFocusShift)
+    setDecenterTiltDraft(nextDraft)
+    decenterTiltDraftRef.current = nextDraft
+    setIrisRadiusMm(nextIris)
+    setIrisMaxRadiusMm(nextIris)
+    irisRadiusRef.current = nextIris
+    runtimeConfigurationRef.current = configuration
+    setRuntimeConfiguration(configuration)
   }
 
   const markSystemChanged = (nextSystem: OpticalSystem) => {
@@ -4011,6 +4225,8 @@ export function App() {
   const requestSummary = analysisRequestSummary(lastRequest)
 
   const saveSnapshot = async () => {
+    setProjectIoIssues([])
+    setProjectIoStatus('')
     const snapshotId = `snapshot-${snapshots.length + 1}`
     const artifactUris = collectArtifactUris({ trace, chartResult, focusResult })
     const artifacts: Record<string, unknown> = {}
@@ -4058,6 +4274,7 @@ export function App() {
         focus_curve_points: focusCurve.length,
       },
       trace_status: trace?.status ?? [],
+      versions: currentProjectVersions(meta.data),
     }
     setSnapshots((current) => [snapshot, ...current])
     setCompareLeftId((current) => current || snapshotId)
@@ -4066,7 +4283,8 @@ export function App() {
   }
 
   const exportSnapshotJson = (snapshot: Snapshot) => {
-    downloadText(`${snapshot.id}.json`, JSON.stringify(snapshot, null, 2), 'application/json')
+    const exported = { ...snapshot, versions: snapshot.versions ?? currentProjectVersions(meta.data) }
+    downloadText(`${snapshot.id}.json`, JSON.stringify(exported, null, 2), 'application/json')
   }
 
   const restoreSnapshot = (snapshot: Snapshot) => {
@@ -4083,36 +4301,7 @@ export function App() {
     setFocusResult(snapshot.results.focus)
     setEvaluationPlane(snapshot.analysis.evaluation_plane)
     setFocusCurve(snapshot.results.focus?.focus_curve ?? snapshot.analysis.evaluation_plane?.focus_curve ?? [])
-    if (!snapshot.configuration) {
-      resetMotionControls(nextSystem)
-    } else {
-      const configuration = cloneConfiguration(snapshot.configuration)
-      const nextZoom = configuration.zoom_position ?? nextSystem.zoom_positions?.[0]?.id ?? ''
-      const nextGroup = Object.keys(configuration.group_positions ?? {})[0] ?? motionGroupIds(nextSystem)[0] ?? ''
-      const baseShift = zoomBaseShift(nextSystem, nextZoom, nextGroup)
-      const nextFocusShift = (configuration.group_positions?.[nextGroup]?.shift_x_mm ?? baseShift) - baseShift
-      const decenter = configuration.decenters?.[0]
-      const tilt = configuration.tilts?.[0]
-      const nextDraft: DecenterTiltDraft = {
-        targetGroupId: decenter?.group ?? tilt?.group ?? decenterTiltGroupIds(nextSystem)[0] ?? '',
-        shiftY: decenter?.shift_y_mm ?? 0,
-        shiftZ: decenter?.shift_z_mm ?? 0,
-        tiltY: tilt?.tilt_y_deg ?? 0,
-        tiltZ: tilt?.tilt_z_deg ?? 0,
-        rollX: tilt?.roll_x_deg ?? 0,
-        rotationReference: tilt?.rotation_center?.reference === 'to_surface_vertex' ? 'to_surface_vertex' : 'from_surface_vertex',
-      }
-      const nextIris = configuration.variables?.iris_radius_mm ?? apertureStopRadius(nextSystem) ?? 1
-      setZoomPositionId(nextZoom)
-      setFocusGroupId(nextGroup)
-      setFocusShiftMm(nextFocusShift)
-      setDecenterTiltDraft(nextDraft)
-      decenterTiltDraftRef.current = nextDraft
-      setIrisRadiusMm(nextIris)
-      irisRadiusRef.current = nextIris
-      runtimeConfigurationRef.current = configuration
-      setRuntimeConfiguration(configuration)
-    }
+    restoreRuntimeConfiguration(nextSystem, snapshot.configuration)
     setAnalysisDirty(false)
     setLastRequest(snapshot.configuration ?? {})
     setLastResponse({ status: 'snapshot_restored', snapshot_id: snapshot.id })
@@ -4121,13 +4310,20 @@ export function App() {
 
   const importSnapshot = (file: File) => {
     void file.text().then((text) => {
-      const parsed = JSON.parse(text) as Partial<Snapshot>
-      if (!parsed.id || !parsed.system || !parsed.analysis || !parsed.results || !parsed.metrics) throw new Error('invalid snapshot')
-      const imported = parsed as Snapshot
+      const imported = parseSnapshot(JSON.parse(text))
+      setProjectIoIssues(compatibilityIssues(imported.versions, currentProjectVersions(meta.data)))
+      setProjectIoStatus(t('common.project_io.snapshot_imported', { name: imported.id }))
       setSnapshots((current) => [imported, ...current.filter((snapshot) => snapshot.id !== imported.id)])
       setCompareLeftId(imported.id)
       restoreSnapshot(imported)
-    }).catch(() => {
+    }).catch((error) => {
+      setProjectIoStatus('')
+      setProjectIoIssues([{
+        code: 'optics_value_error',
+        params: { input: file.name, expected: 'snapshot JSON' },
+        message_en: error instanceof Error ? error.message : 'Snapshot JSON is invalid or incomplete.',
+        severity: 'error',
+      }])
       setLastResponse({
         code: 'optics_value_error',
         params: { input: file.name, expected: 'snapshot JSON' },
@@ -4135,6 +4331,158 @@ export function App() {
         severity: 'error',
       })
     })
+  }
+
+  const currentAnalysisCondition = (): Snapshot['analysis'] => ({
+    fields: cloneFields(analysisFields),
+    wavelengths: wavelengths.map((sample) => ({ ...sample })),
+    samples_per_field: samplesPerField,
+    pupil_distribution: pupilDistribution,
+    aiming_mode: aimingMode,
+    mtf_mode: mtfMode,
+    ...(policyDisabled ? {} : { image_plane_policy: makePolicy(readImagePlanePolicyForm(), analysisFields, wavelengths) }),
+    evaluation_plane: evaluationPlane,
+  })
+
+  const currentResultBundle = (): Snapshot['results'] => ({
+    trace,
+    charts: chartResult,
+    focus: focusResult,
+  })
+
+  const installImportedSystem = async (nextSystem: OpticalSystem) => {
+    try {
+      const nextValidation = await validateSystem(apiBase, nextSystem)
+      setValidation(nextValidation)
+      if (nextValidation.status === 'error') {
+        setProjectIoIssues(nextValidation.issues)
+        setProjectIoStatus('')
+        return false
+      }
+      const registered = await registerSystem(apiBase, nextSystem)
+      setSystem(cloneSystem(nextSystem))
+      setSystemId(registered.system_id)
+      setSystemHash(registered.system_hash)
+      setSystemDirty(false)
+      setAnalysisDirty(true)
+      setSelectedSurfaceId(nextSystem.surfaces[0]?.id ?? '')
+      setSelectedGroupId('')
+      setTrace(undefined)
+      setChartResult(undefined)
+      setMtfResults({})
+      setVisualResult(undefined)
+      setEvaluationPlane(undefined)
+      setFocusCurve([])
+      setFocusResult(undefined)
+      return true
+    } catch (error) {
+      const issue = getApiIssue(error) ?? {
+        code: 'api_error', params: {}, message_en: 'Import validation failed.', severity: 'error' as const,
+      }
+      setProjectIoIssues([issue])
+      setProjectIoStatus('')
+      return false
+    }
+  }
+
+  const importSystemFile = async (file: File) => {
+    setProjectIoIssues([])
+    setProjectIoStatus('')
+    try {
+      const text = await file.text()
+      const parsed = /\.ya?ml$/i.test(file.name) ? loadYaml(text) : JSON.parse(text)
+      const nextSystem = parseOpticalSystem(parsed)
+      if (!await installImportedSystem(nextSystem)) return
+      resetMotionControls(nextSystem)
+      setAnalysisFields(presetFields({}))
+      setWavelengths(initialWavelengths(nextSystem))
+      setLastRequest(nextSystem)
+      setLastResponse({ status: 'system_imported', input: file.name })
+      setProjectIoStatus(t('common.project_io.system_imported', { name: nextSystem.name }))
+    } catch (error) {
+      const issue: EngineIssue = {
+        code: 'optics_value_error',
+        params: { input: file.name, expected: 'OpticalSystem JSON or YAML' },
+        message_en: error instanceof Error ? error.message : 'OpticalSystem file is invalid.',
+        severity: 'error',
+      }
+      setProjectIoIssues([issue])
+      setLastResponse(issue)
+    }
+  }
+
+  const exportSystemFile = (format: 'json' | 'yaml') => {
+    const content = format === 'yaml'
+      ? dumpYaml(system, { noRefs: true, lineWidth: 120 })
+      : JSON.stringify(system, null, 2)
+    downloadText(`optical-system.${format}`, content, format === 'yaml' ? 'application/yaml' : 'application/json')
+    setProjectIoIssues([])
+    setProjectIoStatus(t('common.project_io.system_exported', { format: format.toUpperCase() }))
+  }
+
+  const exportProject = () => {
+    const now = isoNow()
+    const project: ProjectArchive = {
+      project_id: `project-${system.name.toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'optical-system'}`,
+      name: system.name,
+      created_at: now,
+      updated_at: now,
+      optical_systems: [cloneSystem(system)],
+      configurations: [cloneConfiguration(runtimeConfiguration)],
+      analysis_conditions: [currentAnalysisCondition()],
+      results: [currentResultBundle()],
+      snapshots: snapshots.map((snapshot) => ({ ...snapshot, versions: snapshot.versions ?? currentProjectVersions(meta.data) })),
+      compare_sets: compareLeftId && compareRightId ? [{ left_snapshot_id: compareLeftId, right_snapshot_id: compareRightId }] : [],
+      versions: currentProjectVersions(meta.data),
+    }
+    downloadText(`${project.project_id}.json`, JSON.stringify(project, null, 2), 'application/json')
+    setProjectIoIssues([])
+    setProjectIoStatus(t('common.project_io.project_exported', { name: project.name }))
+  }
+
+  const importProjectFile = async (file: File) => {
+    setProjectIoIssues([])
+    setProjectIoStatus('')
+    try {
+      const project = parseProject(JSON.parse(await file.text()))
+      const nextSystem = cloneSystem(project.optical_systems[0])
+      if (!await installImportedSystem(nextSystem)) return
+      const analysis = project.analysis_conditions[0]
+      if (analysis) {
+        setAnalysisFields(cloneFields(analysis.fields))
+        setWavelengths(analysis.wavelengths.map((sample) => ({ ...sample })))
+        setSamplesPerField(analysis.samples_per_field)
+        setPupilDistribution(analysis.pupil_distribution)
+        setAimingMode(analysis.aiming_mode)
+        setMtfMode(analysis.mtf_mode)
+        setEvaluationPlane(analysis.evaluation_plane)
+        setFocusCurve(analysis.evaluation_plane?.focus_curve ?? [])
+      }
+      restoreRuntimeConfiguration(nextSystem, project.configurations[0])
+      const results = project.results[0]
+      setTrace(results?.trace)
+      setChartResult(results?.charts)
+      setFocusResult(results?.focus)
+      setFocusCurve(results?.focus?.focus_curve ?? analysis?.evaluation_plane?.focus_curve ?? [])
+      setSnapshots(project.snapshots)
+      setCompareLeftId(project.compare_sets[0]?.left_snapshot_id ?? project.snapshots[0]?.id ?? '')
+      setCompareRightId(project.compare_sets[0]?.right_snapshot_id ?? '')
+      setAnalysisDirty(false)
+      const issues = compatibilityIssues(project.versions, currentProjectVersions(meta.data))
+      setProjectIoIssues(issues)
+      setProjectIoStatus(t('common.project_io.project_imported', { name: project.name }))
+      setLastRequest(project)
+      setLastResponse({ status: 'project_imported', project_id: project.project_id, compatibility_issues: issues })
+    } catch (error) {
+      const issue: EngineIssue = {
+        code: 'optics_value_error',
+        params: { input: file.name, expected: 'Project JSON conforming to project_schema_version' },
+        message_en: error instanceof Error ? error.message : 'Project JSON is invalid or incomplete.',
+        severity: 'error',
+      }
+      setProjectIoIssues([issue])
+      setLastResponse(issue)
+    }
   }
 
   const writeBackSensor = () => {
@@ -4386,6 +4734,14 @@ export function App() {
                   onRemove={removePosition}
                   onMove={movePosition}
                 />
+                <ProjectIoPanel
+                  issues={projectIoIssues}
+                  status={projectIoStatus}
+                  onExportSystem={exportSystemFile}
+                  onExportProject={exportProject}
+                  onImportSystem={(file) => void importSystemFile(file)}
+                  onImportProject={(file) => void importProjectFile(file)}
+                />
               </div>
               {systemViewMode === 'split' ? <aside className="panel system-mini-layout" data-testid="system-mini-layout">
                 <div className="panel-heading">
@@ -4593,6 +4949,17 @@ export function App() {
                 <h2>{t('analysis:analysis.compare_placeholder_title')}</h2>
                 <p>{t('analysis:analysis.compare_placeholder')}</p>
                 <SnapshotList snapshots={snapshots} onExport={exportSnapshotJson} onRestore={restoreSnapshot} onImport={importSnapshot} />
+                {projectIoStatus ? <InlineNotification lowContrast kind="success" title={t('common.project_io.complete')} subtitle={projectIoStatus} data-testid="snapshot-import-status" /> : null}
+                {projectIoIssues.map((issue, index) => (
+                  <InlineNotification
+                    key={`compare-${issue.code}-${index}`}
+                    lowContrast
+                    kind={issue.severity === 'warning' ? 'warning' : 'error'}
+                    title={issue.code}
+                    subtitle={`${issue.message_en} ${JSON.stringify(issue.params)}`}
+                    data-testid="snapshot-import-issue"
+                  />
+                ))}
               </section>
               <CompareView snapshots={snapshots} leftId={compareLeftId} rightId={compareRightId} onSetLeft={setCompareLeftId} onSetRight={setCompareRightId} />
             </div>
@@ -4818,6 +5185,21 @@ export function App() {
         </aside>
       </main>
 
+      {activeTab !== 'system' && activeTab !== 'compare' && (projectIoStatus || projectIoIssues.length) ? (
+        <div className="project-io-toast" data-testid="project-io-global-notice">
+          {projectIoStatus ? <InlineNotification lowContrast kind="success" title={t('common.project_io.complete')} subtitle={projectIoStatus} data-testid="snapshot-import-status" /> : null}
+          {projectIoIssues.map((issue, index) => (
+            <InlineNotification
+              key={`global-${issue.code}-${index}`}
+              lowContrast
+              kind={issue.severity === 'warning' ? 'warning' : 'error'}
+              title={issue.code}
+              subtitle={`${issue.message_en} ${JSON.stringify(issue.params)}`}
+              data-testid="snapshot-import-issue"
+            />
+          ))}
+        </div>
+      ) : null}
       {snapshotNoticeId ? (
         <div className="snapshot-toast" data-testid="snapshot-toast">
           <ToastNotification

@@ -116,6 +116,23 @@
       "surfaces": "面数",
       "system_id": "system_id"
     },
+    "project_io": {
+      "title": "Projectファイル",
+      "description": "現在の光学系とWorkbench状態をexport／復元します。",
+      "system": "Optical system",
+      "project": "Project",
+      "export_json": "JSON export",
+      "export_yaml": "YAML export",
+      "import_system": "System import",
+      "export_project": "Project export",
+      "import_project": "Project import",
+      "complete": "ファイル操作完了",
+      "system_exported": "光学系を{{format}}でexportしました。",
+      "system_imported": "{{name}}をimportして登録しました。",
+      "project_exported": "Project {{name}}をexportしました。",
+      "project_imported": "Project {{name}}をimportしました。",
+      "snapshot_imported": "Snapshot {{name}}をimportしました。"
+    },
     "debug": {
       "build_info": "Build Info",
       "git_commit": "git_commit",

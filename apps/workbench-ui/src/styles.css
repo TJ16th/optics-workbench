@@ -1095,6 +1095,52 @@ body {
   margin-bottom: 0.75rem;
 }
 
+.project-io {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--ow-border-soft);
+}
+
+.project-io-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(18rem, 1fr));
+  gap: 1rem;
+}
+
+.project-io-groups > div {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.file-action {
+  position: relative;
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  padding: 0 1rem;
+  color: var(--cds-text-on-color, #fff);
+  background: var(--cds-button-primary, #0f62fe);
+  cursor: pointer;
+}
+
+.file-action:focus-within {
+  outline: 2px solid var(--cds-focus, #0f62fe);
+  outline-offset: 2px;
+}
+
+.file-action input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+@media (max-width: 900px) {
+  .project-io-groups {
+    grid-template-columns: 1fr;
+  }
+}
+
 .surface-inspector__identity {
   margin-top: 0.75rem;
 }
@@ -1687,6 +1733,16 @@ body {
   .surface-inspector__fields {
     grid-template-columns: repeat(2, minmax(11rem, 1fr));
   }
+}
+
+.project-io-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 6900;
+  width: min(30rem, calc(100vw - 2rem));
+  display: grid;
+  gap: 0.5rem;
 }
 
 @media (max-width: 720px) {

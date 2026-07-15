@@ -214,6 +214,11 @@
       "message": "image_plane_policyは{system_type}系には適用できません。",
       "action": "focal系で評価像面を指定するか、この解析では像面ポリシーを無効にしてください。"
     },
+    "project_version_mismatch": {
+      "label": "Project version不一致",
+      "message": "保存済み{version_key} {saved}と現在値{current}が一致しません。",
+      "action": "差分を確認し、import後に検証と解析を再実行してください。"
+    },
     "unknown_material": {
       "label": "未知の硝材",
       "message": "硝材が不明です。",

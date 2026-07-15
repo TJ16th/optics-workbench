@@ -214,6 +214,11 @@
       "message": "image_plane_policy cannot be applied to {system_type} systems.",
       "action": "Use image-plane policy with focal systems, or disable it for this analysis."
     },
+    "project_version_mismatch": {
+      "label": "Project version mismatch",
+      "message": "Saved {version_key} {saved} differs from current {current}.",
+      "action": "Review the version difference, then validate and rerun analyses after import."
+    },
     "unknown_material": {
       "label": "Unknown material",
       "message": "Material is unknown.",
