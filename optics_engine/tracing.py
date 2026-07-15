@@ -1232,6 +1232,82 @@ def _path_stop_y(path: list[dict[str, Any]], stop_id: str | None) -> float | Non
     return float(value) if value is not None and np.isfinite(float(value)) else None
 
 
+def _layout_aim_origins(
+    compiled: CompiledSystem,
+    launch_x: float,
+    direction: np.ndarray,
+    wavelength_nm: float,
+    targets: np.ndarray,
+    centers_mm: np.ndarray,
+    rotations: np.ndarray,
+    *,
+    tolerance_mm: float,
+    max_iterations: int,
+    configuration: dict[str, Any] | None,
+    allow_effective_edge: bool,
+) -> tuple[list[np.ndarray], list[bool], list[int], list[float]]:
+    origins, ok, iterations = _exact_aim_origins(
+        compiled,
+        launch_x,
+        direction,
+        wavelength_nm,
+        targets,
+        centers_mm,
+        rotations,
+        tolerance_mm=tolerance_mm,
+        max_iterations=max_iterations,
+        configuration=configuration,
+    )
+    target_scales = [1.0] * len(targets)
+    if not allow_effective_edge or not ok or not ok[0]:
+        return origins, ok, iterations, target_scales
+
+    center_target = targets[0]
+    for target_index in range(1, len(targets)):
+        if ok[target_index]:
+            continue
+
+        low = 0.0
+        high = 1.0
+        best_origin = origins[0].copy()
+        best_iterations = iterations[0]
+        found_effective_edge = False
+        # A fixed iteration count keeps the displayed effective pupil edge
+        # deterministic while resolving well below the aiming tolerance.
+        for _ in range(24):
+            scale = 0.5 * (low + high)
+            candidate_target = center_target + (targets[target_index] - center_target) * scale
+            candidate_origin, candidate_ok, candidate_iterations = _aim_origin_to_stop(
+                compiled,
+                launch_x,
+                direction,
+                wavelength_nm,
+                candidate_target,
+                centers_mm,
+                rotations,
+                tolerance_mm=tolerance_mm,
+                max_iterations=max_iterations,
+                configuration=configuration,
+                initial_param=None,
+            )
+            if candidate_ok:
+                low = scale
+                best_origin = candidate_origin
+                best_iterations = candidate_iterations
+                found_effective_edge = True
+            else:
+                high = scale
+
+        if not found_effective_edge:
+            continue
+        origins[target_index] = best_origin
+        ok[target_index] = True
+        iterations[target_index] = best_iterations
+        target_scales[target_index] = low
+
+    return origins, ok, iterations, target_scales
+
+
 def _layout_baseline_rays(
     compiled: CompiledSystem,
     fields: list[dict[str, Any]],
@@ -1262,7 +1338,7 @@ def _layout_baseline_rays(
         direction = field_direction(float(field.get("theta_y_deg", 0.0)), float(field.get("theta_z_deg", 0.0)))
         field_id = str(field.get("id", f"field_{field_index + 1}"))
         for wavelength_index, wavelength in enumerate(wavelengths):
-            origins, aiming_ok, aiming_iterations = _exact_aim_origins(
+            origins, aiming_ok, aiming_iterations, aiming_target_scales = _layout_aim_origins(
                 compiled,
                 launch_x,
                 direction,
@@ -1273,6 +1349,7 @@ def _layout_baseline_rays(
                 tolerance_mm=tolerance_mm,
                 max_iterations=max_iterations,
                 configuration=configuration,
+                allow_effective_edge=stop_inner <= 0.0,
             )
             trace = _trace_raw(
                 compiled,
@@ -1301,6 +1378,8 @@ def _layout_baseline_rays(
                         "stop_y_mm": _path_stop_y(trace.paths[ray_index], stop_id),
                         "aiming_ok": bool(aiming_ok[ray_index]),
                         "aiming_iterations": int(aiming_iterations[ray_index]),
+                        "aiming_target_scale": float(aiming_target_scales[ray_index]),
+                        "aiming_target_adjusted": bool(aiming_target_scales[ray_index] < 1.0),
                     }
                 )
     return rows

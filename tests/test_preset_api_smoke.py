@@ -388,6 +388,33 @@ def test_p011_planar_double_gauss_has_six_positive_thickness_elements():
     assert analyze_spot(center_trace).rms_radius_mm == pytest.approx(0.4653881107408963)
 
 
+@pytest.mark.parametrize("preset_id", ["P004", "P011"])
+def test_fast_double_gauss_layout_baseline_uses_deterministic_effective_pupil_edges(preset_id: str):
+    preset = next(item for item in _shipped_presets() if item["id"] == preset_id)
+    compiled = compile_system(load_system(preset["system"]))
+    trace_args = (
+        compiled,
+        preset["recommendedFields"],
+        {"samples_per_field": 1, "pupil_distribution": "hexapolar", "ray_aiming": {"mode": "full"}},
+        preset["system"]["wavelengths_nm"]["samples"],
+        {"store_path": True, "include_layout_baseline_rays": True},
+    )
+
+    first = trace_forward(*trace_args).metadata["layout_baseline_rays"]
+    second = trace_forward(*trace_args).metadata["layout_baseline_rays"]
+
+    assert len(first) == 27
+    assert first == second
+    assert all(ray["aiming_ok"] for ray in first)
+    assert all(ray["status"] != "aiming_failed" for ray in first)
+    assert all(0.0 < ray["aiming_target_scale"] <= 1.0 for ray in first)
+    assert any(ray["aiming_target_adjusted"] for ray in first)
+    assert all(
+        ray["aiming_target_adjusted"] == (ray["aiming_target_scale"] < 1.0)
+        for ray in first
+    )
+
+
 def test_p012_tessar_meets_f28_target_with_four_positive_thickness_elements():
     preset = next(item for item in _shipped_presets() if item["id"] == "P012")
     compiled = compile_system(load_system(preset["system"]))
