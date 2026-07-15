@@ -67,6 +67,7 @@ import { useNavigationShellState, useWorkbenchControllerState, useWorkbenchMutat
 
 const themeStorageKey = 'optics-workbench-theme'
 const analysisPanelsStorageKey = 'optics-workbench-analysis-panels'
+const systemViewStorageKey = 'optics-workbench-system-view'
 const presetCategoryOrder: Preset['catalog']['category'][] = ['photographic', 'simple_educational', 'telescope_afocal', 'visual', 'fixtures']
 
 type AnalysisChartKey =
@@ -90,6 +91,9 @@ const analysisChartKeys = new Set<AnalysisChartKey>([
   'mtf_white',
   'through_focus',
 ])
+
+type SystemViewMode = 'table' | 'split'
+type SurfaceNumberField = 'radius_mm' | 'thickness_after_mm' | 'semi_diameter_mm' | 'conic'
 
 type Snapshot = {
   id: string
@@ -218,6 +222,24 @@ function scalarNumber(value: unknown): number | undefined {
 function formatScalarNumber(value: unknown) {
   const next = scalarNumber(value)
   return next ?? '-'
+}
+
+function updateScalarNumber(current: Surface['semi_diameter_mm'], value: number): NonNullable<Surface['semi_diameter_mm']> {
+  return current && typeof current === 'object'
+    ? { variable: current.variable, default: value }
+    : value
+}
+
+function surfaceSupportsRadius(surface: Surface) {
+  return ['refractive', 'mirror'].includes(surface.kind) && surface.surface_type !== 'plane'
+}
+
+function surfaceSupportsAsphere(surface: Surface) {
+  return ['refractive', 'mirror'].includes(surface.kind) && surface.surface_type === 'aspherical_even'
+}
+
+function surfaceSupportsSemiDiameter(surface: Surface) {
+  return ['refractive', 'mirror', 'thin_lens', 'aperture_stop', 'mechanical_aperture'].includes(surface.kind)
 }
 
 function cloneFields(fields: AnalysisField[]): AnalysisField[] {
@@ -1359,6 +1381,130 @@ function SurfaceTable({
         </tbody>
       </table>
     </div>
+  )
+}
+
+function SurfaceInspector({
+  surface,
+  surfaceIndex,
+  surfaceCount,
+  materials,
+  dirty,
+  issue,
+  onUpdateNumber,
+  onUpdateAsphereCoefficient,
+  onUpdateMaterial,
+}: {
+  surface?: Surface
+  surfaceIndex: number
+  surfaceCount: number
+  materials: string[]
+  dirty: boolean
+  issue: EngineIssue | null
+  onUpdateNumber: (index: number, field: SurfaceNumberField, value: number) => void
+  onUpdateAsphereCoefficient: (index: number, coefficient: string, value: number) => void
+  onUpdateMaterial: (index: number, materialId: string) => void
+}) {
+  const { t, i18n } = useTranslation(['surfaceTable'])
+  if (!surface) return null
+  const asphereKeys = Array.from(new Set(['A4', ...Object.keys(surface.asphere_coefficients ?? {})]))
+    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+  const semiDiameter = scalarNumber(
+    surface.aperture?.shape === 'annulus'
+      ? surface.aperture.outer_semi_diameter_mm
+      : surface.aperture?.semi_diameter_mm ?? surface.semi_diameter_mm,
+  ) ?? 0
+  const radiusEnabled = surfaceSupportsRadius(surface)
+  const asphereEnabled = surfaceSupportsAsphere(surface)
+  const thicknessEnabled = surfaceIndex >= 0 && surfaceIndex < surfaceCount - 1
+  const materialEnabled = surface.kind === 'refractive'
+  const semiDiameterEnabled = surfaceSupportsSemiDiameter(surface)
+  const renderedIssue = issue ? renderEngineIssue(issue, i18n.language) : null
+  return (
+    <section className="surface-inspector" data-testid="surface-inspector">
+      <div className="panel-heading">
+        <div>
+          <h2>{t('surfaceTable.inspector.title')}</h2>
+          <p className="muted">{t('surfaceTable.inspector.selected', { surface_id: surface.id })}</p>
+        </div>
+        {dirty ? <Tag type="magenta">{t('surfaceTable.inspector.dirty')}</Tag> : null}
+      </div>
+      {renderedIssue ? (
+        <InlineNotification
+          lowContrast
+          kind={issueKind(issue?.severity ?? 'error')}
+          title={`${renderedIssue.title} (${renderedIssue.code})`}
+          subtitle={renderedIssue.message}
+          data-testid="surface-inspector-issue"
+        />
+      ) : null}
+      <div className="surface-inspector__identity">
+        <TextInput id="surface-inspector-id" labelText={t('surfaceTable.columns.id')} value={surface.id} readOnly />
+        <TextInput id="surface-inspector-kind" labelText={t('surfaceTable.columns.kind')} value={surface.kind} readOnly />
+      </div>
+      <p className="muted">{t('surfaceTable.inspector.identity_read_only')}</p>
+      <div className="surface-inspector__fields">
+        <NumberInput
+          id="surface-inspector-radius"
+          label={t('surfaceTable.inspector.radius_mm')}
+          value={surface.radius_mm ?? 0}
+          step={0.1}
+          disabled={!radiusEnabled}
+          onChange={(_, data) => onUpdateNumber(surfaceIndex, 'radius_mm', numericInputValue(data.value, surface.radius_mm ?? 0))}
+        />
+        <NumberInput
+          id="surface-inspector-thickness"
+          label={t('surfaceTable.inspector.thickness_after_mm')}
+          value={surface.thickness_after_mm ?? 0}
+          step={0.1}
+          disabled={!thicknessEnabled}
+          onChange={(_, data) => onUpdateNumber(surfaceIndex, 'thickness_after_mm', numericInputValue(data.value, surface.thickness_after_mm ?? 0))}
+        />
+        <Select
+          id="surface-inspector-material"
+          labelText={t('surfaceTable.inspector.material')}
+          value={surface.material_after ?? materials[0] ?? ''}
+          disabled={!materialEnabled}
+          onChange={(event) => onUpdateMaterial(surfaceIndex, event.target.value)}
+        >
+          {materials.map((materialId) => <SelectItem key={materialId} value={materialId} text={materialId} />)}
+        </Select>
+        <NumberInput
+          id="surface-inspector-semi-diameter"
+          label={t('surfaceTable.inspector.semi_diameter_mm')}
+          value={semiDiameter}
+          min={0}
+          step={0.1}
+          disabled={!semiDiameterEnabled}
+          onChange={(_, data) => onUpdateNumber(surfaceIndex, 'semi_diameter_mm', numericInputValue(data.value, semiDiameter))}
+        />
+        <NumberInput
+          id="surface-inspector-conic"
+          label={t('surfaceTable.inspector.conic')}
+          value={surface.conic ?? 0}
+          step={0.01}
+          disabled={!asphereEnabled}
+          onChange={(_, data) => onUpdateNumber(surfaceIndex, 'conic', numericInputValue(data.value, surface.conic ?? 0))}
+        />
+        {asphereKeys.map((coefficient) => (
+          <NumberInput
+            id={`surface-inspector-${coefficient.toLowerCase()}`}
+            key={coefficient}
+            label={coefficient}
+            value={surface.asphere_coefficients?.[coefficient] ?? 0}
+            step={0.000001}
+            disabled={!asphereEnabled}
+            onChange={(_, data) => onUpdateAsphereCoefficient(surfaceIndex, coefficient, numericInputValue(data.value, surface.asphere_coefficients?.[coefficient] ?? 0))}
+          />
+        ))}
+      </div>
+      <p className="muted" data-testid="surface-inspector-applicability">
+        {t('surfaceTable.inspector.applicability', {
+          radius: radiusEnabled ? t('surfaceTable.inspector.editable') : t('surfaceTable.inspector.not_applicable'),
+          asphere: asphereEnabled ? t('surfaceTable.inspector.editable') : t('surfaceTable.inspector.not_applicable'),
+        })}
+      </p>
+    </section>
   )
 }
 
@@ -2963,7 +3109,7 @@ function ImagePlanePolicyPanel({
 }
 
 export function App() {
-  const { t, i18n } = useTranslation(['common', 'settings', 'analysis', 'layoutView'])
+  const { t, i18n } = useTranslation(['common', 'settings', 'analysis', 'layoutView', 'surfaceTable'])
   const fixtureMode = new URLSearchParams(window.location.search).get('fixture')
   const visiblePresets = presets.filter((item) => item.visible !== false)
   const availablePresets = sortPresetsByCategory(
@@ -2978,6 +3124,10 @@ export function App() {
     return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system'
   })()
   const [spotExpanded, setSpotExpanded] = useState(false)
+  const [systemViewMode, setSystemViewMode] = useState<SystemViewMode>(() => (
+    window.localStorage.getItem(systemViewStorageKey) === 'split' ? 'split' : 'table'
+  ))
+  const [surfaceEditIssue, setSurfaceEditIssue] = useState<EngineIssue | null>(null)
   const [analysisPanels, setAnalysisPanels] = useState<AnalysisChartKey[]>(() => {
     try {
       const saved = JSON.parse(window.localStorage.getItem(analysisPanelsStorageKey) ?? 'null')
@@ -3035,6 +3185,10 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem(analysisPanelsStorageKey, JSON.stringify(analysisPanels))
   }, [analysisPanels])
+
+  useEffect(() => {
+    window.localStorage.setItem(systemViewStorageKey, systemViewMode)
+  }, [systemViewMode])
 
   const resolvedTheme = themePreference === 'system' ? (systemDark ? 'dark' : 'light') : themePreference
   const {
@@ -3199,6 +3353,74 @@ export function App() {
       surface.aperture.outer_semi_diameter_mm = value
       surface.semi_diameter_mm = value
     }
+    markSystemChanged(nextSystem)
+    setSelectedSurfaceId(surface.id)
+    setSelectedGroupId('')
+    scheduleSystemPreview(nextSystem)
+  }
+
+  const updateSurfaceNumber = (index: number, field: SurfaceNumberField, value: number) => {
+    const currentSurface = system.surfaces[index]
+    if (!currentSurface || !Number.isFinite(value)) return
+    if (field === 'semi_diameter_mm' && value <= 0) {
+      setSurfaceEditIssue({
+        code: 'invalid_semi_diameter',
+        params: { surface_id: currentSurface.id, value, constraint: 'value > 0' },
+        message_en: 'surface semi-diameter must be positive',
+        severity: 'error',
+        surface_id: currentSurface.id,
+      })
+      return
+    }
+    const innerRadius = scalarNumber(currentSurface.aperture?.inner_semi_diameter_mm)
+    if (field === 'semi_diameter_mm' && innerRadius !== undefined && value <= innerRadius) {
+      setSurfaceEditIssue({
+        code: 'invalid_semi_diameter',
+        params: { surface_id: currentSurface.id, value, inner_semi_diameter_mm: innerRadius, constraint: 'outer > inner' },
+        message_en: 'annulus outer semi-diameter must exceed its inner semi-diameter',
+        severity: 'error',
+        surface_id: currentSurface.id,
+      })
+      return
+    }
+    const nextSystem = cloneSystem(system)
+    const surface = nextSystem.surfaces[index]
+    if (field === 'semi_diameter_mm') {
+      surface.semi_diameter_mm = updateScalarNumber(surface.semi_diameter_mm, value)
+      if (surface.aperture?.shape === 'annulus') {
+        surface.aperture.outer_semi_diameter_mm = updateScalarNumber(surface.aperture.outer_semi_diameter_mm, value)
+      } else if (surface.aperture) {
+        surface.aperture.semi_diameter_mm = updateScalarNumber(surface.aperture.semi_diameter_mm, value)
+      }
+    } else {
+      surface[field] = value
+    }
+    setSurfaceEditIssue(null)
+    markSystemChanged(nextSystem)
+    setSelectedSurfaceId(surface.id)
+    setSelectedGroupId('')
+    scheduleSystemPreview(nextSystem)
+  }
+
+  const updateSurfaceAsphereCoefficient = (index: number, coefficient: string, value: number) => {
+    const nextSystem = cloneSystem(system)
+    const surface = nextSystem.surfaces[index]
+    if (!surface || !surfaceSupportsAsphere(surface) || !Number.isFinite(value)) return
+    surface.asphere_coefficients = { ...(surface.asphere_coefficients ?? {}), [coefficient]: value }
+    setSurfaceEditIssue(null)
+    markSystemChanged(nextSystem)
+    setSelectedSurfaceId(surface.id)
+    setSelectedGroupId('')
+    scheduleSystemPreview(nextSystem)
+  }
+
+  const updateSurfaceMaterial = (index: number, materialId: string) => {
+    if (!system.materials.some((material) => material.id === materialId)) return
+    const nextSystem = cloneSystem(system)
+    const surface = nextSystem.surfaces[index]
+    if (!surface || surface.kind !== 'refractive') return
+    surface.material_after = materialId
+    setSurfaceEditIssue(null)
     markSystemChanged(nextSystem)
     setSelectedSurfaceId(surface.id)
     setSelectedGroupId('')
@@ -3595,6 +3817,8 @@ export function App() {
     { key: 'debug' as const, icon: Code },
   ]
   const selectedGroup = (system.groups ?? []).find((group) => group.id === selectedGroupId)
+  const selectedSurfaceIndex = system.surfaces.findIndex((surface) => surface.id === selectedSurfaceId)
+  const selectedSurface = selectedSurfaceIndex >= 0 ? system.surfaces[selectedSurfaceIndex] : undefined
   const selectedGroupRange = selectedGroup ? groupSurfaceRange(selectedGroup, system.surfaces) : undefined
   const selectedLayoutSurfaceIds = selectedSurfaceId
     ? [selectedSurfaceId]
@@ -3703,6 +3927,7 @@ export function App() {
                   setSelectedPresetId(selectedItem.id)
                   setSelectedSurfaceId(selectedItem.system.surfaces[0]?.id ?? '')
                   setSelectedGroupId('')
+                  setSurfaceEditIssue(null)
                   setSystem(cloneSystem(selectedItem.system))
                   setSystemId(null)
                   setSystemHash(null)
@@ -3762,8 +3987,23 @@ export function App() {
 
         <section className="center-pane">
           {activeTab === 'system' ? (
-            <div className="system-workspace" data-testid="system-workspace">
+            <div className={`system-workspace system-workspace--${systemViewMode}`} data-testid="system-workspace" data-view-mode={systemViewMode}>
               <div className="panel large-panel system-editor-pane">
+                <div className="panel-heading system-view-heading">
+                  <div>
+                    <h2>{t('surfaceTable:surfaceTable.title')}</h2>
+                    <p className="muted">{t('surfaceTable:surfaceTable.view.description')}</p>
+                  </div>
+                  <ContentSwitcher
+                    className="system-view-switcher"
+                    selectedIndex={systemViewMode === 'table' ? 0 : 1}
+                    onChange={({ name }) => setSystemViewMode(name as SystemViewMode)}
+                    data-testid="system-view-switcher"
+                  >
+                    <Switch name="table" text={t('surfaceTable:surfaceTable.view.table')} />
+                    <Switch name="split" text={t('surfaceTable:surfaceTable.view.split')} />
+                  </ContentSwitcher>
+                </div>
                 <SurfaceTable
                   surfaces={system.surfaces}
                   onUpdateAnnulusRadius={updateAnnulusRadius}
@@ -3771,8 +4011,20 @@ export function App() {
                   onSelectSurface={(surfaceId) => {
                     setSelectedSurfaceId(surfaceId)
                     setSelectedGroupId('')
+                    setSurfaceEditIssue(null)
                   }}
                   onOpenHelp={setHelpTermId}
+                />
+                <SurfaceInspector
+                  surface={selectedSurface}
+                  surfaceIndex={selectedSurfaceIndex}
+                  surfaceCount={system.surfaces.length}
+                  materials={system.materials.map((material) => material.id)}
+                  dirty={systemDirty}
+                  issue={surfaceEditIssue}
+                  onUpdateNumber={updateSurfaceNumber}
+                  onUpdateAsphereCoefficient={updateSurfaceAsphereCoefficient}
+                  onUpdateMaterial={updateSurfaceMaterial}
                 />
                 <GroupPanel
                   system={system}
@@ -3787,7 +4039,7 @@ export function App() {
                   onOpenHelp={setHelpTermId}
                 />
               </div>
-              <aside className="panel system-mini-layout" data-testid="system-mini-layout">
+              {systemViewMode === 'split' ? <aside className="panel system-mini-layout" data-testid="system-mini-layout">
                 <div className="panel-heading">
                   <div>
                     <h2>{t('layoutView:layoutView.live_layout')}</h2>
@@ -3805,7 +4057,7 @@ export function App() {
                   compact
                   selectedSurfaceIds={selectedLayoutSurfaceIds}
                 />
-              </aside>
+              </aside> : null}
             </div>
           ) : null}
 

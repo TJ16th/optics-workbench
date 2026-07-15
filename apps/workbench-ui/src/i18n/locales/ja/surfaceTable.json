@@ -1,5 +1,11 @@
 {
   "surfaceTable": {
+    "title": "面諸元",
+    "view": {
+      "description": "処方全体の確認とライブ分割表示を切り替えます。",
+      "table": "表",
+      "split": "分割"
+    },
     "columns": {
       "id": "ID",
       "kind": "Kind",
@@ -19,6 +25,20 @@
     "annulus": {
       "outer": "外半径 (mm)",
       "inner": "内半径 (mm)"
+    },
+    "inspector": {
+      "title": "面インスペクター",
+      "selected": "選択中: {{surface_id}}",
+      "dirty": "変更あり",
+      "identity_read_only": "IDとKindはこの編集画面では読み取り専用です。",
+      "radius_mm": "曲率半径 (mm)",
+      "thickness_after_mm": "面後間隔 (mm)",
+      "material": "硝材",
+      "semi_diameter_mm": "有効半径 (mm)",
+      "conic": "コーニック定数",
+      "editable": "編集可",
+      "not_applicable": "対象外",
+      "applicability": "Radius: {{radius}} / Asphere: {{asphere}}"
     },
     "groups": {
       "title": "群",

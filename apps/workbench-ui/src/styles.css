@@ -655,6 +655,24 @@ body {
   gap: 0.75rem;
 }
 
+.system-workspace--table {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.system-view-heading {
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.system-view-heading p,
+.surface-inspector .panel-heading p {
+  margin: 0;
+}
+
+.system-view-switcher {
+  flex: 0 0 15rem;
+}
+
 .analysis-workspace-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(280px, 1fr));
@@ -992,6 +1010,28 @@ body {
   width: 24px;
   height: 12px;
   border: 1px solid var(--ow-glass-stroke);
+}
+
+.surface-inspector {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--ow-border-soft);
+}
+
+.surface-inspector__identity,
+.surface-inspector__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.surface-inspector__identity {
+  margin-top: 0.75rem;
+}
+
+.surface-inspector__fields {
+  grid-template-columns: repeat(3, minmax(12rem, 1fr));
+  margin-top: 1rem;
 }
 
 .compact-spot-heading {
@@ -1572,6 +1612,10 @@ body {
 
   .right-pane-drawer.context-drawer-open {
     transform: translateX(0);
+  }
+
+  .surface-inspector__fields {
+    grid-template-columns: repeat(2, minmax(11rem, 1fr));
   }
 }
 

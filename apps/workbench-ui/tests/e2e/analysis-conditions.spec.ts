@@ -637,6 +637,7 @@ test('R103 System workspace links row selection and debounced preview to the liv
   await page.getByRole('button', { name: 'System', exact: true }).click()
 
   const workspace = page.getByTestId('system-workspace')
+  await page.getByTestId('system-view-switcher').getByText('Split', { exact: true }).click()
   const miniLayout = page.locator('#system-mini-layout-svg')
   await expect(workspace).toBeVisible()
   await page.getByTestId('surface-row').filter({ hasText: 'M1' }).click()
@@ -1399,6 +1400,7 @@ test('layout baseline chief and marginal rays are stable across ray counts', asy
   await expect(page.locator('#show-density-rays')).not.toBeChecked()
   await expect(page.locator('#layout-svg path[data-ray-layer="density"]')).toHaveCount(0)
   await page.getByRole('button', { name: 'System', exact: true }).click()
+  await page.getByTestId('system-view-switcher').getByText('Split', { exact: true }).click()
   await expect(page.locator('#system-mini-layout-svg')).toHaveAttribute('data-density-rays', '0')
   await expect.poll(async () => Number(await page.locator('#system-mini-layout-svg').getAttribute('data-baseline-rays')), { timeout: 3_000 }).toBeGreaterThan(0)
   await page.getByRole('button', { name: 'Preview', exact: true }).click()
@@ -1863,4 +1865,55 @@ test('partial snapshots fall back when embedded artifact retrieval fails', async
   await expect(page.getByText('partial').first()).toBeVisible()
   await expect(page.getByText('Partial Snapshot')).toBeVisible()
   await expect(page.getByText('Comparison falls back to summary data')).toBeVisible()
+})
+
+test('R120 full-width surface table edits P009 through the inspector and persists split view', async ({ page }) => {
+  const registerRequests: unknown[] = []
+  await mockEngine(page, { registerRequests })
+  await page.goto('/?lng=en&fixture=all-presets')
+  await selectPresetOption(page, 'P009 N-BK7 Aspheric Singlet 50mm Demo')
+  await page.getByRole('button', { name: 'System', exact: true }).click()
+
+  const workspace = page.getByTestId('system-workspace')
+  await expect(workspace).toHaveAttribute('data-view-mode', 'table')
+  await expect(page.getByTestId('system-mini-layout')).toHaveCount(0)
+  await expect(page.locator('.surface-table th')).toHaveCount(8)
+  const tableDimensions = await page.locator('.table-shell').evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }))
+  expect(tableDimensions.scrollWidth).toBeLessThanOrEqual(tableDimensions.clientWidth)
+
+  await page.getByTestId('surface-row').filter({ hasText: 'ASP1' }).click()
+  await expect(page.getByTestId('surface-inspector')).toContainText('Selected: ASP1')
+  await expect(page.locator('#surface-inspector-id')).toHaveAttribute('readonly', '')
+  await expect(page.locator('#surface-inspector-kind')).toHaveAttribute('readonly', '')
+  await page.locator('#surface-inspector-radius').fill('51')
+  await page.locator('#surface-inspector-thickness').fill('5.2')
+  await page.locator('#surface-inspector-material').selectOption('N-F2')
+  await page.locator('#surface-inspector-semi-diameter').fill('9.6')
+  await page.locator('#surface-inspector-conic').fill('-1.2')
+  await page.locator('#surface-inspector-a4').fill('-0.000003')
+  await expect(page.getByTestId('system-dirty-status')).toBeVisible()
+  await expect.poll(() => registerRequests.length).toBeGreaterThan(0)
+  const registered = registerRequests.at(-1) as { surfaces?: Array<Record<string, unknown>> }
+  const asphere = registered.surfaces?.find((surface) => surface.id === 'ASP1')
+  expect(asphere).toMatchObject({
+    radius_mm: 51,
+    thickness_after_mm: 5.2,
+    material_after: 'N-F2',
+    semi_diameter_mm: 9.6,
+    conic: -1.2,
+    asphere_coefficients: { A4: -0.000003 },
+  })
+
+  await page.locator('#surface-inspector-semi-diameter').fill('0')
+  await expect(page.getByTestId('surface-inspector-issue')).toContainText('invalid_semi_diameter')
+
+  await page.getByTestId('system-view-switcher').getByText('Split', { exact: true }).click()
+  await expect(workspace).toHaveAttribute('data-view-mode', 'split')
+  await expect(page.getByTestId('system-mini-layout')).toBeVisible()
+  await page.reload()
+  await page.getByRole('button', { name: 'System', exact: true }).click()
+  await expect(page.getByTestId('system-workspace')).toHaveAttribute('data-view-mode', 'split')
 })

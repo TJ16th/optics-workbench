@@ -1,5 +1,11 @@
 {
   "surfaceTable": {
+    "title": "Surface data",
+    "view": {
+      "description": "Review the complete prescription or open the live split view.",
+      "table": "Table",
+      "split": "Split"
+    },
     "columns": {
       "id": "ID",
       "kind": "Kind",
@@ -19,6 +25,20 @@
     "annulus": {
       "outer": "Outer radius (mm)",
       "inner": "Inner radius (mm)"
+    },
+    "inspector": {
+      "title": "Surface inspector",
+      "selected": "Selected: {{surface_id}}",
+      "dirty": "Modified",
+      "identity_read_only": "ID and Kind are read-only in this editor.",
+      "radius_mm": "Radius (mm)",
+      "thickness_after_mm": "Thickness After (mm)",
+      "material": "Material",
+      "semi_diameter_mm": "Semi-Diameter (mm)",
+      "conic": "Conic",
+      "editable": "editable",
+      "not_applicable": "not applicable",
+      "applicability": "Radius: {{radius}} / Asphere: {{asphere}}"
     },
     "groups": {
       "title": "Groups",
