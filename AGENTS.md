@@ -23,6 +23,12 @@
 - Git管理・完了報告の正本は`F:\vscode\opt`側とする。Claude側へのコピーは参照用であり、Claude側のGit操作や既存ファイル削除は行わない。
 - 同期ログは`%LOCALAPPDATA%\OpticsDocSync\sync.log`へ保存する。同期停止・障害調査時はWindowsタスクの状態とこのログを確認する。
 
+## PIIスキャナのベースライン運用
+
+- `scripts/pii_baseline.json`は、R130で人間が明示承認した既知検出だけを保持する。
+- ベースラインはpath・検出pattern・行内容hash・出現数を組にして照合し、未登録の新規検出はCIを失敗させる。
+- ベースラインへの追加・既存entryの更新は、人間の明示承認を得た場合に限る。検出を通す目的でCodexが自己判断で追加してはならない。
+
 ## GitHub Issue運用【Codex自身はIssueを直接作成しない】
 
 - Codex自身の実行環境（ローカルシェル）には、GitHub書き込み用の資格情報を持たせない。`gh issue create` 等をCodexの通常タスク実行中に直接叩かない。
