@@ -63,10 +63,33 @@ import { getTerm, renderEngineIssue, termLabel } from '../i18n/glossary'
 import type { SupportedLanguage } from '../i18n/resources'
 import { seriesPalette, wavelengthColor } from './chartTheme'
 import { makeExportSvg, type ExportChart } from './exportSvg'
-import { useNavigationShellState, useWorkbenchControllerState, useWorkbenchMutations, type AnalysisViewKey, type ThemePreference } from './useWorkbenchController'
+import { useNavigationShellState, useWorkbenchControllerState, useWorkbenchMutations, type ThemePreference } from './useWorkbenchController'
 
 const themeStorageKey = 'optics-workbench-theme'
+const analysisPanelsStorageKey = 'optics-workbench-analysis-panels'
 const presetCategoryOrder: Preset['catalog']['category'][] = ['photographic', 'simple_educational', 'telescope_afocal', 'visual', 'fixtures']
+
+type AnalysisChartKey =
+  | 'longitudinal'
+  | 'field_curvature'
+  | 'distortion'
+  | 'ray_fan'
+  | 'relative_illumination'
+  | 'mtf_monochromatic'
+  | 'mtf_white'
+  | 'through_focus'
+
+const defaultAnalysisPanels: AnalysisChartKey[] = ['longitudinal', 'field_curvature', 'distortion', 'ray_fan']
+const analysisChartKeys = new Set<AnalysisChartKey>([
+  'longitudinal',
+  'field_curvature',
+  'distortion',
+  'ray_fan',
+  'relative_illumination',
+  'mtf_monochromatic',
+  'mtf_white',
+  'through_focus',
+])
 
 type Snapshot = {
   id: string
@@ -2246,18 +2269,6 @@ function aimingFailureCount(points: Array<{ status: string }> | undefined): numb
   return (points ?? []).filter((point) => point.status === 'aiming_failed').length
 }
 
-function seriesFromDistortion(rows: DistortionRow[] | undefined): ChartSeries[] {
-  return [
-    {
-      id: 'distortion',
-      color: seriesPalette[0],
-      points: (rows ?? [])
-        .filter((row) => finitePoint(fieldAngle(row), row.distortion_percent))
-        .map((row) => ({ x: fieldAngle(row), y: row.distortion_percent as number })),
-    },
-  ]
-}
-
 function seriesFromDistortionStandard(rows: DistortionRow[] | undefined): ChartSeries[] {
   return [
     {
@@ -2266,26 +2277,6 @@ function seriesFromDistortionStandard(rows: DistortionRow[] | undefined): ChartS
       points: (rows ?? [])
         .filter((row) => finitePoint(row.distortion_percent, fieldAngle(row)))
         .map((row) => ({ x: row.distortion_percent as number, y: fieldAngle(row) })),
-    },
-  ]
-}
-
-function seriesFromFieldCurvature(rows: FieldCurvatureRow[] | undefined): ChartSeries[] {
-  const safeRows = rows ?? []
-  return [
-    {
-      id: 'M',
-      color: seriesPalette[0],
-      points: safeRows
-        .filter((row) => finitePoint(fieldAngle(row), row.tangential_focus_shift_mm ?? row.best_focus_shift_mm))
-        .map((row) => ({ x: fieldAngle(row), y: (row.tangential_focus_shift_mm ?? row.best_focus_shift_mm) as number })),
-    },
-    {
-      id: 'S',
-      color: seriesPalette[1],
-      points: safeRows
-        .filter((row) => finitePoint(fieldAngle(row), row.sagittal_focus_shift_mm ?? row.best_focus_shift_mm))
-        .map((row) => ({ x: fieldAngle(row), y: (row.sagittal_focus_shift_mm ?? row.best_focus_shift_mm) as number })),
     },
   ]
 }
@@ -2372,7 +2363,6 @@ function ThroughFocusMtfCharts({ result }: { result?: ChartAnalysisResult['throu
   return (
     <div className="through-focus-view" data-testid="through-focus-mtf-view">
       <div className="through-focus-heading">
-        <h2>{t('analysis:analysis.through_focus_mtf_title')}</h2>
         <p className="muted">{t('analysis:analysis.through_focus_mtf_note')}</p>
       </div>
       <div className="through-focus-grid">
@@ -2380,7 +2370,7 @@ function ThroughFocusMtfCharts({ result }: { result?: ChartAnalysisResult['throu
           const first = points[0]
           const defocus = points.map((point) => point.defocus_mm)
           return (
-            <section className="panel chart-panel through-focus-panel" key={fieldId} data-testid={`through-focus-panel-${fieldId}`}>
+            <section className="through-focus-panel" key={fieldId} data-testid={`through-focus-panel-${fieldId}`}>
               <h3>{fieldId}</h3>
               <p className="muted">{formatFixed(first.theta_y_deg, 3)} / {formatFixed(first.theta_z_deg, 3)} deg</p>
               <ChartSvg
@@ -2496,122 +2486,185 @@ function EvaluationPlanePanel({
   )
 }
 
-function AnalysisCharts({ result, onOpenHelp }: { result?: ChartAnalysisResult; onOpenHelp: (termId: string) => void }) {
+function AnalysisCharts({
+  result,
+  mtfResults,
+  panels,
+  onSetPanel,
+  onAddPanel,
+  onRemovePanel,
+  onOpenHelp,
+}: {
+  result?: ChartAnalysisResult
+  mtfResults: Partial<Record<MtfMode, ChartAnalysisResult['mtf']>>
+  panels: AnalysisChartKey[]
+  onSetPanel: (index: number, key: AnalysisChartKey) => void
+  onAddPanel: () => void
+  onRemovePanel: (index: number) => void
+  onOpenHelp: (termId: string) => void
+}) {
   const { t, i18n } = useTranslation(['analysis'])
   const empty = t('analysis:analysis.chart_empty')
-  if (!result) {
-    return <p className="muted">{t('analysis:analysis.run_charts_empty')}</p>
+
+  const panelLabel = (key: AnalysisChartKey) => {
+    switch (key) {
+      case 'longitudinal': return termLabel('longitudinal_aberration', i18n.language)
+      case 'field_curvature': return termLabel('field_curvature', i18n.language)
+      case 'distortion': return termLabel('distortion', i18n.language)
+      case 'ray_fan': return termLabel('ray_fan', i18n.language)
+      case 'relative_illumination': return termLabel('relative_illumination', i18n.language)
+      case 'mtf_monochromatic': return `${termLabel('mtf', i18n.language)} - ${t('analysis:analysis.mtf_mode_monochromatic')}`
+      case 'mtf_white': return `${termLabel('mtf', i18n.language)} - ${t('analysis:analysis.mtf_mode_white')}`
+      case 'through_focus': return t('analysis:analysis.through_focus_mtf_title')
+    }
   }
-  return (
-    <div className="analysis-chart-grid" data-testid="analysis-chart-grid">
-      <section className="panel chart-panel chart-panel--wide">
-        <h2>{t('analysis:analysis.standard_aberration_title')}</h2>
-        <div className="standard-aberration-grid" data-testid="standard-aberration-grid">
-          <div>
-            <h3>{termLabel('longitudinal_aberration', i18n.language)}</h3>
-            {aimingFailureCount(result.longitudinal?.points) > 0 ? (
-              <InlineNotification
-                lowContrast
-                kind="warning"
-                title={t('analysis:analysis.aiming_failed_title')}
-                subtitle={t('analysis:analysis.aiming_failed_count', { count: aimingFailureCount(result.longitudinal?.points) })}
-                data-testid="longitudinal-aiming-warning"
-              />
-            ) : null}
-            <ChartSvg
-              series={seriesFromLongitudinal(result.longitudinal?.points)}
-              xLabel={t('analysis:analysis.axis_focus_shift_mm')}
-              yLabel={t('analysis:analysis.axis_pupil_coordinate')}
-              emptyLabel={empty}
-              testId="longitudinal-aberration-chart"
-            />
-          </div>
-          <div>
-            <h3>{termLabel('field_curvature', i18n.language)}</h3>
-            <ChartSvg
-              series={seriesFromFieldCurvatureStandard(result.fieldCurvature?.rows)}
-              xLabel={t('analysis:analysis.axis_focus_shift_mm')}
-              yLabel={t('analysis:analysis.axis_half_field_deg')}
-              emptyLabel={empty}
-              testId="standard-field-curvature-chart"
-            />
-          </div>
-          <div>
-            <h3>{termLabel('distortion', i18n.language)}</h3>
-            <ChartSvg
-              series={seriesFromDistortionStandard(result.distortion?.rows)}
-              xLabel={t('analysis:analysis.axis_distortion_percent')}
-              yLabel={t('analysis:analysis.axis_half_field_deg')}
-              emptyLabel={empty}
-              testId="standard-distortion-chart"
-            />
-          </div>
-        </div>
-      </section>
-      <section className="panel chart-panel chart-panel--wide">
-        <h2>
-          <TermHelp termId="ray_fan" fallback={termLabel('ray_fan', i18n.language)} onOpenHelp={onOpenHelp} />
-        </h2>
-        {aimingFailureCount(result.rayFan?.fan_y_points) + aimingFailureCount(result.rayFan?.fan_z_points) > 0 ? (
+
+  const renderPanel = (key: AnalysisChartKey) => {
+    if (key === 'longitudinal') {
+      return <>
+        {aimingFailureCount(result?.longitudinal?.points) > 0 ? (
+          <InlineNotification
+            lowContrast
+            kind="warning"
+            title={t('analysis:analysis.aiming_failed_title')}
+            subtitle={t('analysis:analysis.aiming_failed_count', { count: aimingFailureCount(result?.longitudinal?.points) })}
+            data-testid="longitudinal-aiming-warning"
+          />
+        ) : null}
+        <ChartSvg
+          series={seriesFromLongitudinal(result?.longitudinal?.points)}
+          xLabel={t('analysis:analysis.axis_focus_shift_mm')}
+          yLabel={t('analysis:analysis.axis_pupil_coordinate')}
+          emptyLabel={empty}
+          testId="longitudinal-aberration-chart"
+        />
+      </>
+    }
+    if (key === 'field_curvature') {
+      return <ChartSvg
+        series={seriesFromFieldCurvatureStandard(result?.fieldCurvature?.rows)}
+        xLabel={t('analysis:analysis.axis_focus_shift_mm')}
+        yLabel={t('analysis:analysis.axis_half_field_deg')}
+        emptyLabel={empty}
+        testId="standard-field-curvature-chart"
+      />
+    }
+    if (key === 'distortion') {
+      return <ChartSvg
+        series={seriesFromDistortionStandard(result?.distortion?.rows)}
+        xLabel={t('analysis:analysis.axis_distortion_percent')}
+        yLabel={t('analysis:analysis.axis_half_field_deg')}
+        emptyLabel={empty}
+        testId="standard-distortion-chart"
+      />
+    }
+    if (key === 'ray_fan') {
+      return <>
+        {aimingFailureCount(result?.rayFan?.fan_y_points) + aimingFailureCount(result?.rayFan?.fan_z_points) > 0 ? (
           <InlineNotification
             lowContrast
             kind="warning"
             title={t('analysis:analysis.aiming_failed_title')}
             subtitle={t('analysis:analysis.aiming_failed_fan_counts', {
-              fanY: aimingFailureCount(result.rayFan?.fan_y_points),
-              fanZ: aimingFailureCount(result.rayFan?.fan_z_points),
+              fanY: aimingFailureCount(result?.rayFan?.fan_y_points),
+              fanZ: aimingFailureCount(result?.rayFan?.fan_z_points),
             })}
             data-testid="ray-fan-aiming-warning"
           />
         ) : null}
         <div className="chart-pair">
           <ChartSvg
-            series={seriesFromRayFan(result.rayFan?.fan_y_points ?? result.rayFan?.points, 'y')}
+            series={seriesFromRayFan(result?.rayFan?.fan_y_points ?? result?.rayFan?.points, 'y')}
             xLabel="Py"
             yLabel="Y mm"
             emptyLabel={empty}
             testId="ray-fan-y-chart"
           />
           <ChartSvg
-            series={seriesFromRayFan(result.rayFan?.fan_z_points ?? result.rayFan?.points, 'z')}
+            series={seriesFromRayFan(result?.rayFan?.fan_z_points ?? result?.rayFan?.points, 'z')}
             xLabel="Pz"
             yLabel="Z mm"
             emptyLabel={empty}
             testId="ray-fan-z-chart"
           />
         </div>
-      </section>
-      <section className="panel chart-panel">
-        <h2>{termLabel('distortion', i18n.language)}</h2>
-        <ChartSvg series={seriesFromDistortion(result.distortion?.rows)} xLabel="field deg" yLabel="%" emptyLabel={empty} testId="distortion-chart" />
-      </section>
-      <section className="panel chart-panel">
-        <h2>{termLabel('field_curvature', i18n.language)}</h2>
-        <ChartSvg series={seriesFromFieldCurvature(result.fieldCurvature?.rows)} xLabel="field deg" yLabel="mm" emptyLabel={empty} testId="field-curvature-chart" />
-      </section>
-      <section className="panel chart-panel">
-        <h2>{termLabel('relative_illumination', i18n.language)}</h2>
-        <ChartSvg series={seriesFromRelativeIllumination(result.relativeIllumination?.rows)} xLabel="field deg" yLabel="%" emptyLabel={empty} testId="relative-illumination-chart" />
-      </section>
-      <section className="panel chart-panel">
-        <h2>
-          <TermHelp termId="mtf" fallback={termLabel('mtf', i18n.language)} onOpenHelp={onOpenHelp} />
-        </h2>
-        <Tag type={result.mtf?.mode === 'white' ? 'cyan' : 'gray'}>
-          {result.mtf?.mode === 'white' ? t('analysis:analysis.mtf_mode_white') : t('analysis:analysis.mtf_mode_monochromatic')}
-        </Tag>
-        <ChartSvg
-          series={seriesFromMtf(result.mtf?.points, result.mtf?.mode)}
-          xLabel="lp/mm"
-          yLabel="MTF"
-          emptyLabel={empty}
-          testId="mtf-chart"
-          xDomain={mtfFrequencyDomain(result.mtf?.points)}
-          yDomain={[0, 1]}
-        />
-        {result.mtf?.mode === 'white' ? <p className="muted">{t('analysis:analysis.white_mtf_note')}</p> : null}
-        {result.mtf?.diffraction_included === false ? <p className="muted">{t('analysis:analysis.geometric_mtf_note')}</p> : null}
-      </section>
+      </>
+    }
+    if (key === 'relative_illumination') {
+      return <ChartSvg
+        series={seriesFromRelativeIllumination(result?.relativeIllumination?.rows)}
+        xLabel="field deg"
+        yLabel="%"
+        emptyLabel={empty}
+        testId="relative-illumination-chart"
+      />
+    }
+    if (key === 'through_focus') {
+      return <ThroughFocusMtfCharts result={result?.throughFocusMtf} />
+    }
+
+    const mode: MtfMode = key === 'mtf_white' ? 'white' : 'monochromatic'
+    const mtf = mtfResults[mode]
+    return <>
+      <Tag type={mode === 'white' ? 'cyan' : 'gray'}>
+        {mode === 'white' ? t('analysis:analysis.mtf_mode_white') : t('analysis:analysis.mtf_mode_monochromatic')}
+      </Tag>
+      <ChartSvg
+        series={seriesFromMtf(mtf?.points, mode)}
+        xLabel="lp/mm"
+        yLabel="MTF"
+        emptyLabel={empty}
+        testId={`mtf-chart-${mode}`}
+        xDomain={mtfFrequencyDomain(mtf?.points)}
+        yDomain={[0, 1]}
+      />
+      {mode === 'white' ? <p className="muted">{t('analysis:analysis.white_mtf_note')}</p> : null}
+      {mtf?.diffraction_included === false ? <p className="muted">{t('analysis:analysis.geometric_mtf_note')}</p> : null}
+    </>
+  }
+
+  return (
+    <div className="analysis-workspace" data-testid="analysis-chart-grid" data-panel-count={panels.length}>
+      <div className="analysis-workspace-grid">
+        {panels.map((key, index) => (
+          <section className="panel chart-panel analysis-workspace-panel" key={`${index}-${key}`} data-testid={`analysis-workspace-panel-${index}`}>
+            <div className="analysis-panel-heading">
+              <h2>
+                {key === 'ray_fan' ? <TermHelp termId="ray_fan" fallback={panelLabel(key)} onOpenHelp={onOpenHelp} /> :
+                  key === 'mtf_monochromatic' || key === 'mtf_white' ? <TermHelp termId="mtf" fallback={panelLabel(key)} onOpenHelp={onOpenHelp} /> : panelLabel(key)}
+              </h2>
+              <div className="analysis-panel-controls">
+                <Select
+                  id={`analysis-chart-picker-${index}`}
+                  data-testid={`analysis-chart-picker-${index}`}
+                  hideLabel
+                  labelText={t('analysis:analysis.chart_picker')}
+                  value={key}
+                  onChange={(event) => onSetPanel(index, event.target.value as AnalysisChartKey)}
+                >
+                  {[...analysisChartKeys].map((option) => <SelectItem key={option} value={option} text={panelLabel(option)} />)}
+                </Select>
+                <Button
+                  kind="ghost"
+                  size="sm"
+                  hasIconOnly
+                  renderIcon={TrashCan}
+                  iconDescription={t('analysis:analysis.remove_panel')}
+                  disabled={panels.length <= 2}
+                  onClick={() => onRemovePanel(index)}
+                  data-testid={`remove-analysis-panel-${index}`}
+                />
+              </div>
+            </div>
+            {renderPanel(key)}
+          </section>
+        ))}
+      </div>
+      {panels.length < 4 ? (
+        <Button size="sm" kind="tertiary" renderIcon={Add} onClick={onAddPanel} data-testid="add-analysis-panel">
+          {t('analysis:analysis.add_panel')}
+        </Button>
+      ) : null}
     </div>
   )
 }
@@ -2925,9 +2978,21 @@ export function App() {
     return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system'
   })()
   const [spotExpanded, setSpotExpanded] = useState(false)
+  const [analysisPanels, setAnalysisPanels] = useState<AnalysisChartKey[]>(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(analysisPanelsStorageKey) ?? 'null')
+      if (Array.isArray(saved) && saved.length >= 2 && saved.length <= 4 && saved.every((key) => analysisChartKeys.has(key))) {
+        return saved as AnalysisChartKey[]
+      }
+    } catch {
+      // Invalid workspace state falls back to the documented initial layout.
+    }
+    return [...defaultAnalysisPanels]
+  })
+  const [mtfResults, setMtfResults] = useState<Partial<Record<MtfMode, ChartAnalysisResult['mtf']>>>({})
   const {
     themePreference, setThemePreference, systemDark, setSystemDark, apiBase, setApiBase,
-    selectedPresetId, setSelectedPresetId, activeTab, setActiveTab, analysisView, setAnalysisView,
+    selectedPresetId, setSelectedPresetId, activeTab, setActiveTab,
     samplesPerField, setSamplesPerField, analysisFields, setAnalysisFields, wavelengths, setWavelengths,
     pupilDistribution, setPupilDistribution, aimingMode, setAimingMode, mtfMode, setMtfMode,
     showDensityRays, setShowDensityRays, imagePlanePolicy, setImagePlanePolicy, imagePlanePolicyRef,
@@ -2966,6 +3031,10 @@ export function App() {
     if (themePreference === 'system') media.addEventListener('change', updateSystemTheme)
     return () => media.removeEventListener('change', updateSystemTheme)
   }, [themePreference])
+
+  useEffect(() => {
+    window.localStorage.setItem(analysisPanelsStorageKey, JSON.stringify(analysisPanels))
+  }, [analysisPanels])
 
   const resolvedTheme = themePreference === 'system' ? (systemDark ? 'dark' : 'light') : themePreference
   const {
@@ -3368,6 +3437,9 @@ export function App() {
     },
     onSuccess: (result) => {
       setChartResult(result)
+      if (result.mtf) {
+        setMtfResults((current) => ({ ...current, [result.mtf?.mode ?? mtfMode]: result.mtf }))
+      }
       const nextEvaluationPlane = extractEvaluationPlane(result)
       setEvaluationPlane(nextEvaluationPlane)
       setFocusCurve(nextEvaluationPlane?.focus_curve ?? [])
@@ -3537,17 +3609,16 @@ export function App() {
         <HeaderName href="#" prefix={t('common.app.prefix')}>
           {t('common.app.name')}
         </HeaderName>
-        {contextUsesDrawer ? (
-            <Button
-              className="context-drawer-toggle"
-              kind="ghost"
-              size="sm"
-              hasIconOnly
-              renderIcon={SidePanelOpen}
-              iconDescription={contextDrawerOpen ? t('common.navigation.close_context') : t('common.navigation.open_context')}
-              onClick={() => setContextDrawerOpen((current) => !current)}
-            />
-        ) : null}
+        <Button
+          className="context-drawer-toggle"
+          kind="ghost"
+          size="sm"
+          hasIconOnly
+          renderIcon={SidePanelOpen}
+          iconDescription={contextDrawerOpen ? t('common.navigation.close_context') : t('common.navigation.open_context')}
+          aria-expanded={contextDrawerOpen}
+          onClick={() => setContextDrawerOpen((current) => !current)}
+        />
         <div className="header-status">
           <Select
             id="theme-preference"
@@ -3569,9 +3640,10 @@ export function App() {
       </Header>
 
       <main
-        className={`workbench-grid ${navigationExpanded ? 'navigation-expanded' : 'navigation-collapsed'} ${contextUsesDrawer ? 'context-drawer-layout' : ''}`}
+        className={`workbench-grid ${navigationExpanded ? 'navigation-expanded' : 'navigation-collapsed'} ${contextUsesDrawer ? 'context-drawer-layout' : ''} ${contextDrawerOpen ? 'context-panel-open' : 'context-panel-closed'}`}
         data-navigation-expanded={navigationExpanded}
         data-context-mode={contextUsesDrawer ? 'drawer' : 'fixed'}
+        data-context-open={contextDrawerOpen}
       >
         <aside className="left-pane" data-testid="navigation-shell">
           <nav className="workbench-navigation" aria-label={t('common.navigation.label')}>
@@ -3631,12 +3703,12 @@ export function App() {
                   setSelectedPresetId(selectedItem.id)
                   setSelectedSurfaceId(selectedItem.system.surfaces[0]?.id ?? '')
                   setSelectedGroupId('')
-                  setAnalysisView('standard')
                   setSystem(cloneSystem(selectedItem.system))
                   setSystemId(null)
                   setSystemHash(null)
                   setTrace(undefined)
                   setChartResult(undefined)
+                  setMtfResults({})
                   setEvaluationPlane(undefined)
                   setFocusCurve([])
                   setFocusResult(undefined)
@@ -3848,20 +3920,21 @@ export function App() {
                     <h2>{t('analysis:analysis.analysis_charts_title')}</h2>
                     <p className="muted">{t('analysis:analysis.analysis_charts_summary')}</p>
                   </div>
-                  {system.system_type !== 'afocal' ? (
-                    <ContentSwitcher selectedIndex={analysisView === 'standard' ? 0 : 1} onChange={({ name }) => setAnalysisView(name as AnalysisViewKey)} data-testid="analysis-view-switcher">
-                      <Switch name="standard" text={t('analysis:analysis.standard_view')} />
-                      <Switch name="through_focus" text={t('analysis:analysis.through_focus_view')} />
-                    </ContentSwitcher>
-                  ) : null}
                   {system.visual_evaluation?.mode === 'instrument_and_retinal' ? (
                     <Button size="sm" renderIcon={Play} disabled={!engineOnline || running || versionBlocked} onClick={() => visualMutation.mutate()}>
                       {t('analysis:analysis.run_visual_composite')}
                     </Button>
                   ) : (
-                    <Button size="sm" renderIcon={Play} disabled={!engineOnline || running || versionBlocked} onClick={() => (analysisView === 'through_focus' ? throughFocusMutation.mutate() : chartsMutation.mutate())}>
-                      {t('analysis:analysis.run_charts')}
-                    </Button>
+                    <>
+                      <Button size="sm" renderIcon={Play} disabled={!engineOnline || running || versionBlocked} onClick={() => chartsMutation.mutate()}>
+                        {t('analysis:analysis.run_charts')}
+                      </Button>
+                      {analysisPanels.includes('through_focus') ? (
+                        <Button size="sm" kind="secondary" renderIcon={Play} disabled={!engineOnline || running || versionBlocked} onClick={() => throughFocusMutation.mutate()}>
+                          {t('analysis:analysis.run_through_focus')}
+                        </Button>
+                      ) : null}
+                    </>
                   )}
                   <Button size="sm" kind="secondary" renderIcon={Save} disabled={!trace && !chartResult && !focusResult} onClick={() => void saveSnapshot()}>
                     {t('common.buttons.save_snapshot')}
@@ -3895,18 +3968,22 @@ export function App() {
                   )}
                 </section>
               ) : null}
-              {analysisView === 'standard' ? (
-                <>
-                  <EvaluationPlanePanel
-                    evaluationPlane={evaluationPlane}
-                    focusCurve={focusCurve}
-                    canWriteBack={Boolean(!policyDisabled && evaluationPlane && Number.isFinite(evaluationPlane.solved_offset_from_sensor_mm ?? evaluationPlane.offset_from_sensor_mm))}
-                    onWriteBack={writeBackSensor}
-                    onOpenHelp={setHelpTermId}
-                  />
-                  <AnalysisCharts result={chartResult} onOpenHelp={setHelpTermId} />
-                </>
-              ) : <ThroughFocusMtfCharts result={chartResult?.throughFocusMtf} />}
+              <EvaluationPlanePanel
+                evaluationPlane={evaluationPlane}
+                focusCurve={focusCurve}
+                canWriteBack={Boolean(!policyDisabled && evaluationPlane && Number.isFinite(evaluationPlane.solved_offset_from_sensor_mm ?? evaluationPlane.offset_from_sensor_mm))}
+                onWriteBack={writeBackSensor}
+                onOpenHelp={setHelpTermId}
+              />
+              <AnalysisCharts
+                result={chartResult}
+                mtfResults={mtfResults}
+                panels={analysisPanels}
+                onSetPanel={(index, key) => setAnalysisPanels((current) => current.map((item, itemIndex) => itemIndex === index ? key : item))}
+                onAddPanel={() => setAnalysisPanels((current) => current.length >= 4 ? current : [...current, 'mtf_monochromatic'])}
+                onRemovePanel={(index) => setAnalysisPanels((current) => current.length <= 2 ? current : current.filter((_, itemIndex) => itemIndex !== index))}
+                onOpenHelp={setHelpTermId}
+              />
             </div>
           ) : null}
 
@@ -3987,7 +4064,8 @@ export function App() {
         ) : null}
         <aside
           className={`right-pane ${contextUsesDrawer ? 'right-pane-drawer' : ''} ${contextDrawerOpen ? 'context-drawer-open' : ''}`}
-          aria-hidden={contextUsesDrawer && !contextDrawerOpen}
+          aria-hidden={!contextDrawerOpen}
+          hidden={!contextDrawerOpen && !contextUsesDrawer}
         >
           <Accordion className="right-panel-accordion" align="start">
             <AccordionItem title={t('settings:settings.api')}>

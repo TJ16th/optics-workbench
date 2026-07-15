@@ -75,7 +75,7 @@ for (const presetId of ['P007', 'P009'] as const) {
 
     for (const response of completedResponses) expect(response.ok(), `${response.url()} returned ${response.status()}`).toBe(true)
     assertRunChartsWithinBudget(elapsedMs)
-    await expect(page.getByTestId('analysis-chart-grid').locator('svg.analysis-chart')).toHaveCount(9)
+    await expect(page.getByTestId('analysis-chart-grid').locator('svg.analysis-chart')).toHaveCount(5)
     await expect(page.getByTestId('analysis-chart-grid').locator('circle')).not.toHaveCount(0)
     await test.info().attach(`${presetId}-run-charts-timing.json`, {
       body: JSON.stringify({ preset_id: presetId, elapsed_ms: elapsedMs, budget_ms: RUN_CHARTS_BUDGET_MS }, null, 2),

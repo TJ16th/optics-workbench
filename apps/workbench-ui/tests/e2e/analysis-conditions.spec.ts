@@ -554,7 +554,10 @@ test('navigation and context defaults follow the R101 viewport thresholds', asyn
   const assertShell = async (width: number, expanded: boolean, contextMode: 'fixed' | 'drawer') => {
     await page.setViewportSize({ width, height: 900 })
     await page.goto('/?lng=en')
-    await page.evaluate(() => window.localStorage.removeItem('optics-workbench-navigation-expanded'))
+    await page.evaluate(() => {
+      window.localStorage.removeItem('optics-workbench-navigation-expanded')
+      window.localStorage.removeItem('optics-workbench-context-panel-open')
+    })
     await page.reload()
     const shell = page.locator('.workbench-grid')
     await expect(shell).toHaveAttribute('data-navigation-expanded', String(expanded))
@@ -614,6 +617,7 @@ test('navigation and context drawer transitions keep layout and chart dimensions
   expect(chartSettled?.height ?? 0).toBeGreaterThan(100)
 
   await page.setViewportSize({ width: 1366, height: 900 })
+  await page.locator('.context-drawer-backdrop').click()
   await page.getByRole('button', { name: 'Preview', exact: true }).click()
   const layout = page.locator('#layout-svg')
   const beforeDrawer = await layout.boundingBox()
@@ -1551,7 +1555,7 @@ test('decenter tilt sliders send configuration and expose evaluated symmetric fi
   await expect(page.getByText('Possible vignetting')).toBeVisible()
 })
 
-test('P002 and P003 analysis charts render standard aberration panels without collapsed labels', async ({ page }) => {
+test('P002 and P003 analysis workspace opens with four standard panels without collapsed labels', async ({ page }) => {
   await mockEngine(page)
   for (const preset of ['P002 N-BK7 Biconvex Singlet 50mm Demo', 'P003 Achromat Doublet 100mm Demo']) {
     await page.goto('/?lng=en')
@@ -1561,8 +1565,7 @@ test('P002 and P003 analysis charts render standard aberration panels without co
     await page.getByRole('button', { name: 'Run Charts' }).click()
 
     await expect(page.getByTestId('analysis-chart-grid')).toBeVisible()
-    await expect(page.getByText('Longitudinal Aberration Standard Panels').first()).toBeVisible()
-    await expect(page.getByTestId('standard-aberration-grid')).toBeVisible()
+    await expect(page.getByTestId('analysis-chart-grid')).toHaveAttribute('data-panel-count', '4')
     await expect(page.getByTestId('longitudinal-aberration-chart')).toBeVisible()
     await expect(page.getByTestId('standard-field-curvature-chart')).toBeVisible()
     await expect(page.getByTestId('standard-distortion-chart')).toBeVisible()
@@ -1573,34 +1576,24 @@ test('P002 and P003 analysis charts render standard aberration panels without co
     await expect(page.getByText('Ray Fan').first()).toBeVisible()
     await expect(page.getByText('Distortion').first()).toBeVisible()
     await expect(page.getByText('Field Curvature').first()).toBeVisible()
-    await expect(page.getByText('Relative Illumination').first()).toBeVisible()
-    await expect(page.getByText('MTF').first()).toBeVisible()
-    await expect(page.getByText('Diffraction included: false')).toBeVisible()
     await expect(page.getByTestId('longitudinal-aberration-chart').locator('circle')).toHaveCount(9)
     await expect(page.getByTestId('ray-fan-y-chart').locator('circle')).toHaveCount(27)
     await expect(page.getByTestId('ray-fan-z-chart').locator('circle')).toHaveCount(27)
-    await expect(page.getByTestId('mtf-chart').locator('circle')).toHaveCount(198)
     await expect(page.getByTestId('ray-fan-y-chart')).toHaveAttribute('data-point-count', '27')
     await expect(page.getByTestId('ray-fan-y-chart')).toHaveAttribute('data-marker-radius', '1.7')
     await expect(page.getByTestId('ray-fan-y-chart')).toHaveAttribute('data-marker-opacity', '0.68')
     await expect(page.getByTestId('standard-field-curvature-chart')).toHaveAttribute('data-point-count', '32')
     await expect(page.getByTestId('standard-distortion-chart')).toHaveAttribute('data-point-count', '16')
-    await expect(page.getByTestId('distortion-chart')).toHaveAttribute('data-point-count', '16')
-    await expect(page.getByTestId('field-curvature-chart')).toHaveAttribute('data-point-count', '32')
-    await expect(page.getByTestId('relative-illumination-chart')).toHaveAttribute('data-point-count', '16')
     await expect(page.getByTestId('standard-distortion-chart')).toHaveAttribute('data-marker-radius', '2.2')
     await expect(page.getByTestId('standard-distortion-chart')).toHaveAttribute('data-marker-opacity', '0.78')
-    for (const legend of ['center M', 'center S', 'mid-y M', 'mid-y S', 'edge-y M', 'edge-y S']) {
-      await expect(page.getByTestId('mtf-chart').locator('..').getByText(legend, { exact: true })).toBeVisible()
-    }
 
-    const labelBoxes = await page.getByTestId('standard-aberration-grid').locator('.plot-label').evaluateAll((nodes) =>
+    const labelBoxes = await page.getByTestId('analysis-chart-grid').locator('.plot-label').evaluateAll((nodes) =>
       nodes.map((node) => {
         const rect = node.getBoundingClientRect()
         return { width: rect.width, height: rect.height }
       }),
     )
-    expect(labelBoxes).toHaveLength(6)
+    expect(labelBoxes).toHaveLength(10)
     for (const box of labelBoxes) {
       expect(box.width).toBeGreaterThan(5)
       expect(box.height).toBeGreaterThan(5)
@@ -1608,13 +1601,48 @@ test('P002 and P003 analysis charts render standard aberration panels without co
   }
 })
 
+test('analysis panel layout and both side-panel states persist across reload', async ({ page }) => {
+  await mockEngine(page)
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await page.goto('/?lng=en')
+  await page.evaluate(() => {
+    window.localStorage.removeItem('optics-workbench-analysis-panels')
+    window.localStorage.removeItem('optics-workbench-navigation-expanded')
+    window.localStorage.removeItem('optics-workbench-context-panel-open')
+  })
+  await page.reload()
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
+
+  const workspace = page.getByTestId('analysis-chart-grid')
+  await expect(workspace).toHaveAttribute('data-panel-count', '4')
+  await page.locator('#analysis-chart-picker-0').selectOption('relative_illumination')
+  await page.getByTestId('remove-analysis-panel-3').click()
+  await page.getByTestId('remove-analysis-panel-2').click()
+  await expect(workspace).toHaveAttribute('data-panel-count', '2')
+  await page.getByTestId('add-analysis-panel').click()
+  await expect(workspace).toHaveAttribute('data-panel-count', '3')
+
+  await page.getByRole('button', { name: 'Collapse navigation' }).click()
+  await page.getByRole('button', { name: 'Close context panel' }).click()
+  await expect(page.locator('.workbench-grid')).toHaveAttribute('data-context-open', 'false')
+
+  await page.reload()
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
+  await expect(page.getByTestId('analysis-chart-grid')).toHaveAttribute('data-panel-count', '3')
+  await expect(page.locator('#analysis-chart-picker-0')).toHaveValue('relative_illumination')
+  await expect(page.locator('#analysis-chart-picker-2')).toHaveValue('mtf_monochromatic')
+  await expect(page.locator('.workbench-grid')).toHaveAttribute('data-navigation-expanded', 'false')
+  await expect(page.locator('.workbench-grid')).toHaveAttribute('data-context-open', 'false')
+  await expect(page.locator('.right-pane')).toBeHidden()
+})
+
 test('P002 through-focus MTF renders one four-series panel per recommended field', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en')
   await selectPresetOption(page, 'P002 N-BK7 Biconvex Singlet 50mm Demo')
   await page.getByRole('button', { name: 'Analysis', exact: true }).click()
-  await page.getByTestId('analysis-view-switcher').getByRole('tab', { name: 'Through-focus MTF' }).click()
-  await page.getByRole('button', { name: 'Run Charts' }).click()
+  await page.locator('#analysis-chart-picker-3').selectOption('through_focus')
+  await page.getByRole('button', { name: 'Run through-focus MTF' }).click()
 
   const view = page.getByTestId('through-focus-mtf-view')
   await expect(view).toBeVisible()
@@ -1650,6 +1678,7 @@ test('curve analyses keep dense fields separate from ray fan and MTF frequency s
   await page.getByRole('button', { name: 'Analysis', exact: true }).click()
   await page.getByRole('button', { name: 'Run Charts' }).click()
   await expect(page.getByTestId('analysis-chart-grid')).toBeVisible()
+  await expect.poll(() => requests.length).toBe(9)
 
   const curveEndpoints = [
     '/v1/analysis/distortion',
@@ -1704,13 +1733,14 @@ test('MTF mode switches between monochromatic and weighted white-light endpoints
 
   const modeControl = page.getByTestId('mtf-mode-control')
   await expect(modeControl.getByRole('tab', { name: 'Monochromatic' })).toHaveAttribute('aria-selected', 'true')
+  await page.locator('#analysis-chart-picker-3').selectOption('mtf_white')
   await modeControl.getByRole('tab', { name: 'White light' }).click()
   await page.getByRole('button', { name: 'Run Charts' }).click()
 
   await expect(page.getByText('White light', { exact: true }).last()).toBeVisible()
   await expect(page.getByText('White-light MTF uses the wavelength weights from the analysis conditions. Unit: lp/mm.')).toBeVisible()
   for (const legend of ['white center M', 'white center S', 'white mid-y M', 'white mid-y S', 'white edge-y M', 'white edge-y S']) {
-    await expect(page.getByTestId('mtf-chart').locator('..').getByText(legend, { exact: true })).toBeVisible()
+    await expect(page.getByTestId('mtf-chart-white').locator('..').getByText(legend, { exact: true })).toBeVisible()
   }
   const whiteRequests = mtfRequests.filter((request) => request.url.endsWith('/v1/analysis/white-mtf'))
   expect(whiteRequests).toHaveLength(3)
@@ -1718,27 +1748,29 @@ test('MTF mode switches between monochromatic and weighted white-light endpoints
   expect(whiteRequests[0].body.wavelength_weights).toEqual({ '486.13': 0.5, '587.56': 1, '656.27': 0.5 })
   for (const request of whiteRequests) expect(request.body.ray_sampling).toEqual(expectedMtfSampling)
   expect(whiteRequests.every((request) => JSON.stringify(request.body.frequencies_lp_per_mm) === JSON.stringify(expectedMtfFrequencies))).toBe(true)
-  await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-point-count', '198')
-  await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-x-domain-min', '0')
-  await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-x-domain-max', '80')
-  await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-y-domain-min', '0')
-  await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-y-domain-max', '1')
-  await expect(page.getByTestId('mtf-chart').locator('.plot-tick')).toHaveText(['0.00', '80.00', '0.00', '1.00'])
+  await expect(page.getByTestId('mtf-chart-white')).toHaveAttribute('data-point-count', '198')
+  await expect(page.getByTestId('mtf-chart-white')).toHaveAttribute('data-x-domain-min', '0')
+  await expect(page.getByTestId('mtf-chart-white')).toHaveAttribute('data-x-domain-max', '80')
+  await expect(page.getByTestId('mtf-chart-white')).toHaveAttribute('data-y-domain-min', '0')
+  await expect(page.getByTestId('mtf-chart-white')).toHaveAttribute('data-y-domain-max', '1')
+  await expect(page.getByTestId('mtf-chart-white').locator('.plot-tick')).toHaveText(['0.00', '80.00', '0.00', '1.00'])
 
   await modeControl.getByRole('tab', { name: 'Monochromatic' }).click()
+  await page.locator('#analysis-chart-picker-2').selectOption('mtf_monochromatic')
   await page.getByRole('button', { name: 'Run Charts' }).click()
   await expect(page.getByText('Monochromatic', { exact: true }).last()).toBeVisible()
-  await expect(page.getByTestId('mtf-chart').locator('..').getByText('center M', { exact: true })).toBeVisible()
-  await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-x-domain-min', '0')
-  await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-x-domain-max', '80')
-  await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-y-domain-min', '0')
-  await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-y-domain-max', '1')
-  await expect(page.getByTestId('mtf-chart').locator('.plot-tick')).toHaveText(['0.00', '80.00', '0.00', '1.00'])
+  await expect(page.getByTestId('mtf-chart-monochromatic').locator('..').getByText('center M', { exact: true })).toBeVisible()
+  await expect(page.getByTestId('mtf-chart-monochromatic')).toHaveAttribute('data-x-domain-min', '0')
+  await expect(page.getByTestId('mtf-chart-monochromatic')).toHaveAttribute('data-x-domain-max', '80')
+  await expect(page.getByTestId('mtf-chart-monochromatic')).toHaveAttribute('data-y-domain-min', '0')
+  await expect(page.getByTestId('mtf-chart-monochromatic')).toHaveAttribute('data-y-domain-max', '1')
+  await expect(page.getByTestId('mtf-chart-monochromatic').locator('.plot-tick')).toHaveText(['0.00', '80.00', '0.00', '1.00'])
+  await expect(page.getByTestId('mtf-chart-white')).toBeVisible()
   const monochromaticRequests = mtfRequests.filter((request) => request.url.endsWith('/v1/analysis/mtf'))
   expect(monochromaticRequests).toHaveLength(3)
   for (const request of monochromaticRequests) expect(request.body.ray_sampling).toEqual(expectedMtfSampling)
   expect(monochromaticRequests.every((request) => JSON.stringify(request.body.frequencies_lp_per_mm) === JSON.stringify(expectedMtfFrequencies))).toBe(true)
-  await expect(page.getByTestId('mtf-chart')).toHaveAttribute('data-point-count', '198')
+  await expect(page.getByTestId('mtf-chart-monochromatic')).toHaveAttribute('data-point-count', '198')
 })
 
 test('P007 full aiming reports excluded failures in ray fan and longitudinal panels', async ({ page }) => {

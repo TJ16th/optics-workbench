@@ -17,10 +17,10 @@ import type {
 import type { SupportedLanguage } from '../i18n/resources'
 
 export type WorkbenchViewKey = 'system' | 'preview' | 'analysis' | 'compare' | 'debug'
-export type AnalysisViewKey = 'standard' | 'through_focus'
 export type ThemePreference = 'system' | 'light' | 'dark'
 
 const navigationStorageKey = 'optics-workbench-navigation-expanded'
+const contextPanelStorageKey = 'optics-workbench-context-panel-open'
 
 type ControllerInitialState<ImagePlanePolicyDraft, DecenterTiltDraft> = {
   apiBase: string
@@ -43,7 +43,6 @@ export function useWorkbenchControllerState<Snapshot, ImagePlanePolicyDraft, Dec
   const [apiBase, setApiBase] = useState(initial.apiBase)
   const [selectedPresetId, setSelectedPresetId] = useState('P001')
   const [activeTab, setActiveTab] = useState<WorkbenchViewKey>('preview')
-  const [analysisView, setAnalysisView] = useState<AnalysisViewKey>('standard')
   const [samplesPerField, setSamplesPerField] = useState(9)
   const [analysisFields, setAnalysisFields] = useState<AnalysisField[]>(initial.fields)
   const [wavelengths, setWavelengths] = useState<WavelengthSample[]>(initial.wavelengths)
@@ -93,7 +92,7 @@ export function useWorkbenchControllerState<Snapshot, ImagePlanePolicyDraft, Dec
 
   return {
     themePreference, setThemePreference, systemDark, setSystemDark, apiBase, setApiBase,
-    selectedPresetId, setSelectedPresetId, activeTab, setActiveTab, analysisView, setAnalysisView,
+    selectedPresetId, setSelectedPresetId, activeTab, setActiveTab,
     samplesPerField, setSamplesPerField, analysisFields, setAnalysisFields, wavelengths, setWavelengths,
     pupilDistribution, setPupilDistribution, aimingMode, setAimingMode, mtfMode, setMtfMode,
     showDensityRays, setShowDensityRays, imagePlanePolicy, setImagePlanePolicy, imagePlanePolicyRef,
@@ -145,7 +144,10 @@ export function useNavigationShellState() {
     const saved = window.localStorage.getItem(navigationStorageKey)
     return saved == null ? window.innerWidth >= 1440 : saved === 'true'
   })
-  const [contextDrawerOpen, setContextDrawerOpen] = useState(false)
+  const [contextDrawerOpen, setContextDrawerOpen] = useState(() => {
+    const saved = window.localStorage.getItem(contextPanelStorageKey)
+    return saved == null ? window.innerWidth > 1366 : saved === 'true'
+  })
 
   useEffect(() => {
     const updateViewport = () => setViewportWidth(window.innerWidth)
@@ -156,6 +158,10 @@ export function useNavigationShellState() {
   useEffect(() => {
     window.localStorage.setItem(navigationStorageKey, String(navigationExpanded))
   }, [navigationExpanded])
+
+  useEffect(() => {
+    window.localStorage.setItem(contextPanelStorageKey, String(contextDrawerOpen))
+  }, [contextDrawerOpen])
 
   const contextUsesDrawer = viewportWidth <= 1366
   return {

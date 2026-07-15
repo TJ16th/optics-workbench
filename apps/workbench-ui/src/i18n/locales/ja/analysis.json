@@ -10,7 +10,6 @@
     "run_charts": "チャート実行",
     "run_charts_empty": "チャートを実行すると解析ビューに表示されます。",
     "chart_empty": "プロット可能なデータがありません。",
-    "standard_aberration_title": "縦収差図 標準パネル",
     "axis_focus_shift_mm": "焦点ずれ mm",
     "axis_pupil_coordinate": "瞳座標",
     "axis_half_field_deg": "半画角 deg",
@@ -71,10 +70,12 @@
     "psf_samples": "PSF到達光線",
     "angular_mtf_10": "角度MTF 10 cycles/degree",
     "retinal_mtf_10": "網膜MTF 10 lp/mm",
-    "standard_view": "標準解析",
-    "through_focus_view": "デフォーカスMTF",
     "through_focus_mtf_title": "デフォーカスMTF",
     "through_focus_mtf_note": "実線はメリディオナル（M）、破線はサジタル（S）です。幾何MTFのため回折は含みません。",
-    "axis_defocus_mm": "デフォーカス mm"
+    "axis_defocus_mm": "デフォーカス mm",
+    "chart_picker": "チャート",
+    "add_panel": "パネルを追加",
+    "remove_panel": "パネルを削除",
+    "run_through_focus": "デフォーカスMTFを実行"
   }
 }

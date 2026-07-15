@@ -10,7 +10,6 @@
     "run_charts": "Run Charts",
     "run_charts_empty": "Run charts to populate this analysis view.",
     "chart_empty": "No plottable data.",
-    "standard_aberration_title": "Longitudinal Aberration Standard Panels",
     "axis_focus_shift_mm": "focus shift mm",
     "axis_pupil_coordinate": "pupil coordinate",
     "axis_half_field_deg": "half field deg",
@@ -71,10 +70,12 @@
     "psf_samples": "PSF arrived rays",
     "angular_mtf_10": "Angular MTF at 10 cycles/degree",
     "retinal_mtf_10": "Retinal MTF at 10 lp/mm",
-    "standard_view": "Standard",
-    "through_focus_view": "Through-focus MTF",
     "through_focus_mtf_title": "Through-focus MTF",
     "through_focus_mtf_note": "Solid lines are meridional (M); dashed lines are sagittal (S). Geometric MTF, diffraction included: false.",
-    "axis_defocus_mm": "defocus mm"
+    "axis_defocus_mm": "defocus mm",
+    "chart_picker": "Chart",
+    "add_panel": "Add panel",
+    "remove_panel": "Remove panel",
+    "run_through_focus": "Run through-focus MTF"
   }
 }
