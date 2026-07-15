@@ -265,18 +265,22 @@ Phase 8でafocal、eye_reference、射出瞳、アイボックス、角度MTF等
 
 ### 背景
 
-現行APIは同期HTTPが中心です。重いPSF/MTF、最適化、大量field解析では、非同期jobや進捗通知が必要になる可能性があります。
+現行APIは同期HTTPが中心です。重いPSF/MTF、最適化、大量field解析では、非同期jobや進捗通知が必要になる可能性があります。R126ではUIが複数endpointを呼ぶRun Chartsについて、endpoint完了数を使う粗い進捗とAbortControllerキャンセルを実装したが、単一endpoint内部の真の進捗率は取得できない。
 
 ### 対応案
 
 - まずHTTP job APIかWebSocketかを比較する。
 - 進捗、キャンセル、artifact TTLとの関係を設計する。
 - UI側ではjob状態表示と再取得導線を設計する。
+- 長時間候補は`/v1/analysis/mtf`、`/v1/analysis/white-mtf`、`/v1/analysis/mtf/through-focus`、PSF系、大量fieldの`/v1/analysis/relative-illumination`、最適化系endpointとする。
+- 進捗粒度は、ray batch完了数／総batch数、field・wavelength完了数、focus sweep step、optimizer iterationを候補とし、単調増加する`completed`／`total`と現在phaseをjob状態へ含める。
+- `POST`でjobを作成し、status pollingまたはWebSocketで進捗を取得し、cancel endpointで中断する最小契約を比較する。完了artifactは既存TTLと関連付ける。
 
 ### 受け入れ条件
 
 - 長時間解析の進捗とキャンセル方針が仕様化されている。
 - MVP API形状とUI状態遷移が決まっている。
+- 単一endpoint実行中にUIが真の進捗率とphaseを表示でき、再接続後もjob状態を再取得できる。
 
 ## Issue: 面ごとの製造外径（mechanical_diameter_mm）を導入し、段付き外径をUIで表現できるようにする
 

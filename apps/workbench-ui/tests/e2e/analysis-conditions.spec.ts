@@ -2134,3 +2134,52 @@ test('R122 reports structured issues for invalid project files', async ({ page }
   await expect(issue).toContainText('optics_value_error')
   await expect(issue).toContainText('optical_systems')
 })
+
+test('R126 keeps navigation responsive while chart panels report progress and cancellation', async ({ page }) => {
+  await mockEngine(page)
+  let delayedRequestIndex = 0
+  await page.route('http://127.0.0.1:8000/v1/analysis/**', async (route) => {
+    delayedRequestIndex += 1
+    await new Promise((resolve) => setTimeout(resolve, delayedRequestIndex * 120))
+    await route.fallback()
+  })
+  await page.goto('/?lng=en')
+  await page.evaluate(() => {
+    const metrics = window as unknown as { __r126LongTasks: number[]; __r126Observer: PerformanceObserver }
+    metrics.__r126LongTasks = []
+    metrics.__r126Observer = new PerformanceObserver((list) => {
+      metrics.__r126LongTasks.push(...list.getEntries().map((entry) => entry.duration))
+    })
+    metrics.__r126Observer.observe({ type: 'longtask', buffered: true })
+  })
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
+  await page.getByRole('button', { name: 'Run Charts' }).click()
+
+  const progress = page.getByTestId('analysis-run-progress')
+  await expect(progress).toBeVisible()
+  await expect(page.getByTestId(/^analysis-panel-loading-/)).toHaveCount(4)
+  await expect.poll(async () => await progress.textContent()).toMatch(/[1-9]\d* of \d+ analyses complete/)
+
+  const navigationStartedAt = Date.now()
+  await page.getByRole('button', { name: 'System', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'System', exact: true })).toHaveAttribute('aria-current', 'page')
+  const navigationElapsedMs = Date.now() - navigationStartedAt
+  expect(navigationElapsedMs).toBeLessThan(750)
+
+  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
+  await expect(page.getByTestId('analysis-run-progress')).toBeVisible()
+  await expect(page.getByTestId('standard-field-curvature-chart')).toBeVisible({ timeout: 5_000 })
+  const longTasks = await page.evaluate(() => (window as unknown as { __r126LongTasks: number[] }).__r126LongTasks)
+  console.log('R126 responsiveness', {
+    navigationElapsedMs,
+    longTaskCount: longTasks.length,
+    maxLongTaskMs: longTasks.length ? Math.max(...longTasks) : 0,
+  })
+
+  delayedRequestIndex = 0
+  await page.getByRole('button', { name: 'Run Charts' }).click()
+  await expect(page.getByTestId('cancel-analysis-run')).toBeVisible()
+  await page.getByTestId('cancel-analysis-run').click()
+  await expect(page.getByTestId(/^analysis-panel-loading-/)).toHaveCount(0)
+  await expect(page.getByTestId('cancel-analysis-run')).toHaveCount(0)
+})

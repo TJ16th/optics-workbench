@@ -135,11 +135,12 @@ type WhiteMtfResponse = {
   metadata?: Record<string, unknown>
 }
 
-async function postAnalysis<T>(apiBase: string, endpoint: string, request: object): Promise<T> {
+async function postAnalysis<T>(apiBase: string, endpoint: string, request: object, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${apiBase}${endpoint}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(request),
+    signal,
   })
   return readJson(response, 'api_error')
 }
@@ -188,7 +189,16 @@ export function buildCurveAnalysisFields(fields: AnalysisField[]): AnalysisField
   )
 }
 
-export async function runChartAnalyses(apiBase: string, request: AnalysisRequest, mtfMode: MtfMode = 'monochromatic'): Promise<ChartAnalysisResult> {
+export function chartAnalysisRequestCount(request: AnalysisRequest) {
+  return 7 + Math.max(1, request.fields.length)
+}
+
+export async function runChartAnalyses(
+  apiBase: string,
+  request: AnalysisRequest,
+  mtfMode: MtfMode = 'monochromatic',
+  options: { signal?: AbortSignal; onProgress?: (completed: number, total: number) => void } = {},
+): Promise<ChartAnalysisResult> {
   const axialField = [...request.fields].sort(
     (left, right) => Math.hypot(left.theta_y_deg ?? 0, left.theta_z_deg ?? 0) - Math.hypot(right.theta_y_deg ?? 0, right.theta_z_deg ?? 0),
   )[0]
@@ -202,36 +212,46 @@ export async function runChartAnalyses(apiBase: string, request: AnalysisRequest
     },
     {},
   )
+  const total = chartAnalysisRequestCount(request)
+  let completed = 0
+  const tracked = async <T,>(promise: Promise<T>) => {
+    try {
+      return await promise
+    } finally {
+      completed += 1
+      options.onProgress?.(completed, total)
+    }
+  }
   const [rayFanY, rayFanZ, longitudinal, distortion, fieldCurvature, msImageSurface, relativeIllumination, mtfByField] = await Promise.all([
-    postAnalysis<ChartAnalysisResult['rayFan']>(apiBase, '/v1/analysis/ray-fan', {
+    tracked(postAnalysis<ChartAnalysisResult['rayFan']>(apiBase, '/v1/analysis/ray-fan', {
       ...request,
       ray_sampling: { ...request.ray_sampling, pupil_distribution: 'fan_y' },
-    }),
-    postAnalysis<ChartAnalysisResult['rayFan']>(apiBase, '/v1/analysis/ray-fan', {
+    }, options.signal)),
+    tracked(postAnalysis<ChartAnalysisResult['rayFan']>(apiBase, '/v1/analysis/ray-fan', {
       ...request,
       ray_sampling: { ...request.ray_sampling, pupil_distribution: 'fan_z' },
-    }),
-    postAnalysis<ChartAnalysisResult['longitudinal']>(apiBase, '/v1/analysis/longitudinal-aberration', {
+    }, options.signal)),
+    tracked(postAnalysis<ChartAnalysisResult['longitudinal']>(apiBase, '/v1/analysis/longitudinal-aberration', {
       ...request,
       fields: axialField ? [axialField] : request.fields,
       ray_sampling: { ...request.ray_sampling, pupil_distribution: 'fan_y' },
-    }),
-    postAnalysis<ChartAnalysisResult['distortion']>(apiBase, '/v1/analysis/distortion', curveRequest),
-    postAnalysis<{ rows: FieldCurvatureRow[]; artifacts?: Record<string, string> }>(apiBase, '/v1/analysis/field-curvature', curveRequest),
-    postAnalysis<{ rows: FieldCurvatureRow[] }>(apiBase, '/v1/analysis/ms-image-surface', curveRequest),
-    postAnalysis<ChartAnalysisResult['relativeIllumination']>(apiBase, '/v1/analysis/relative-illumination', {
+    }, options.signal)),
+    tracked(postAnalysis<ChartAnalysisResult['distortion']>(apiBase, '/v1/analysis/distortion', curveRequest, options.signal)),
+    tracked(postAnalysis<{ rows: FieldCurvatureRow[]; artifacts?: Record<string, string> }>(apiBase, '/v1/analysis/field-curvature', curveRequest, options.signal)),
+    tracked(postAnalysis<{ rows: FieldCurvatureRow[] }>(apiBase, '/v1/analysis/ms-image-surface', curveRequest, options.signal)),
+    tracked(postAnalysis<ChartAnalysisResult['relativeIllumination']>(apiBase, '/v1/analysis/relative-illumination', {
       ...curveRequest,
       ray_sampling: request.relative_illumination_sampling ?? DEFAULT_RELATIVE_ILLUMINATION_SAMPLING,
-    }),
+    }, options.signal)),
     Promise.all(
       mtfFields.map((field) =>
-        postAnalysis<NonNullable<ChartAnalysisResult['mtf']> | WhiteMtfResponse>(apiBase, mtfMode === 'white' ? '/v1/analysis/white-mtf' : '/v1/analysis/mtf', {
+        tracked(postAnalysis<NonNullable<ChartAnalysisResult['mtf']> | WhiteMtfResponse>(apiBase, mtfMode === 'white' ? '/v1/analysis/white-mtf' : '/v1/analysis/mtf', {
           ...request,
           ...(field ? { fields: [field] } : {}),
           ...(mtfMode === 'white' ? { wavelength_weights: wavelengthWeights } : {}),
           ray_sampling: DEFAULT_MTF_SAMPLING,
           frequencies_lp_per_mm: request.frequencies_lp_per_mm ?? [...DEFAULT_MTF_FREQUENCIES_LP_PER_MM],
-        }),
+        }, options.signal)),
       ),
     ),
   ])

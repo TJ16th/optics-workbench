@@ -59,6 +59,11 @@
     }
   },
   "errors": {
+    "analysis_cancelled": {
+      "label": "Analysis cancelled",
+      "message": "Analysis was cancelled by the user.",
+      "action": "Adjust the conditions and run the analysis again when ready."
+    },
     "artifact_not_found": {
       "label": "Artifact not found",
       "message": "The artifact {category}/{id} was not found or has expired.",

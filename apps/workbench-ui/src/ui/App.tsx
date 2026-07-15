@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import {
   Accordion,
   AccordionItem,
@@ -10,6 +10,7 @@ import {
   Header,
   HeaderName,
   InlineNotification,
+  InlineLoading,
   Modal,
   NumberInput,
   Select,
@@ -23,11 +24,11 @@ import {
   ToggletipContent,
   Theme,
 } from '@carbon/react'
-import { Add, ArrowDown, ArrowUp, ChartLine, Checkmark, Code, Compare, Copy, Download, Information, Maximize, Menu, Play, Renew, Save, Settings, SidePanelOpen, TrashCan, View } from '@carbon/icons-react'
+import { Add, ArrowDown, ArrowUp, ChartLine, Checkmark, Code, Compare, Copy, Download, Information, Maximize, Menu, Play, Renew, Save, Settings, SidePanelOpen, Stop, TrashCan, View } from '@carbon/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { dump as dumpYaml, load as loadYaml } from 'js-yaml'
-import { DEFAULT_MTF_FREQUENCIES_LP_PER_MM, defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, runThroughFocusMtf, runVisualComposite, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
+import { chartAnalysisRequestCount, DEFAULT_MTF_FREQUENCIES_LP_PER_MM, defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, runThroughFocusMtf, runVisualComposite, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
 import { presets, visualFixturePresets } from '../domain/presets'
 import type {
   AnalysisField,
@@ -97,6 +98,7 @@ const analysisChartKeys = new Set<AnalysisChartKey>([
 type SystemViewMode = 'table' | 'split'
 type SurfaceNumberField = 'radius_mm' | 'thickness_after_mm' | 'semi_diameter_mm' | 'conic'
 type ZoomPosition = NonNullable<OpticalSystem['zoom_positions']>[number]
+type AnalysisRunProgress = { completed: number; total: number; startedAt: number; active: boolean }
 
 type Snapshot = {
   id: string
@@ -2984,6 +2986,8 @@ function AnalysisCharts({
   result,
   mtfResults,
   panels,
+  loading,
+  elapsedSeconds,
   onSetPanel,
   onAddPanel,
   onRemovePanel,
@@ -2992,6 +2996,8 @@ function AnalysisCharts({
   result?: ChartAnalysisResult
   mtfResults: Partial<Record<MtfMode, ChartAnalysisResult['mtf']>>
   panels: AnalysisChartKey[]
+  loading: boolean
+  elapsedSeconds: number
   onSetPanel: (index: number, key: AnalysisChartKey) => void
   onAddPanel: () => void
   onRemovePanel: (index: number) => void
@@ -3150,7 +3156,12 @@ function AnalysisCharts({
                 />
               </div>
             </div>
-            {renderPanel(key)}
+            {loading ? (
+              <div className="analysis-panel-loading" data-testid={`analysis-panel-loading-${index}`} aria-live="polite">
+                <InlineLoading status="active" description={t('analysis:analysis.panel_loading')} />
+                <span>{t('analysis:analysis.elapsed_seconds', { seconds: formatFixed(elapsedSeconds, 1) })}</span>
+              </div>
+            ) : renderPanel(key)}
           </section>
         ))}
       </div>
@@ -3480,6 +3491,11 @@ export function App() {
   const [positionSaveId, setPositionSaveId] = useState('')
   const [projectIoIssues, setProjectIoIssues] = useState<EngineIssue[]>([])
   const [projectIoStatus, setProjectIoStatus] = useState('')
+  const [analysisRunProgress, setAnalysisRunProgress] = useState<AnalysisRunProgress | null>(null)
+  const [analysisRunNow, setAnalysisRunNow] = useState(() => performance.now())
+  const [chartRenderPending, startChartTransition] = useTransition()
+  const chartAbortControllerRef = useRef<AbortController | null>(null)
+  const analysisProgressTimerRef = useRef<number | undefined>()
   const [analysisPanels, setAnalysisPanels] = useState<AnalysisChartKey[]>(() => {
     try {
       const saved = JSON.parse(window.localStorage.getItem(analysisPanelsStorageKey) ?? 'null')
@@ -3537,6 +3553,18 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem(analysisPanelsStorageKey, JSON.stringify(analysisPanels))
   }, [analysisPanels])
+
+  useEffect(() => {
+    if (!analysisRunProgress) return
+    setAnalysisRunNow(performance.now())
+    const timer = window.setInterval(() => setAnalysisRunNow(performance.now()), 250)
+    return () => window.clearInterval(timer)
+  }, [analysisRunProgress?.startedAt])
+
+  useEffect(() => () => {
+    chartAbortControllerRef.current?.abort()
+    if (analysisProgressTimerRef.current) window.clearTimeout(analysisProgressTimerRef.current)
+  }, [])
 
   useEffect(() => {
     window.localStorage.setItem(systemViewStorageKey, systemViewMode)
@@ -4087,6 +4115,13 @@ export function App() {
     void runMotionPreview(runtimeConfigurationRef.current, false)
   }
 
+  const finishAnalysisProgress = () => {
+    setAnalysisRunProgress((current) => current ? { ...current, completed: current.total, active: false } : null)
+    if (analysisProgressTimerRef.current) window.clearTimeout(analysisProgressTimerRef.current)
+    analysisProgressTimerRef.current = window.setTimeout(() => setAnalysisRunProgress(null), 1500)
+    chartAbortControllerRef.current = null
+  }
+
   const { validateMutation, registerMutation, previewMutation, chartsMutation, throughFocusMutation, visualMutation, focusMutation } = useWorkbenchMutations({
     validate: {
     mutationFn: async () => validateSystem(apiBase, system),
@@ -4139,23 +4174,46 @@ export function App() {
       const id = await ensureRegisteredSystem()
       const request = makeAnalysisRequest(id)
       setLastRequest(request)
-      return runChartAnalyses(apiBase, request, mtfMode)
+      if (analysisProgressTimerRef.current) window.clearTimeout(analysisProgressTimerRef.current)
+      const controller = new AbortController()
+      chartAbortControllerRef.current = controller
+      const total = chartAnalysisRequestCount(request)
+      setAnalysisRunProgress({ completed: 0, total, startedAt: performance.now(), active: true })
+      return runChartAnalyses(apiBase, request, mtfMode, {
+        signal: controller.signal,
+        onProgress: (completed, progressTotal) => {
+          setAnalysisRunProgress((current) => current ? { ...current, completed, total: progressTotal } : current)
+        },
+      })
     },
     onSuccess: (result) => {
-      setChartResult(result)
-      if (result.mtf) {
-        setMtfResults((current) => ({ ...current, [result.mtf?.mode ?? mtfMode]: result.mtf }))
-      }
-      const nextEvaluationPlane = extractEvaluationPlane(result)
-      setEvaluationPlane(nextEvaluationPlane)
-      setFocusCurve(nextEvaluationPlane?.focus_curve ?? [])
-      setFocusResult(undefined)
-      setLastResponse(result)
-      setAnalysisDirty(false)
-      setActiveTab('analysis')
+      startChartTransition(() => {
+        setChartResult(result)
+        if (result.mtf) {
+          setMtfResults((current) => ({ ...current, [result.mtf?.mode ?? mtfMode]: result.mtf }))
+        }
+        const nextEvaluationPlane = extractEvaluationPlane(result)
+        setEvaluationPlane(nextEvaluationPlane)
+        setFocusCurve(nextEvaluationPlane?.focus_curve ?? [])
+        setFocusResult(undefined)
+        setLastResponse(result)
+        setAnalysisDirty(false)
+        setActiveTab('analysis')
+      })
+      finishAnalysisProgress()
     },
     onError: (error) => {
-      setLastResponse(getApiIssue(error))
+      const cancelled = error instanceof DOMException && error.name === 'AbortError'
+      setLastResponse(cancelled ? {
+        code: 'analysis_cancelled',
+        params: { completed: analysisRunProgress?.completed ?? 0, total: analysisRunProgress?.total ?? 0 },
+        message_en: 'Analysis was cancelled by the user.',
+        severity: 'info',
+      } : getApiIssue(error))
+      setAnalysisRunProgress((current) => current ? { ...current, active: false } : null)
+      if (analysisProgressTimerRef.current) window.clearTimeout(analysisProgressTimerRef.current)
+      analysisProgressTimerRef.current = window.setTimeout(() => setAnalysisRunProgress(null), 1500)
+      chartAbortControllerRef.current = null
     },
     },
 
@@ -4216,7 +4274,9 @@ export function App() {
     },
   })
 
-  const running = validateMutation.isPending || registerMutation.isPending || previewMutation.isPending || chartsMutation.isPending || throughFocusMutation.isPending || visualMutation.isPending || focusMutation.isPending
+  const analysisRunElapsedSeconds = analysisRunProgress ? Math.max(0, (analysisRunNow - analysisRunProgress.startedAt) / 1000) : 0
+  const analysisPanelLoading = Boolean(analysisRunProgress?.active) || chartRenderPending
+  const running = validateMutation.isPending || registerMutation.isPending || previewMutation.isPending || chartsMutation.isPending || chartRenderPending || throughFocusMutation.isPending || visualMutation.isPending || focusMutation.isPending
   const engineOnline = health.data?.status === 'ok'
   const apiMajor = meta.data?.api_schema_version?.split('.')[0]
   const versionBlocked = Boolean(apiMajor && apiMajor !== '2')
@@ -4896,6 +4956,20 @@ export function App() {
                     {t('common.buttons.save_snapshot')}
                   </Button>
                 </div>
+                {analysisRunProgress ? (
+                  <div className="analysis-run-progress" data-testid="analysis-run-progress" aria-live="polite">
+                    <InlineLoading
+                      status={analysisRunProgress.active ? 'active' : 'finished'}
+                      description={t('analysis:analysis.progress_count', { completed: analysisRunProgress.completed, total: analysisRunProgress.total })}
+                    />
+                    <span>{t('analysis:analysis.elapsed_seconds', { seconds: formatFixed(analysisRunElapsedSeconds, 1) })}</span>
+                    {analysisRunProgress.active ? (
+                      <Button size="sm" kind="danger--tertiary" renderIcon={Stop} onClick={() => chartAbortControllerRef.current?.abort()} data-testid="cancel-analysis-run">
+                        {t('analysis:analysis.cancel_run')}
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               {system.visual_evaluation?.mode === 'instrument_and_retinal' ? (
                 <section className="panel large-panel" data-testid="visual-composite-results">
@@ -4935,6 +5009,8 @@ export function App() {
                 result={chartResult}
                 mtfResults={mtfResults}
                 panels={analysisPanels}
+                loading={analysisPanelLoading}
+                elapsedSeconds={analysisRunElapsedSeconds}
                 onSetPanel={(index, key) => setAnalysisPanels((current) => current.map((item, itemIndex) => itemIndex === index ? key : item))}
                 onAddPanel={() => setAnalysisPanels((current) => current.length >= 4 ? current : [...current, 'mtf_monochromatic'])}
                 onRemovePanel={(index) => setAnalysisPanels((current) => current.length <= 2 ? current : current.filter((_, itemIndex) => itemIndex !== index))}

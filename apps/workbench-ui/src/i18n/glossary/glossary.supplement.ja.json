@@ -59,6 +59,11 @@
     }
   },
   "errors": {
+    "analysis_cancelled": {
+      "label": "解析キャンセル",
+      "message": "ユーザー操作により解析をキャンセルしました。",
+      "action": "必要に応じて条件を調整し、解析を再実行してください。"
+    },
     "artifact_not_found": {
       "label": "Artifactが見つからない",
       "message": "Artifact {category}/{id} が見つからないか期限切れです。",
