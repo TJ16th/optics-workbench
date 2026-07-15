@@ -858,3 +858,46 @@ R91でJ2独立exact有限差分とJ3 request-local warm refinementを実装し�
 - warmを選んだcandidateは代表プリセット全体で独立exactより遅くならないか、遅くなる場合は規定閾値でcoldへ切り替わる。
 - response metadataから候補別の反復・fallback・時間内訳を再現できる。
 - R83条件の複数回測定で中央値と分散を報告し、`1.25 x cold`目標に対する達否を安定して判定できる。
+
+## Issue: 全解析エンドポイントへconfiguration適用と検証を統一する
+
+ラベル案: `engine`, `testing`
+
+### 背景
+
+R106棚卸しで、主要trace・spot・MTF・solve系は`configuration.zoom_position`を実行時レイアウトへ渡す一方、`/v1/analysis/chromatic-aberration`の解析本体、`/v1/analysis/exit-pupil`、`/v1/analysis/eye-box`、`/v1/analysis/telescope`はconfigurationを受け渡していないことを確認した。`/v1/analysis/binocular-alignment`も右系の`right_configuration`だけを参照する。これは`doc/engine_spec.md` 10.3節の「validateおよび各解析エンドポイントは構成適用後に検査する」という規約と整合しない。
+
+### 対応案
+
+- 各解析関数とAPI endpointへconfigurationを一貫して受け渡す。
+- `validate_configuration()`を共通入口で実行し、未知position、負の空気間隔、群交差等を同じ構造化エラーで返す。
+- binocularはleft/right双方のconfigurationを明示的に受けられるschemaへ揃える。
+- named position適用前後で結果が変わる直接APIテストをendpointごとに追加する。
+
+### 受け入れ条件
+
+- configurationを受ける全解析endpointが`zoom_position`によるruntime layoutを参照する。
+- 未知`zoom_position`が全対象endpointで`unknown_zoom_position`となる。
+- configuration非対応endpointを残す場合は、仕様・capabilities・API schemaで明示する。
+
+## Issue: named position管理UIとsnapshotへのruntime configuration保存を追加する
+
+ラベル案: `ui`, `testing`
+
+### 背景
+
+R106棚卸しで、PreviewのRuntime controlsには既存`zoom_positions`を順番に切り替えるsliderがあるが、positionの一覧・内容確認・追加・更新・削除UIは存在しないことを確認した。またSnapshotはsystem内の`zoom_positions`定義を保持する一方、選択中の`runtimeConfiguration`をanalysis条件へ保存しないため、どのzoom/focus/OIS状態で結果を取得したかを復元できない。
+
+### 対応案
+
+- Systemビューへ`system.zoom_positions`を正本とするPosition Managerを追加する。
+- position ID、nominal focal length、groupごとのX/Y/Z shiftを一覧・編集・複製・削除できるようにする。
+- Runtime controlsへ「現在値をnamed positionとして保存」を追加し、保存時はsystem dirty・validation対象にする。
+- Snapshotのanalysis条件へ選択position IDと正規化済みruntime configurationを保存し、Compare/export/importで復元する。
+
+### 受け入れ条件
+
+- UIからnamed positionを作成し、system export後も保持できる。
+- Previewでpositionを切り替え、同じIDとruntime configurationがSnapshotへ保存される。
+- focus sliderやOIS shiftの一時値と、systemへ保存済みのpositionが視覚的に区別される。
+- R5 multi-configuration評価へ安定したposition ID列を渡せる。
