@@ -29,6 +29,13 @@
 - ベースラインはpath・検出pattern・行内容hash・出現数を組にして照合し、未登録の新規検出はCIを失敗させる。
 - ベースラインへの追加・既存entryの更新は、人間の明示承認を得た場合に限る。検出を通す目的でCodexが自己判断で追加してはならない。
 
+## Git push承認ルール
+
+- 完了報告、スクリーンショット、指示書の`done/`移動、`issues_backlog`等、ドキュメントだけを含むコミットは事前承認なしでpushしてよい。
+- 製品コード、テスト、CI設定、`doc/engine_spec.md`、`doc/ui_spec.md`、PIIスキャナ設定を含むコミット、およびdocsとこれらが混在するコミットのpushには、人間の明示承認を必要とする。
+- 個別の指示書でpush禁止または承認待ちが指定されている場合は、その指示を優先する。実装コミットが未pushのタスクでは、参照先のない完了報告だけを先行pushしない。
+- docs-only pushでもforce push、rebase、履歴書き換えは許可されない。push後は`git rev-list --left-right --count origin/master...HEAD`で同期状態を確認する。
+
 ## GitHub Issue運用【Codex自身はIssueを直接作成しない】
 
 - Codex自身の実行環境（ローカルシェル）には、GitHub書き込み用の資格情報を持たせない。`gh issue create` 等をCodexの通常タスク実行中に直接叩かない。
