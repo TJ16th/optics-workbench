@@ -678,7 +678,7 @@ test('R103 snapshot save stays in place and toast action opens Compare', async (
   await expect(page.locator('.snapshot-row').filter({ hasText: 'snapshot-1' })).toBeVisible()
 })
 
-test('R110 expanded spot modal preserves layout size and distinguishes fields and wavelengths', async ({ page }) => {
+test('R115 expanded spot modal splits fields with shared scale and RMS values without resizing layout', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en&fixture=all-presets')
   await selectPresetOption(page, 'P003 Achromat Doublet 100mm Demo')
@@ -696,11 +696,14 @@ test('R110 expanded spot modal preserves layout size and distinguishes fields an
   const expandedBox = await page.locator('#spot-svg-expanded').boundingBox()
   expect(expandedBox?.width ?? 0).toBeGreaterThan((compactBox?.width ?? 0) * 2)
   expect(expandedBox?.width ?? 0).toBeGreaterThan(500)
-  await expect(expanded.getByTestId('spot-field-legend-item')).toHaveCount(3)
+  await expect(expanded.getByTestId('spot-field-panel')).toHaveCount(3)
+  await expect(expanded.getByTestId('spot-rms-value')).toHaveCount(3)
+  await expect(expanded.getByTestId('spot-common-scale-bar')).toBeVisible()
+  await expect(expanded.getByText(/displayed samples/)).toHaveCount(4)
   await expect(expanded.getByTestId('spot-wavelength-legend-item')).toHaveCount(3)
-  await expect(expanded.locator('#spot-svg-expanded .spot-field-0')).not.toHaveCount(0)
-  await expect(expanded.locator('#spot-svg-expanded .spot-field-1')).not.toHaveCount(0)
-  await expect(expanded.locator('#spot-svg-expanded .spot-field-2')).not.toHaveCount(0)
+  await expect(expanded.locator('.spot-field-panel[data-field-index="0"] .spot-point')).not.toHaveCount(0)
+  await expect(expanded.locator('.spot-field-panel[data-field-index="1"] .spot-point')).not.toHaveCount(0)
+  await expect(expanded.locator('.spot-field-panel[data-field-index="2"] .spot-point')).not.toHaveCount(0)
   expect(await layout.boundingBox()).toEqual(before)
 
   await page.getByRole('button', { name: 'Close', exact: true }).click()

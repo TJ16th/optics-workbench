@@ -968,16 +968,97 @@ body {
 
 .spot-expanded-content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 180px;
+  grid-template-columns: minmax(0, 1fr) 150px;
   gap: 1rem;
   align-items: start;
   padding-bottom: 1rem;
 }
 
-.spot-strip.spot-strip--expanded {
+.spot-field-panels-shell {
   width: 100%;
   max-width: 620px;
   margin: 0 auto;
+}
+
+.spot-field-panels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.spot-field-panel {
+  min-width: 0;
+  border: 1px solid var(--ow-border-soft);
+  background: var(--ow-surface-subtle);
+}
+
+.spot-field-panel__heading {
+  display: grid;
+  gap: 0.15rem;
+  min-height: 3.2rem;
+  padding: 0.55rem 0.6rem 0.35rem;
+  border-bottom: 1px solid var(--ow-border-soft);
+}
+
+.spot-field-panel__heading strong {
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
+}
+
+.spot-field-panel__heading span,
+.spot-field-panel__metrics,
+.spot-sampling-note {
+  color: var(--ow-muted);
+  font-size: 0.69rem;
+  line-height: 1.35;
+}
+
+.spot-field-panel__plot {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+.spot-field-panel__metrics {
+  display: grid;
+  gap: 0.15rem;
+  min-height: 3.1rem;
+  padding: 0.35rem 0.6rem 0.5rem;
+  border-top: 1px solid var(--ow-border-soft);
+}
+
+.spot-origin-note {
+  color: var(--ow-orange);
+}
+
+.spot-origin-marker {
+  fill: none;
+  stroke: var(--ow-text-secondary);
+  stroke-width: 1;
+}
+
+.spot-common-scale {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+  color: var(--ow-text-secondary);
+  font-size: 0.75rem;
+}
+
+.spot-common-scale__line {
+  display: inline-block;
+  max-width: 180px;
+  height: 0.45rem;
+  border-right: 1px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  border-left: 1px solid currentColor;
+}
+
+.spot-sampling-note {
+  margin: 0.45rem 0 0;
+  text-align: center;
 }
 
 .spot-expanded-legend {
@@ -1000,7 +1081,6 @@ body {
   min-width: 0;
 }
 
-.spot-field-symbol,
 .spot-wavelength-symbol {
   display: inline-block;
   flex: 0 0 auto;
@@ -1009,17 +1089,25 @@ body {
   background: var(--ow-text-secondary);
 }
 
-.spot-field-symbol-0 {
-  border-radius: 50%;
-}
-
-.spot-field-symbol-2 {
-  clip-path: polygon(50% 0, 0 100%, 100% 100%);
-}
-
 .spot-wavelength-symbol {
   width: 18px;
   height: 3px;
+}
+
+@media (max-width: 920px) {
+  .spot-expanded-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .spot-field-panels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .spot-field-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .legend-glass {

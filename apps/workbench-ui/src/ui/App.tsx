@@ -1737,26 +1737,43 @@ function markerAppearance(pointCount: number) {
   return { radius: 1.3, opacity: 0.58 }
 }
 
-function SpotStrip({ trace, id = 'spot-svg', expanded = false }: { trace?: TraceResponse; id?: string; expanded?: boolean }) {
-  const { t } = useTranslation(['layoutView'])
+type SpotPoint = {
+  y: number
+  z: number
+  status: string
+  wavelength: number | undefined
+  wavelengthIndex: number
+  fieldIndex: number
+}
+
+function traceSpotPoints(trace?: TraceResponse): SpotPoint[] {
   const samples = Math.max(1, Number(trace?.metadata.samples_per_field ?? 1))
   const wavelengths = trace?.metadata.wavelengths_nm?.length ? trace.metadata.wavelengths_nm : [undefined]
-  const points = trace?.sensor_y_mm
+  return trace?.sensor_y_mm
     ?.map((y, index) => {
       const wavelengthIndex = Math.floor(index / samples) % wavelengths.length
-      const wavelength = wavelengths[wavelengthIndex]
-      const fieldIndex = Math.floor(index / (samples * wavelengths.length))
-      return { y, z: trace.sensor_z_mm[index], status: trace.status[index], wavelength, wavelengthIndex, fieldIndex }
+      return {
+        y,
+        z: trace.sensor_z_mm[index],
+        status: trace.status[index],
+        wavelength: wavelengths[wavelengthIndex],
+        wavelengthIndex,
+        fieldIndex: Math.floor(index / (samples * wavelengths.length)),
+      }
     })
-    .filter((point): point is { y: number; z: number; status: string; wavelength: number | undefined; wavelengthIndex: number; fieldIndex: number } => Number.isFinite(point.y) && Number.isFinite(point.z))
-    .slice(0, 120)
-  const pointCount = points?.length ?? 0
+    .filter((point): point is SpotPoint => Number.isFinite(point.y) && Number.isFinite(point.z)) ?? []
+}
+
+function SpotStrip({ trace, id = 'spot-svg' }: { trace?: TraceResponse; id?: string }) {
+  const { t } = useTranslation(['layoutView'])
+  const points = traceSpotPoints(trace).slice(0, 120)
+  const pointCount = points.length
   const marker = markerAppearance(pointCount)
 
   return (
     <svg
       id={id}
-      className={`spot-strip${expanded ? ' spot-strip--expanded' : ''}`}
+      className="spot-strip"
       viewBox="0 0 260 220"
       role="img"
       aria-label={t('layoutView.spot_diagram_aria')}
@@ -1773,7 +1790,7 @@ function SpotStrip({ trace, id = 'spot-svg', expanded = false }: { trace?: Trace
       <text x="134" y="24" className="plot-label">
         Z
       </text>
-      {points?.map((point, index) => {
+      {points.map((point, index) => {
         const x = 130 + Math.max(-96, Math.min(96, point.y * 16))
         const y = 110 - Math.max(-86, Math.min(86, point.z * 16))
         const color = point.wavelength === undefined ? undefined : wavelengthColor(point.wavelength)
@@ -1808,23 +1825,111 @@ function SpotStrip({ trace, id = 'spot-svg', expanded = false }: { trace?: Trace
   )
 }
 
-function ExpandedSpotLegend({ trace }: { trace?: TraceResponse }) {
+function spotCentroid(points: SpotPoint[]) {
+  if (!points.length) return { y: 0, z: 0 }
+  return {
+    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
+    z: points.reduce((sum, point) => sum + point.z, 0) / points.length,
+  }
+}
+
+function chiefRayOrigin(trace: TraceResponse | undefined, fieldId: string, fallback: { y: number; z: number }) {
+  const chiefRays = trace?.metadata.layout_baseline_rays
+    ?.filter((ray) => ray.field_id === fieldId && ray.role === 'chief' && ray.status === 'alive' && ray.aiming_ok !== false)
+    .sort((left, right) => Math.abs(left.wavelength_nm - 587.56) - Math.abs(right.wavelength_nm - 587.56)) ?? []
+  const endpoint = chiefRays[0]?.path.at(-1)?.point_mm
+  return endpoint && Number.isFinite(endpoint[1]) && Number.isFinite(endpoint[2])
+    ? { y: Number(endpoint[1]), z: Number(endpoint[2]), usedCentroid: false }
+    : { ...fallback, usedCentroid: true }
+}
+
+function niceSpotScale(maximumMm: number) {
+  if (!(maximumMm > 0)) return 0.001
+  const exponent = Math.floor(Math.log10(maximumMm))
+  const unit = 10 ** exponent
+  const normalized = maximumMm / unit
+  const factor = normalized >= 5 ? 5 : normalized >= 2 ? 2 : 1
+  return factor * unit
+}
+
+function ExpandedSpotPanels({ trace }: { trace?: TraceResponse }) {
   const { t } = useTranslation(['layoutView'])
   const fields = trace?.metadata.evaluated_fields ?? []
+  const allPoints = traceSpotPoints(trace)
+  const panels = fields.map((field, fieldIndex) => {
+    const points = allPoints.filter((point) => point.fieldIndex === fieldIndex && point.status === 'alive')
+    const centroid = spotCentroid(points)
+    const origin = chiefRayOrigin(trace, field.id, centroid)
+    const rmsMm = points.length
+      ? Math.sqrt(points.reduce((sum, point) => sum + (point.y - centroid.y) ** 2 + (point.z - centroid.z) ** 2, 0) / points.length)
+      : 0
+    return { field, fieldIndex, points, origin, rmsMm }
+  })
+  const maximumOffsetMm = Math.max(
+    0.0005,
+    ...panels.flatMap((panel) => panel.points.flatMap((point) => [Math.abs(point.y - panel.origin.y), Math.abs(point.z - panel.origin.z)])),
+  )
+  const halfRangeMm = maximumOffsetMm * 1.12
+  const scaleBarMm = niceSpotScale(halfRangeMm)
+  const plotCenter = 100
+  const plotHalfSize = 74
+  const pixelsPerMm = plotHalfSize / halfRangeMm
+  const scaleBarPixels = scaleBarMm * pixelsPerMm
+  const totalPointCount = panels.reduce((sum, panel) => sum + panel.points.length, 0)
+  const marker = markerAppearance(Math.max(...panels.map((panel) => panel.points.length), 0))
+
+  return (
+    <div id="spot-svg-expanded" className="spot-field-panels-shell" data-point-count={totalPointCount}>
+      <div className="spot-field-panels" data-testid="spot-field-panels">
+        {panels.map(({ field, fieldIndex, points, origin, rmsMm }) => (
+          <section className="spot-field-panel" data-testid="spot-field-panel" data-field-index={fieldIndex} key={field.id}>
+            <div className="spot-field-panel__heading">
+              <strong>{field.id}</strong>
+              <span>{t('layoutView.field_angles', { thetaY: formatFixed(field.theta_y_deg, 3), thetaZ: formatFixed(field.theta_z_deg, 3) })}</span>
+            </div>
+            <svg className="spot-field-panel__plot" viewBox="0 0 200 200" role="img" aria-label={t('layoutView.field_spot_aria', { fieldId: field.id })}>
+              <line x1={plotCenter} x2={plotCenter} y1="18" y2="182" className="plot-axis" />
+              <line x1="18" x2="182" y1={plotCenter} y2={plotCenter} className="plot-axis" />
+              {points.map((point, pointIndex) => {
+                const x = plotCenter + (point.y - origin.y) * pixelsPerMm
+                const y = plotCenter - (point.z - origin.z) * pixelsPerMm
+                return (
+                  <circle
+                    key={`${point.wavelengthIndex}-${pointIndex}`}
+                    cx={Math.max(18, Math.min(182, x))}
+                    cy={Math.max(18, Math.min(182, y))}
+                    r={marker.radius}
+                    opacity={marker.opacity}
+                    className="spot-point spot-marker"
+                    style={point.wavelength === undefined ? undefined : { fill: wavelengthColor(point.wavelength) }}
+                    data-wavelength-index={point.wavelengthIndex}
+                    data-wavelength-nm={point.wavelength}
+                  />
+                )
+              })}
+              <circle cx={plotCenter} cy={plotCenter} r="2.2" className="spot-origin-marker" />
+            </svg>
+            <div className="spot-field-panel__metrics">
+              <span data-testid="spot-rms-value">{t('layoutView.rms_display_samples', { value: formatFixed(rmsMm * 1000, 2) })}</span>
+              {origin.usedCentroid ? <span className="spot-origin-note">{t('layoutView.centroid_origin_note')}</span> : null}
+            </div>
+          </section>
+        ))}
+      </div>
+      <div className="spot-common-scale" data-testid="spot-common-scale-bar">
+        <span className="spot-common-scale__line" style={{ width: `${scaleBarPixels}px` }} aria-hidden="true" />
+        <span>{t('layoutView.common_scale', { value: formatFixed(scaleBarMm * 1000, scaleBarMm * 1000 < 10 ? 1 : 0) })}</span>
+      </div>
+      <p className="spot-sampling-note">{t('layoutView.rms_sampling_note')}</p>
+    </div>
+  )
+}
+
+function ExpandedSpotLegend({ trace }: { trace?: TraceResponse }) {
+  const { t } = useTranslation(['layoutView'])
   const wavelengths = trace?.metadata.wavelengths_nm ?? []
   return (
     <div className="spot-expanded-legend" data-testid="spot-expanded-legend">
-      <div>
-        <strong>{t('layoutView.spot_fields')}</strong>
-        <div className="spot-legend-items">
-          {fields.map((field, index) => (
-            <span className="spot-legend-item" data-testid="spot-field-legend-item" key={field.id}>
-              <span className={`spot-field-symbol spot-field-symbol-${index % 3}`} aria-hidden="true" />
-              <span>{field.id}</span>
-            </span>
-          ))}
-        </div>
-      </div>
       <div>
         <strong>{t('layoutView.legend.wavelengths')}</strong>
         <div className="spot-legend-items">
@@ -3728,7 +3833,7 @@ export function App() {
                 onRequestClose={() => setSpotExpanded(false)}
               >
                 <div className="spot-expanded-content" data-testid="spot-expanded-content">
-                  <SpotStrip id="spot-svg-expanded" trace={trace} expanded />
+                  <ExpandedSpotPanels trace={trace} />
                   <ExpandedSpotLegend trace={trace} />
                 </div>
               </Modal>

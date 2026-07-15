@@ -36,6 +36,11 @@
     "spot_diagram_aria": "スポットダイアグラム",
     "expand_spot": "スポットダイアグラムを拡大",
     "expanded_spot_heading": "スポットダイアグラム拡大表示",
-    "spot_fields": "Fields"
+    "field_angles": "θy {{thetaY}} deg / θz {{thetaZ}} deg",
+    "field_spot_aria": "{{fieldId}}のスポットダイアグラム",
+    "rms_display_samples": "RMS {{value}} µm（表示点群）",
+    "centroid_origin_note": "chief ray未取得のため重心を原点に使用",
+    "common_scale": "共通スケール {{value}} µm",
+    "rms_sampling_note": "RMSは表示点群から算出したサンプリング依存値です。"
   }
 }

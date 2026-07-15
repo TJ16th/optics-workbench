@@ -36,6 +36,11 @@
     "spot_diagram_aria": "Spot diagram",
     "expand_spot": "Expand spot diagram",
     "expanded_spot_heading": "Expanded Spot Diagram",
-    "spot_fields": "Fields"
+    "field_angles": "θy {{thetaY}} deg / θz {{thetaZ}} deg",
+    "field_spot_aria": "Spot diagram for {{fieldId}}",
+    "rms_display_samples": "RMS {{value}} µm (displayed samples)",
+    "centroid_origin_note": "Centroid origin used because the chief ray is unavailable",
+    "common_scale": "Common scale {{value}} µm",
+    "rms_sampling_note": "RMS is calculated from the displayed samples and depends on sampling."
   }
 }
