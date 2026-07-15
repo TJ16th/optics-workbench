@@ -333,7 +333,7 @@ async function mockEngine(
 }
 
 async function expectLayoutRayPath(page: import('@playwright/test').Page, pointCount: number) {
-  const rayPaths = page.locator('#layout-svg path.ray-line')
+  const rayPaths = page.locator('#layout-svg path.ray-line[data-baseline-role^="marginal"]')
   await expect(rayPaths.first()).toBeVisible()
   const d = (await rayPaths.first().getAttribute('d')) ?? ''
   expect(d.split('L')).toHaveLength(pointCount)
