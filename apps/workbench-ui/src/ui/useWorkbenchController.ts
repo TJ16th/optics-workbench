@@ -50,7 +50,7 @@ export function useWorkbenchControllerState<Snapshot, ImagePlanePolicyDraft, Dec
   const [pupilDistribution, setPupilDistribution] = useState('grid')
   const [aimingMode, setAimingMode] = useState('paraxial')
   const [mtfMode, setMtfMode] = useState<MtfMode>('monochromatic')
-  const [showDensityRays, setShowDensityRays] = useState(true)
+  const [showDensityRays, setShowDensityRays] = useState(false)
   const [imagePlanePolicy, setImagePlanePolicy] = useState<ImagePlanePolicyDraft>(initial.imagePlanePolicy)
   const imagePlanePolicyRef = useRef<ImagePlanePolicyDraft>(imagePlanePolicy)
   const [zoomPositionId, setZoomPositionId] = useState('')

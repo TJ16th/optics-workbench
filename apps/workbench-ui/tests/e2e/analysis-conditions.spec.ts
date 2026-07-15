@@ -896,6 +896,7 @@ test('P003 slider preview keeps layout rays on education preview surface paths',
   await page.goto('/?lng=en')
   await page.getByRole('combobox', { name: 'Preset', exact: true }).click()
   await page.getByText('P003 Achromat Doublet 100mm Demo').click()
+  await page.locator('#show-density-rays').setChecked(true, { force: true })
 
   await page.locator('#focus-shift-slider').evaluate((node) => {
     const input = node as HTMLInputElement
@@ -1317,6 +1318,13 @@ test('layout baseline chief and marginal rays are stable across ray counts', asy
   }
 
   expect(new Set(signatures).size).toBe(1)
+  await expect(page.locator('#show-density-rays')).not.toBeChecked()
+  await expect(page.locator('#layout-svg path[data-ray-layer="density"]')).toHaveCount(0)
+  await page.getByRole('button', { name: 'System', exact: true }).click()
+  await expect(page.locator('#system-mini-layout-svg')).toHaveAttribute('data-density-rays', '0')
+  await expect.poll(async () => Number(await page.locator('#system-mini-layout-svg').getAttribute('data-baseline-rays')), { timeout: 3_000 }).toBeGreaterThan(0)
+  await page.getByRole('button', { name: 'Preview', exact: true }).click()
+  await page.locator('#show-density-rays').setChecked(true, { force: true })
   await expect.poll(async () => Number(await page.locator('#layout-svg').getAttribute('data-density-rays')), { timeout: 3_000 }).toBeGreaterThan(0)
   await page.locator('#show-density-rays').setChecked(false, { force: true })
   await expect(page.locator('#layout-svg path[data-ray-layer="density"]')).toHaveCount(0)
