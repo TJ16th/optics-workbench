@@ -34,6 +34,11 @@
   --ow-series-4: #8a3ffc;
   --ow-series-5: #ba4e00;
   --ow-series-6: #007d79;
+  --ow-glass-fill: rgb(15 98 254 / 8%);
+  --ow-glass-stroke: rgb(15 98 254 / 36%);
+  --ow-air-fill: #fafafa;
+  --ow-air-stroke: #8d8d8d;
+  --ow-cemented-stroke: #4589ff;
 }
 
 .app-theme--dark {
@@ -72,6 +77,11 @@
   --ow-series-4: #be95ff;
   --ow-series-5: #ff832b;
   --ow-series-6: #3ddbd9;
+  --ow-glass-fill: rgb(120 169 255 / 22%);
+  --ow-glass-stroke: rgb(166 200 255 / 78%);
+  --ow-air-fill: #353535;
+  --ow-air-stroke: #a8a8a8;
+  --ow-cemented-stroke: #a6c8ff;
 }
 
 * {
@@ -738,7 +748,7 @@ body {
   width: 100%;
   aspect-ratio: 2.1 / 1;
   border: 1px solid var(--ow-border-soft);
-  background: var(--ow-surface-subtle);
+  background: var(--ow-air-fill);
   display: block;
 }
 
@@ -919,7 +929,7 @@ body {
 }
 
 .legend-cemented {
-  border-color: var(--ow-blue-alt);
+  border-color: var(--ow-cemented-stroke);
   border-top-width: 1.4px;
 }
 
@@ -942,17 +952,17 @@ body {
   display: inline-block;
   width: 24px;
   height: 12px;
-  border: 1px solid rgba(15, 98, 254, 0.36);
+  border: 1px solid var(--ow-glass-stroke);
 }
 
 .legend-glass {
-  background: rgba(15, 98, 254, 0.08);
+  background: var(--ow-glass-fill);
 }
 
 .legend-air {
-  background: var(--ow-surface-subtle);
+  background: var(--ow-air-fill);
   border-style: dashed;
-  border-color: var(--ow-grid);
+  border-color: var(--ow-air-stroke);
 }
 
 .legend-symbol {
@@ -1002,7 +1012,7 @@ body {
 }
 
 .surface-cemented {
-  stroke: var(--ow-blue-alt);
+  stroke: var(--ow-cemented-stroke);
   stroke-width: 1.4;
 }
 
@@ -1079,8 +1089,8 @@ body {
 }
 
 .glass-element {
-  fill: rgba(15, 98, 254, 0.08);
-  stroke: rgba(15, 98, 254, 0.36);
+  fill: var(--ow-glass-fill);
+  stroke: var(--ow-glass-stroke);
   stroke-width: 0.9;
   pointer-events: none;
 }

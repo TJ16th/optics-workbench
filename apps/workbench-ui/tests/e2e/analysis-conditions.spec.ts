@@ -508,6 +508,47 @@ test('theme follows explicit selection, keeps contrast and wavelength identity, 
   light.waveContrast.forEach((value) => expect(value).toBeGreaterThanOrEqual(3))
 })
 
+test('R109 dark theme uses stronger semantic glass, air, and cemented-surface tokens', async ({ page }) => {
+  await mockEngine(page)
+  await page.goto('/?lng=en&fixture=all-presets')
+  await selectPresetOption(page, 'P003 Achromat Doublet 100mm Demo')
+
+  const readLayoutStyles = () => page.evaluate(() => {
+    const root = document.querySelector('.app-theme') as HTMLElement
+    const glass = document.querySelector('#layout-svg .glass-element') as SVGPathElement
+    const cemented = document.querySelector('#layout-svg .surface-cemented') as SVGPathElement
+    const layout = document.querySelector('#layout-svg') as SVGElement
+    const style = getComputedStyle(root)
+    return {
+      glassFill: getComputedStyle(glass).fill,
+      glassStroke: getComputedStyle(glass).stroke,
+      cementedStroke: getComputedStyle(cemented).stroke,
+      airFill: getComputedStyle(layout).backgroundColor,
+      airStrokeToken: style.getPropertyValue('--ow-air-stroke').trim(),
+    }
+  })
+
+  await page.locator('#theme-preference').selectOption('light')
+  const light = await readLayoutStyles()
+  expect(light).toEqual({
+    glassFill: 'rgba(15, 98, 254, 0.08)',
+    glassStroke: 'rgba(15, 98, 254, 0.36)',
+    cementedStroke: 'rgb(69, 137, 255)',
+    airFill: 'rgb(250, 250, 250)',
+    airStrokeToken: '#8d8d8d',
+  })
+
+  await page.locator('#theme-preference').selectOption('dark')
+  const dark = await readLayoutStyles()
+  expect(dark).toEqual({
+    glassFill: 'rgba(120, 169, 255, 0.22)',
+    glassStroke: 'rgba(166, 200, 255, 0.78)',
+    cementedStroke: 'rgb(166, 200, 255)',
+    airFill: 'rgb(53, 53, 53)',
+    airStrokeToken: '#a8a8a8',
+  })
+})
+
 test('navigation and context defaults follow the R101 viewport thresholds', async ({ page }) => {
   await mockEngine(page)
   const assertShell = async (width: number, expanded: boolean, contextMode: 'fixed' | 'drawer') => {
