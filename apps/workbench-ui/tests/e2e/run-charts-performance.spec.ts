@@ -30,28 +30,25 @@ async function selectCatalogPreset(page: Page, presetId: 'P007' | 'P009' | 'P011
   await expect(page.getByTestId('preset-selected-name')).toHaveText(`${preset.id} ${preset.name}`)
 }
 
-test('P011 Preview distinguishes aiming_failed baseline rays against the real API', async ({ page }) => {
+test('P011 Preview aims every baseline ray at a deterministic effective pupil edge', async ({ page }) => {
   await page.goto('/?lng=en')
   await selectCatalogPreset(page, 'P011')
   const previewResponse = page.waitForResponse((response) => new URL(response.url()).pathname === '/v1/education/preview')
   await page.getByRole('button', { name: 'Run Preview' }).click()
-  expect((await previewResponse).ok()).toBe(true)
+  const response = await previewResponse
+  expect(response.ok()).toBe(true)
+  const body = await response.json() as { metadata?: { layout_baseline_rays?: Array<{ status: string; aiming_ok: boolean; aiming_target_adjusted: boolean }> } }
+  const baseline = body.metadata?.layout_baseline_rays ?? []
+  expect(baseline).toHaveLength(27)
+  expect(baseline.every((ray) => ray.status === 'alive' && ray.aiming_ok)).toBe(true)
+  expect(baseline.some((ray) => ray.aiming_target_adjusted)).toBe(true)
 
   const failedRays = page.locator('#layout-svg path.ray-baseline-aiming-failed[data-baseline-status="aiming_failed"]')
-  await expect(failedRays).toHaveCount(9)
-  await expect(page.locator('#layout-svg [data-ray-end-marker="aiming_failed"]')).toHaveCount(9)
+  await expect(failedRays).toHaveCount(0)
+  await expect(page.locator('#layout-svg path.ray-baseline[data-baseline-status="alive"]')).toHaveCount(27)
+  await expect(page.locator('#layout-svg [data-ray-end-marker="aiming_failed"]')).toHaveCount(0)
   await expect(page.locator('#layout-svg [data-ray-end-marker="blocked"]')).toHaveCount(0)
-  await expect(page.getByTestId('preview-aiming-warning')).toContainText('aiming_failed detected')
-  await expect(page.getByTestId('preview-aiming-warning')).toContainText('Exact aiming failed for 12 layout baseline ray(s).')
-  await page.getByTestId('layout-legend-toggle').click()
-  await expect(page.getByText('Aiming failed', { exact: true })).toBeVisible()
-
-  const style = await failedRays.first().evaluate((node) => {
-    const computed = getComputedStyle(node)
-    return { stroke: computed.stroke, dash: computed.strokeDasharray }
-  })
-  expect(style.stroke).toBe('rgb(186, 78, 0)')
-  expect(style.dash).not.toBe('3px, 2px')
+  await expect(page.getByTestId('preview-aiming-warning')).toHaveCount(0)
 })
 
 for (const presetId of ['P007', 'P009'] as const) {
