@@ -988,12 +988,15 @@ function LayoutView({
     })
     .filter((item): item is { key: string; d: string; warning: boolean } => Boolean(item?.d))
   const labelRows = new Map<string, number>()
-  let previousLabelX = Number.NEGATIVE_INFINITY
-  let labelRow = 0
+  const labelRowLastX = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY]
+  const labelMinimumSpacingPx = 44
   surfaceViews.forEach((view) => {
-    labelRow = view.sx - previousLabelX < 72 ? labelRow + 1 : 0
+    const availableRow = labelRowLastX.findIndex((lastX) => view.sx - lastX >= labelMinimumSpacingPx)
+    const labelRow = availableRow >= 0
+      ? availableRow
+      : labelRowLastX.reduce((oldestRow, lastX, row) => (lastX < labelRowLastX[oldestRow] ? row : oldestRow), 0)
     labelRows.set(view.surface.id, labelRow)
-    previousLabelX = view.sx
+    labelRowLastX[labelRow] = view.sx
   })
 
   return (
@@ -1080,7 +1083,14 @@ function LayoutView({
                 )
               : null}
             {transform.active ? <circle cx={sx} cy={sy - h - 10} r="3.5" className="configured-dot" /> : null}
-            <text x={sx} y={labelY} textAnchor="middle" className="surface-label">
+            <text
+              x={sx}
+              y={labelY}
+              textAnchor="middle"
+              className="surface-label"
+              data-label-row={labelRows.get(surface.id) ?? 0}
+              data-label-y={labelY}
+            >
               {surface.id}
             </text>
           </g>

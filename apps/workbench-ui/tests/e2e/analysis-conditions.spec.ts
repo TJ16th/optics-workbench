@@ -774,6 +774,32 @@ test('layout view draws spherical surfaces as signed curves', async ({ page }) =
   await expect(page.locator('#layout-svg path.surface-cemented')).toHaveCount(1)
 })
 
+test('R114 surface labels stay bounded and stable across ten preview redraws', async ({ page }) => {
+  const previewRequests: unknown[] = []
+  await mockEngine(page, { previewRequests })
+  await page.goto('/?lng=en&fixture=all-presets')
+  await selectPresetOption(page, 'P004 Double Gauss 50mm F1.4 Demo')
+  await page.getByRole('button', { name: 'Preview', exact: true }).click()
+
+  const readLabelCoordinates = () => page.locator('#layout-svg [data-surface-id] .surface-label').evaluateAll((nodes) =>
+    nodes.map((node) => ({
+      id: node.parentElement?.getAttribute('data-surface-id'),
+      row: Number(node.getAttribute('data-label-row')),
+      y: Number(node.getAttribute('data-label-y')),
+    })),
+  )
+  const initial = await readLabelCoordinates()
+  expect(Math.max(...initial.map((label) => label.row))).toBeLessThanOrEqual(2)
+  expect(Math.max(...initial.map((label) => label.y))).toBeLessThan(340)
+
+  for (let redraw = 0; redraw < 10; redraw += 1) {
+    const requestCount = previewRequests.length
+    await page.getByRole('button', { name: 'Run Preview' }).click()
+    await expect.poll(() => previewRequests.length).toBeGreaterThan(requestCount)
+    expect(await readLabelCoordinates()).toEqual(initial)
+  }
+})
+
 test('layout view uses trace path polylines when preview returns surface hits', async ({ page }) => {
   await mockEngine(page)
   await page.goto('/?lng=en')
