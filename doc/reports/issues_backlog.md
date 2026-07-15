@@ -84,23 +84,6 @@ UI仕様ではRaw JSON/YAML編集が定義されていますが、現状は高�
 - 無効入力では構造化エラーを表示し、既存systemを壊さない。
 - raw表示では識別子を翻訳しない。
 
-## Issue: UI実装にP004プリセット（簡易ダブルガウス）を追加する
-
-ラベル案: `ui`
-
-### 背景
-
-UI仕様9章にP004の定義があるが、実装側 `apps/workbench-ui/src/domain/presets.ts` に存在しないことがP3-0で判明した。
-
-### 対応案
-
-仕様9章のP004定義に従い、`presets.ts` へ追加する。近軸検証を行い、9.1節の数値検証規約に従って凍結する。
-
-### 受け入れ条件
-
-- P004がプリセット一覧に表示され選択できる。
-- 近軸トレースが破綻しない。
-
 ## Issue: PNG exportの画像比較テストを追加する [issue: #4]
 
 ラベル案: `ui`, `testing`, `good-first-issue`
@@ -307,24 +290,6 @@ Phase 8でafocal、eye_reference、射出瞳、アイボックス、角度MTF等
 - snapshot export/importで追加寸法が保持される。
 - 既存の `edge_thickness` 評価・validationと矛盾しない。
 
-## Issue: edge_thickness metricのエンジン実装を追加する
-
-ラベル案: `engine`
-
-### 背景
-
-仕様・`/v1/meta` のmetadata列挙には `edge_thickness` が存在するが、エンジン本体に算出コードが見当たらないことがLayout View品質改善タスクで判明した。
-
-### 対応案
-
-- 仕様10.3節の定義（`min(semiD_a, semiD_b)` 位置での周縁厚評価）に従い、実際の算出ロジックを実装する。
-- validation warning、optimization operand、API metadataで同じ評価値を参照できるようにする。
-
-### 受け入れ条件
-
-- `edge_thickness` オペランドがevaluate APIで実際の数値を返す。
-- 既存のedge thickness警告経路と整合する。
-
 ## Issue: 最適化APIにmulti-configuration（複数zoom_position/フォーカス位置）評価を追加する
 
 ラベル案: `engine`
@@ -412,12 +377,14 @@ R9-13では、Workbench UIに±5 mmのシフト上限明示と、対象群の最
 
 - まず無収差・無限深度のRGBD画像に対し、PSFを畳み込む簡易シミュレーションから着手する。
 - 将来的に被写界深度、フォーカス位置、オブジェクト距離差によるボケ量を反映する。
+- zoom/focus positionごとの歪曲、画角、フォーカスブリージングを方眼チャートまたは入力画像で比較できるようにする。
 - UIでは入力画像、深度、解析条件を選び、結果画像を比較表示できるようにする。
 
 ### 受け入れ条件
 
 - 単一PSFでの画像畳み込み結果をUIで確認できる。
 - 使用した光学系、field、波長/重み、フォーカス条件が結果に保存される。
+- 複数のzoom/focus positionで画角と歪曲の変化を比較できる。
 
 ## Issue: 太陽光5000K等の連続スペクトルで色収差をシミュレーションする
 
@@ -477,25 +444,6 @@ R9-13では、Workbench UIに±5 mmのシフト上限明示と、対象群の最
 - その係数がゴースト強度計算に反映される。
 - 教育用途の制限が仕様書に明記される。
 
-## Issue: ズーム/フォーカス時の撮影シミュレーションを追加する
-
-ラベル案: `ui`
-
-### 背景
-
-ズーム・フォーカス位置を変えたときの歪曲変化、画角変化、フォーカスブリージングを視覚的に確認するUIは未実装である。
-
-### 対応案
-
-- 方眼チャートまたは画像に対して、歪曲マップを適用した簡易表示を行う。
-- focus group / zoom positionの変更に応じて画角や歪曲量の変化を比較する。
-- 将来の撮影結果シミュレータと接続できるようにする。
-
-### 受け入れ条件
-
-- 方眼チャートが歪曲量に応じて変形表示される。
-- 複数のズーム/フォーカス位置を比較できる。
-
 ## Issue: 光学系の3Dデータ出力（3Dプリンタ用カットモデル）を追加する
 
 ラベル案: `ui`, `engine`
@@ -534,70 +482,25 @@ R9-13では、Workbench UIに±5 mmのシフト上限明示と、対象群の最
 - 複数の解析条件プリセットを選択できる。
 - 選択によりfield、波長、sampling、表示設定がまとめて更新される。
 
-## Issue: Layout Viewの代表光線がsampling方式に依存して見えることを説明する
+## Issue: Layout Viewの任意density layerとsampling条件の関係を説明する
 
 ラベル案: `ui`, `docs`
 
 ### 背景
 
-R26の確認で、P002のLayout View代表光線（lower / center / upper）はsample indexではなく、実際のSTOP面到達Y座標に基づいて選ばれていることを確認した。一方で、`grid` / 現行`hexapolar`相当の瞳サンプリングは`samples_per_field`ごとに候補点集合を作り直すため、光線数を変えると表示代表光線のSTOP到達高さそのものが変わる。これはLOD選択バグではなくsampling方式の性質だが、人間には「表示がずれた」ように見えやすい。
+R27以降、chief/marginalの代表光線は解析samplingから独立した固定baselineとして生成され、`samples_per_field`を変えても代表高さは変わらない。sampling依存が残るのは、追加の光線密度を確認する任意density layerである。density layerは実際に生成された瞳サンプルを描くため、distributionやsample数で点集合が変わる。
 
 ### 対応案
 
-- Ray sampling設定またはLayout View付近に、代表光線は実際に生成された瞳サンプルから選ばれ、`samples_per_field`変更時には代表高さが変わる場合がある旨を短く表示する。
-- 必要なら、比較用に`fan_y`など固定高さを含むsampling方式を使うと分かりやすいことをヘルプに追記する。
-- 将来、Layout View専用の固定代表光線モードを追加するか検討する。
+- density layerの表示設定付近に、実際の解析samplingを描画するためdistribution・sample数で見え方が変わる旨を短く表示する。
+- baseline chief/marginalはsampling非依存であることを同じヘルプから確認できるようにする。
+- density layerがoffの通常表示には説明を常時出さず、Toggletipから参照できるようにする。
 
 ### 受け入れ条件
 
-- `samples_per_field`変更時の代表光線の見え方がsampling由来であることをUI上で理解できる。
+- baselineとdensity layerの責務差をUI上で確認できる。
+- density layerの変化がsampling条件由来であることを理解できる。
 - 表示文言はi18n ja/en両方に追加され、`npm run i18n:coverage`が通る。
-
-## Issue: P005/P006のpreview/traceでNaN JSON serializationエラーが発生する
-
-ラベル案: `engine`, `testing`
-
-### 背景
-
-R29の全プリセット有効径見直し中、P005（coaxial Cassegrain）とP006（afocal telescope）で`/v1/education/preview`および`/v1/trace/forward`が`400`を返した。`ray_aiming.mode`を`full` / `paraxial` / `off`に変えても、いずれも`Out of range float values are not JSON compliant: nan`となり、P005/P006の実光線ベース評価を継続できなかった。
-
-### 対応案
-
-- P005/P006のtrace resultまたはmetadataに`NaN`が混入する経路を特定する。
-- APIレスポンス直前で非有限値を構造化エラーまたは`null`へ正規化する方針を決め、エンジン仕様の非有限値扱いと整合させる。
-- P005/P006に対する`/v1/education/preview`および`/v1/trace/forward`の回帰テストを追加する。
-
-### 受け入れ条件
-
-- P005/P006のpreview/traceがJSON serialization errorで失敗しない。
-- 非有限値が発生する場合も、`severity / code / params / message_en`の構造化エラーまたは仕様で定めた正規化値として返る。
-- R29のような全プリセット横断評価で、P001〜P007を同一手順で評価できる。
-
-## Issue: アフォーカル系のアイポイントに眼球モデルを接続し、網膜結像として評価できるようにする
-
-ラベル案: `engine`
-
-### 背景
-
-現行のafocal系評価（双眼鏡・望遠鏡）は、終端要素`eye_reference`（射出瞳・アイレリーフ・角度MTF等）までを評価対象とし、「眼に渡す角度像の品質」を間接的な指標で評価する設計（エンジン仕様9.2節・22章）である。これに対し、眼球そのもの（角膜・水晶体・網膜相当）を簡易光学系としてモデル化し、`eye_reference`の後段に接続することで、実際の網膜結像（spot・MTF）まで直接評価する手法を追加したいという提案がある。視覚光学で用いられるGullstrand模型眼、Navarro模型眼等の簡易模型眼を接続する形を想定する。
-
-R68の設計調査では、現行traceカーネルが`eye_reference`で停止せず後続面を追跡できる一方、`system_type`の終端検証、射出瞳・アイレリーフ集計、主絞り、結果の単位系が1システム全体に固定されていることを確認した。また、仕様上の`position_mode: at_exit_pupil`に対応する自動配置処理は現行コンパイル処理に見当たらず、単純な面列延長だけでは仕様上の責務を保てない。
-
-### 対応案
-
-- 初期版は587.56 nmの簡約Gullstrand眼を採用する。角膜前面`R=+7.70 mm, t=0.50 mm, n=1.376`、角膜後面`R=+6.80 mm, t=3.10 mm, n=1.336`、水晶体前面`R=+10.0 mm, t=3.60 mm, n=1.4085`、水晶体後面`R=-6.00 mm, t=17.187 mm, n=1.336`を既存の球面`refractive`で表す。初期版の網膜は平面`sensor`とし、曲率`R=-17.2 mm`の網膜は曲面評価面対応へ分離する。
-- 一般的なsystem chainingグラフは初期版では導入しない。単一面列内に、装置側afocal区間、`eye_reference`中間境界、模型眼区間、網膜`sensor`を持つ明示的な「視覚評価コンポジット」を追加する。
-- コンパイル時に`eye_reference`境界indexを保持し、装置側の射出瞳・アイレリーフ・角度spot/MTFは境界まで、網膜spot/MTFは境界後の`sensor`までとして結果名前空間を分離する。ray aimingの主絞りは装置側、`eye_reference`は眼瞳クリップとして扱う。
-- `position_mode: at_exit_pupil`の実配置を実装し、固定offsetとの排他・位置検証を追加する。模型眼へ入る媒質はAIRとし、初期版は固定瞳径・無調節・単色とする。
-- 将来の任意system chainingは、複数装置接続、座標変換、媒質handoff、個別cacheが必要になった段階で別Issueとして設計する。
-
-### 受け入れ条件
-
-- 簡約Gullstrand眼を`eye_reference`後段に接続し、網膜相当`sensor`でspot/MTFを評価できる。
-- 同じtraceから、装置側の射出瞳・アイレリーフ・角度spot/MTFと、模型眼側の網膜spot/MTFを別の結果として取得できる。
-- 装置側評価が模型眼の屈折面を含めてアイレリーフや角倍率を再計算しないことを直接テストで固定する。
-- `position_mode: at_exit_pupil`が計算済み射出瞳位置へ実配置され、固定offset時も境界位置が決定論的になる。
-- 平面網膜、単色、固定調節という初期版の制限を仕様とcapabilitiesに正確に記載し、曲面網膜や眼分散を未実装のまま列挙しない。
 
 ## Issue: 実体を持つ後続面による内径側の固定遮蔽を自然に表現する
 
@@ -618,26 +521,6 @@ R68の設計調査では、現行traceカーネルが`eye_reference`で停止せ
 - 副鏡面の物理径から前段光束の中央遮蔽を表現できる。
 - 同じ遮蔽がaiming、sampling、traceで一貫して適用される。
 - 専用annulus面との重複遮蔽を検出または防止できる。
-
-## Issue: 実体を持たない固定内径遮蔽のannulus定義とUIを維持・整備する
-
-ラベル案: `engine`, `ui`
-
-### 背景
-
-鏡筒内壁や遮光環など、対応する光学面を持たない機械的制約には、現行の`mechanical_aperture`と`shape: annulus`が適している。エンジンの遮光判定は利用可能で、R47でSystemタブのinner/outer表示・編集は追加されたが、固定遮蔽としてのLayout View表現、検証、文書化を横断的に固定する必要がある。
-
-### 対応案
-
-- `mechanical_aperture`のannulusを固定内径遮蔽の標準表現として仕様化する。
-- Systemタブ、Layout View、validate、traceのinner/outer扱いを直接テストする。
-- `aperture_stop`のannulusとの役割差をUIと仕様で明確にする。
-
-### 受け入れ条件
-
-- mechanical annulusをSystemタブで表示・編集し、Layout Viewで単一の固定遮蔽として確認できる。
-- inner未満とouter超過の光線が決定論的に遮光される。
-- 主開口絞りとの役割差と併用規則が仕様に記載される。
 
 ## Issue: mechanical_apertureをフォーカス・ズーム連動の可変位置・可変径に拡張する
 
@@ -718,7 +601,7 @@ R68の設計調査では、現行traceカーネルが`eye_reference`で停止せ
 - circle/annulusの通過・遮蔽statusと表示説明が矛盾しない。
 - 既存のX-Y Layout Viewを過密にせず、キーボード操作とja/en表示に対応する。
 
-## Issue: 同軸系の像面湾曲・M/S像面にCoddington方式を実装しmethodを正す
+## Issue: ミラー・even asphereへCoddington像面計算を拡張する
 
 ラベル案: `engine`, `testing`
 
@@ -732,44 +615,17 @@ R75作業1の実装コミット`84c592fdd967ca4f96c70a8a3b938992e1ebb01e`で、P
 
 ### 対応案
 
-- 同軸系向けに、aiming済み主光線に沿ったCoddington方程式によるM/S像面計算を実装し、既定方式とする。
-- RMS探索は偏芯・チルト系および相互検証用の明示modeとして残し、サンプル数、distribution、aiming、探索範囲、探索刻みを結果metadataへ含める。
-- `field-curvature`と`ms-image-surface`の両レスポンスへ実際の計算方式を示すmethod metadataを追加し、`coddington_rms_consistent`という誤解を招く名称を廃止する。
-- RMS最良点が探索範囲端にある場合は、探索範囲拡張または`solve_not_converged`相当の構造化warningを返す。
+- ミラー反射面の入射・出射符号と屈折力をCoddington漸化式へ組み込む。
+- even asphereの主光線交点で子午・球欠方向の局所主曲率を評価し、漸化式へ渡す。
+- ミラー・非球面系でも実際の経路を示すmethod metadataを返し、RMS fallbackとの差を直接比較する。
+- 偏芯・チルト系と未対応面だけは既存RMS探索へフォールバックし、理由をmetadataで観測可能にする。
 
 ### 受け入れ条件
 
-- P002/P003同軸系の既定応答が実際の`coddington`計算となり、瞳サンプル数を変えても同一値になる。
-- Coddington結果を独立した近軸参照式またはGolden Testで検証し、RMS探索との比較差をテストする。
-- 偏芯・チルト系のRMS modeでは、使用したサンプリング条件と探索条件がmetadataから確認できる。
-- P003のように探索解が範囲端へ張り付く場合、収束済みの値として無警告で返さない。
-- `field-curvature`と`ms-image-surface`のmethod表示が実際の計算経路と一致する。
-
-## Issue: 周辺光量に解析専用サンプリングと正確な放射量metadataを導入する
-
-ラベル案: `engine`, `performance`, `testing`
-
-### 背景
-
-R74作業2で、WorkbenchのRun Chartsは共有`ray_sampling`を`POST /v1/analysis/relative-illumination`へそのまま渡し、UI既定の`9 rays / grid / paraxial`で周辺光量を計算することを確認した。周辺光量専用の最小サンプル数や収束判定はない。
-
-P002の40 deg fieldでは、100000 rays時のthroughput `0.89541`に対し、9 raysでは`1.0`となり、relative illuminationを`11.68%`過大評価した。現行実装は瞳gridの到達率へcos⁴を明示乗算する`ray_throughput_times_cos4`であり、仕様16.5・21.4節の等立体角または等価な重み付きサンプリングからcos⁴を自然導出する定義とは異なる。またresponse metadataにサンプル数、distribution、aiming、重み付け方式がない。
-
-### 対応案
-
-- 周辺光量解析に専用sampling設定を設け、共有preview値とは分離して既定を少なくとも1000 rays/fieldとする。
-- 仕様16.5節に沿い、物体空間の等立体角サンプリングまたはヤコビアンを持つ重み付き瞳サンプリングを実装する。
-- cos⁴を別途乗算する近似を維持する場合は、仕様方式と明確にmodeを分け、二重計上を防ぐ。
-- response metadataへ要求/実使用サンプル数、distribution、aiming、weighting、seed、到達数を含める。
-- UIに周辺光量の精度presetまたは収束状態を表示し、Run Chartsの30秒性能ガードと両立させる。
-
-### 受け入れ条件
-
-- Run Charts既定9 raysが、周辺光量の最終値に暗黙利用されない。
-- P002 40 deg等のpartial vignetting系で、既定設定が高密度参照値に対する規定誤差内へ収束する。
-- 放射量サンプリングとcos⁴の扱いが`doc/engine_spec.md` 16.5・21.4節と一致する。
-- response metadataだけで計算の再現条件を取得できる。
-- 同一seed入力はビット同一となり、sampling精度と実行時間の回帰テストがある。
+- 同軸ミラー系のM/S像面を独立した近軸参照式またはGolden Testで検証できる。
+- 同軸even asphere系で局所主曲率を用いた結果が決定論的に得られる。
+- 対応対象では`rms_search`へ暗黙フォールバックせず、両endpointのmethod表示が実際の計算経路と一致する。
+- R75で対応済みの球面・平面屈折系と理想薄レンズ系の結果が変わらない。
 
 ## Issue: 周辺光量とRMS像面探索に適応的収束サンプリングを導入する
 
@@ -779,7 +635,7 @@ P002の40 deg fieldでは、100000 rays時のthroughput `0.89541`に対し、9 r
 
 R74作業2では、周辺光量の誤差がサンプル数に強く依存し、P002 40 degで9 raysが100000 rays基準を`11.68%`過大評価した。現行gridはNごとに点集合を再構成するため誤差が単調減少せず、固定Nだけでは収束済みか判定できない。R74作業1で確認したRMS像面探索も、本来は偏芯・チルト系でサンプリング依存となる。
 
-このIssueは、先行する「周辺光量に解析専用サンプリングと正確な放射量metadataを導入する」と「同軸系の像面湾曲・M/S像面にCoddington方式を実装しmethodを正す」の後段に位置付ける。
+R75で固定1000 raysの専用samplingと再現metadataは実装済みである。このIssueは、その固定samplingをnested・seed付きの適応samplingへ発展させる後段に位置付ける。
 
 ### 対応案
 
@@ -827,21 +683,22 @@ R74完了監査の`python -m pytest -q`で、`tests/test_engine_v2_3.py::test_ar
 
 ### 背景
 
-R67で追加したP011 Planar/Xenon型50 mm F1.4を、3 fields × 3 wavelengths × 25 rays、`hexapolar`、`full` aimingで追跡すると、225本中`alive 213`、`aiming_failed 12`となる。R80でも現行HEAD `1031997`（機能コミット`b655a3a`）の実APIで同値を再現した。`blocked 0`であるため開口遮光ではなく、周辺fieldの主光線aimingが収束せず像面へ到達しない既知問題である。また、既存のP011直接回帰は中心81-ray spot RMSの期待値`0.4654229601 mm`に対して`0.4654474966 mm`を決定論的に返して失敗する。到達数の既知値は一致しているが、このRMS差も原因切り分けが必要である。
+R67で追加したP011 Planar/Xenon型50 mm F1.4を、3 fields × 3 wavelengths × 25 rays、`hexapolar`、`full` aimingで追跡すると、225本中`alive 213`、`aiming_failed 12`となる。R80でも実APIで同値を再現した。`blocked 0`であるため、物理的に到達不能な瞳点が`aiming_failed`へ分類された通常解析bundleの既知問題である。
+
+R116の機能コミット`1f4ac20`で、Layout View専用baselineは通過可能な実効瞳端へ決定論的に縮退する方式となり、P011の27本は`aiming_failed 0`になった。中心spot RMSの回帰も現行全pytestでグリーンである。したがって残件は、数値解析に使う通常225-ray bundleの12本を、物理的vignettingと数値的aiming失敗に正しく分類することに限る。
 
 ### 対応案
 
-- 失敗12本のfield、wavelength、pupil座標、反復履歴を構造化して特定する。
-- affine seed、Jacobian更新、収束判定、iteration上限のどこで失敗するかをLevel 0リファレンス実装と比較する。
-- P011固有の処方問題と汎用full aimingアルゴリズムの問題を切り分け、必要ならfallback aimingを設計する。
-- 修正時はP011だけでなくP007等の高速系プリセットでも到達率と決定論を回帰テストする。
+- 通常bundleの12本についてfield、wavelength、pupil座標、到達可能半径、反復履歴を構造化して特定する。
+- 到達不能な瞳点は専用の物理的vignetting statusへ分類し、数値的なNewton非収束と区別する。
+- spot/MTF等の集計とray loss metadataが新しい分類を一貫して扱うようにする。
+- P011だけでなくP004/P007等の高速系でも分類と決定論を回帰テストする。
 
 ### 受け入れ条件
 
-- P011の同条件で`aiming_failed 0`となり、225本が像面へ到達する、または物理的に到達不能な光線が別の正しいstatusへ分類される。
+- P011の通常bundleで物理的に到達不能な光線が`aiming_failed`ではない正しいstatusへ分類される。
 - `blocked`と`aiming_failed`を混同せず、原因をmetadataまたは構造化warningから判別できる。
-- 中心81-ray spot RMSの正しい基準値をLevel 0との比較で確定し、`tests/test_preset_api_smoke.py::test_p011_planar_double_gauss_has_six_positive_thickness_elements`がグリーンになる。
-- Level 0/Level 1の代表光線が許容差内で一致し、既存のaiming Golden Testがグリーンを維持する。
+- R116のLayout baseline 27本が`aiming_failed 0`を維持し、既存spot RMSとaiming Golden Testがグリーンを保つ。
 
 ## Issue: Jacobian warm refinementの適用判定と性能profilingを追加する
 
@@ -885,25 +742,3 @@ R106棚卸しで、主要trace・spot・MTF・solve系は`configuration.zoom_pos
 - configurationを受ける全解析endpointが`zoom_position`によるruntime layoutを参照する。
 - 未知`zoom_position`が全対象endpointで`unknown_zoom_position`となる。
 - configuration非対応endpointを残す場合は、仕様・capabilities・API schemaで明示する。
-
-## Issue: named position管理UIとsnapshotへのruntime configuration保存を追加する
-
-ラベル案: `ui`, `testing`
-
-### 背景
-
-R106棚卸しで、PreviewのRuntime controlsには既存`zoom_positions`を順番に切り替えるsliderがあるが、positionの一覧・内容確認・追加・更新・削除UIは存在しないことを確認した。またSnapshotはsystem内の`zoom_positions`定義を保持する一方、選択中の`runtimeConfiguration`をanalysis条件へ保存しないため、どのzoom/focus/OIS状態で結果を取得したかを復元できない。
-
-### 対応案
-
-- Systemビューへ`system.zoom_positions`を正本とするPosition Managerを追加する。
-- position ID、nominal focal length、groupごとのX/Y/Z shiftを一覧・編集・複製・削除できるようにする。
-- Runtime controlsへ「現在値をnamed positionとして保存」を追加し、保存時はsystem dirty・validation対象にする。
-- Snapshotのanalysis条件へ選択position IDと正規化済みruntime configurationを保存し、Compare/export/importで復元する。
-
-### 受け入れ条件
-
-- UIからnamed positionを作成し、system export後も保持できる。
-- Previewでpositionを切り替え、同じIDとruntime configurationがSnapshotへ保存される。
-- focus sliderやOIS shiftの一時値と、systemへ保存済みのpositionが視覚的に区別される。
-- R5 multi-configuration評価へ安定したposition ID列を渡せる。
