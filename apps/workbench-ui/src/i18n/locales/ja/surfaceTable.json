@@ -29,6 +29,7 @@
     "inspector": {
       "title": "面インスペクター",
       "selected": "選択中: {{surface_id}}",
+      "select_surface": "諸元を編集する面を表から選択してください。",
       "dirty": "変更あり",
       "identity_read_only": "IDとKindはこの編集画面では読み取り専用です。",
       "radius_mm": "曲率半径 (mm)",

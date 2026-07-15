@@ -1946,7 +1946,10 @@ test('R120 full-width surface table edits P009 through the inspector and persist
   expect(tableDimensions.scrollWidth).toBeLessThanOrEqual(tableDimensions.clientWidth)
 
   await page.getByTestId('surface-row').filter({ hasText: 'ASP1' }).click()
-  await expect(page.getByTestId('surface-inspector')).toContainText('Selected: ASP1')
+  const rightPane = page.locator('.right-pane')
+  await expect(rightPane.getByTestId('surface-inspector')).toContainText('Selected: ASP1')
+  await expect(rightPane.locator('.surface-inspector')).toHaveCount(1)
+  await expect(workspace.getByTestId('surface-inspector')).toHaveCount(0)
   await expect(page.locator('#surface-inspector-id')).toHaveAttribute('readonly', '')
   await expect(page.locator('#surface-inspector-kind')).toHaveAttribute('readonly', '')
   await page.locator('#surface-inspector-radius').fill('51')
@@ -1956,7 +1959,11 @@ test('R120 full-width surface table edits P009 through the inspector and persist
   await page.locator('#surface-inspector-conic').fill('-1.2')
   await page.locator('#surface-inspector-a4').fill('-0.000003')
   await expect(page.getByTestId('system-dirty-status')).toBeVisible()
-  await expect.poll(() => registerRequests.length).toBeGreaterThan(0)
+  await expect.poll(() => {
+    const latest = registerRequests.at(-1) as { surfaces?: Array<Record<string, unknown>> } | undefined
+    const latestAsphere = latest?.surfaces?.find((surface) => surface.id === 'ASP1')
+    return (latestAsphere?.asphere_coefficients as Record<string, number> | undefined)?.A4
+  }).toBe(-0.000003)
   const registered = registerRequests.at(-1) as { surfaces?: Array<Record<string, unknown>> }
   const asphere = registered.surfaces?.find((surface) => surface.id === 'ASP1')
   expect(asphere).toMatchObject({
@@ -1977,6 +1984,55 @@ test('R120 full-width surface table edits P009 through the inspector and persist
   await page.reload()
   await page.getByRole('button', { name: 'System', exact: true }).click()
   await expect(page.getByTestId('system-workspace')).toHaveAttribute('data-view-mode', 'split')
+})
+
+test('R127 keeps the full table visible and edits through the 1366px context drawer', async ({ page }) => {
+  const registerRequests: unknown[] = []
+  const previewRequests: unknown[] = []
+  await mockEngine(page, { registerRequests, previewRequests })
+  await page.goto('/?lng=en&fixture=all-presets')
+  await selectPresetOption(page, 'P013 7-Element Modified Double Gauss 50mm F1.4 Focus Demo')
+  await page.getByRole('button', { name: 'System', exact: true }).click()
+
+  const tableMetrics = await page.evaluate(() => {
+    const pane = document.querySelector('.center-pane')
+    const rows = [...document.querySelectorAll('[data-testid="surface-row"]')]
+    const fullyVisibleRows = rows.filter((row) => {
+      const bounds = row.getBoundingClientRect()
+      return bounds.top >= 48 && bounds.bottom <= window.innerHeight
+    }).length
+    return {
+      rowCount: rows.length,
+      fullyVisibleRows,
+      centerScrollHeight: pane?.scrollHeight ?? 0,
+      centerClientHeight: pane?.clientHeight ?? 0,
+    }
+  })
+  console.log('R127 table visibility', tableMetrics)
+  expect(tableMetrics.fullyVisibleRows).toBe(tableMetrics.rowCount)
+  expect(tableMetrics.rowCount).toBe(15)
+  expect(tableMetrics.centerScrollHeight - tableMetrics.centerClientHeight).toBeLessThan(600)
+
+  await page.setViewportSize({ width: 1366, height: 900 })
+  const shell = page.locator('.workbench-grid')
+  await expect(shell).toHaveAttribute('data-context-mode', 'drawer')
+  const contextToggle = page.locator('.context-drawer-toggle')
+  if ((await contextToggle.getAttribute('aria-expanded')) === 'true') await contextToggle.click()
+  await expect(shell).toHaveAttribute('data-context-open', 'false')
+  await selectPresetOption(page, 'P009 N-BK7 Aspheric Singlet 50mm Demo')
+  await page.getByRole('button', { name: 'System', exact: true }).click()
+
+  const registerBefore = registerRequests.length
+  const previewBefore = previewRequests.length
+  await page.getByTestId('surface-row').filter({ hasText: 'ASP1' }).click()
+  await expect(shell).toHaveAttribute('data-context-open', 'true')
+  const drawer = page.locator('.right-pane-drawer')
+  await expect(drawer.getByTestId('surface-inspector')).toContainText('Selected: ASP1')
+  await drawer.locator('#surface-inspector-radius').fill('52')
+  await expect.poll(() => registerRequests.length).toBeGreaterThan(registerBefore)
+  await expect.poll(() => previewRequests.length).toBeGreaterThan(previewBefore)
+  const registered = registerRequests.at(-1) as { surfaces?: Array<Record<string, unknown>> }
+  expect(registered.surfaces?.find((surface) => surface.id === 'ASP1')).toMatchObject({ radius_mm: 52 })
 })
 
 test('R121 Position Manager edits named positions and saves the current P013 focus shift', async ({ page }) => {

@@ -1625,7 +1625,14 @@ function SurfaceInspector({
   onUpdateMaterial: (index: number, materialId: string) => void
 }) {
   const { t, i18n } = useTranslation(['surfaceTable'])
-  if (!surface) return null
+  if (!surface) {
+    return (
+      <section className="panel surface-inspector surface-inspector--empty" data-testid="surface-inspector-placeholder">
+        <h2>{t('surfaceTable.inspector.title')}</h2>
+        <p className="muted">{t('surfaceTable.inspector.select_surface')}</p>
+      </section>
+    )
+  }
   const asphereKeys = Array.from(new Set(['A4', ...Object.keys(surface.asphere_coefficients ?? {})]))
     .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
   const semiDiameter = scalarNumber(
@@ -1640,7 +1647,7 @@ function SurfaceInspector({
   const semiDiameterEnabled = surfaceSupportsSemiDiameter(surface)
   const renderedIssue = issue ? renderEngineIssue(issue, i18n.language) : null
   return (
-    <section className="surface-inspector" data-testid="surface-inspector">
+    <section className="panel surface-inspector" data-testid="surface-inspector">
       <div className="panel-heading">
         <div>
           <h2>{t('surfaceTable.inspector.title')}</h2>
@@ -5071,19 +5078,9 @@ export function App() {
                     setSelectedSurfaceId(surfaceId)
                     setSelectedGroupId('')
                     setSurfaceEditIssue(null)
+                    if (contextUsesDrawer) setContextDrawerOpen(true)
                   }}
                   onOpenHelp={setHelpTermId}
-                />
-                <SurfaceInspector
-                  surface={selectedSurface}
-                  surfaceIndex={selectedSurfaceIndex}
-                  surfaceCount={system.surfaces.length}
-                  materials={system.materials.map((material) => material.id)}
-                  dirty={systemDirty}
-                  issue={surfaceEditIssue}
-                  onUpdateNumber={updateSurfaceNumber}
-                  onUpdateAsphereCoefficient={updateSurfaceAsphereCoefficient}
-                  onUpdateMaterial={updateSurfaceMaterial}
                 />
                 <GroupPanel
                   system={system}
@@ -5421,6 +5418,19 @@ export function App() {
           aria-hidden={!contextDrawerOpen}
           hidden={!contextDrawerOpen && !contextUsesDrawer}
         >
+          {activeTab === 'system' ? (
+            <SurfaceInspector
+              surface={selectedSurface}
+              surfaceIndex={selectedSurfaceIndex}
+              surfaceCount={system.surfaces.length}
+              materials={system.materials.map((material) => material.id)}
+              dirty={systemDirty}
+              issue={surfaceEditIssue}
+              onUpdateNumber={updateSurfaceNumber}
+              onUpdateAsphereCoefficient={updateSurfaceAsphereCoefficient}
+              onUpdateMaterial={updateSurfaceMaterial}
+            />
+          ) : null}
           <Accordion className="right-panel-accordion" align="start">
             <AccordionItem title={t('settings:settings.api')}>
               <div className="right-accordion-body">

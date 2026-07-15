@@ -29,6 +29,7 @@
     "inspector": {
       "title": "Surface inspector",
       "selected": "Selected: {{surface_id}}",
+      "select_surface": "Select a surface in the table to edit its properties.",
       "dirty": "Modified",
       "identity_read_only": "ID and Kind are read-only in this editor.",
       "radius_mm": "Radius (mm)",
