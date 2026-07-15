@@ -30,6 +30,8 @@
     "open_in_compare": "Open in Compare",
     "snapshot_empty": "No snapshots saved.",
     "snapshot_partial": "partial",
+    "import_snapshot": "Import snapshot JSON",
+    "restore_snapshot": "Restore",
     "partial_snapshot": "Partial Snapshot",
     "partial_snapshot_detail": "Some embedded artifacts were unavailable. Comparison falls back to summary data.",
     "compare_left": "Snapshot A",

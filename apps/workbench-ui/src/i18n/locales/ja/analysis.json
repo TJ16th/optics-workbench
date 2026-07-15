@@ -30,6 +30,8 @@
     "open_in_compare": "Compareで開く",
     "snapshot_empty": "保存済みsnapshotはありません。",
     "snapshot_partial": "partial",
+    "import_snapshot": "Snapshot JSONをimport",
+    "restore_snapshot": "復元",
     "partial_snapshot": "Partial Snapshot",
     "partial_snapshot_detail": "一部の埋め込みartifactを取得できませんでした。比較はsummary dataへフォールバックします。",
     "compare_left": "Snapshot A",

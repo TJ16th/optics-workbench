@@ -23,7 +23,7 @@ import {
   ToggletipContent,
   Theme,
 } from '@carbon/react'
-import { Add, ChartLine, Checkmark, Code, Compare, Download, Information, Maximize, Menu, Play, Renew, Save, Settings, SidePanelOpen, TrashCan, View } from '@carbon/icons-react'
+import { Add, ArrowDown, ArrowUp, ChartLine, Checkmark, Code, Compare, Copy, Download, Information, Maximize, Menu, Play, Renew, Save, Settings, SidePanelOpen, TrashCan, View } from '@carbon/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { DEFAULT_MTF_FREQUENCIES_LP_PER_MM, defaultApiBase, EngineApiError, fetchArtifact, registerSystem, runBestFocus, runChartAnalyses, runPreview, runThroughFocusMtf, runVisualComposite, validateSystem, getHealth, getMeta, type AnalysisRequest } from '../api/engine'
@@ -94,6 +94,7 @@ const analysisChartKeys = new Set<AnalysisChartKey>([
 
 type SystemViewMode = 'table' | 'split'
 type SurfaceNumberField = 'radius_mm' | 'thickness_after_mm' | 'semi_diameter_mm' | 'conic'
+type ZoomPosition = NonNullable<OpticalSystem['zoom_positions']>[number]
 
 type Snapshot = {
   id: string
@@ -102,6 +103,7 @@ type Snapshot = {
   system_name: string
   system_hash: string | null
   system: OpticalSystem
+  configuration?: RuntimeConfiguration
   analysis: {
     fields: AnalysisField[]
     wavelengths: WavelengthSample[]
@@ -208,6 +210,36 @@ const surfaceColumns: Array<{
 
 function cloneSystem(system: OpticalSystem): OpticalSystem {
   return JSON.parse(JSON.stringify(system))
+}
+
+function cloneConfiguration(configuration?: RuntimeConfiguration): RuntimeConfiguration {
+  return configuration ? JSON.parse(JSON.stringify(configuration)) : {}
+}
+
+function uniquePositionId(system: OpticalSystem, base = 'position') {
+  const ids = new Set((system.zoom_positions ?? []).map((position) => position.id))
+  let index = 1
+  while (ids.has(`${base}_${index}`)) index += 1
+  return `${base}_${index}`
+}
+
+function positionFromRuntime(system: OpticalSystem, configuration: RuntimeConfiguration, id: string): ZoomPosition {
+  const selected = system.zoom_positions?.find((position) => position.id === configuration.zoom_position)
+  const groupPositions = Object.fromEntries((system.groups ?? []).map((group) => {
+    const base = selected?.group_positions[group.id] ?? {}
+    const runtime = configuration.group_positions?.[group.id] ?? {}
+    const decenter = configuration.decenters?.find((entry) => entry.group === group.id)
+    return [group.id, {
+      shift_x_mm: runtime.shift_x_mm ?? base.shift_x_mm ?? 0,
+      shift_y_mm: (base.shift_y_mm ?? 0) + (decenter?.shift_y_mm ?? 0),
+      shift_z_mm: (base.shift_z_mm ?? 0) + (decenter?.shift_z_mm ?? 0),
+    }]
+  }))
+  return {
+    id,
+    focal_length_nominal_mm: selected?.focal_length_nominal_mm,
+    group_positions: groupPositions,
+  }
 }
 
 function scalarNumber(value: unknown): number | undefined {
@@ -357,6 +389,7 @@ function comparisonWarnings(left?: Snapshot, right?: Snapshot) {
   if (!sameJson(left.analysis.fields, right.analysis.fields)) warnings.push('fields')
   if (!sameJson(left.analysis.wavelengths, right.analysis.wavelengths)) warnings.push('wavelengths')
   if (!sameJson(evaluationPlaneSignature(left.analysis.evaluation_plane), evaluationPlaneSignature(right.analysis.evaluation_plane))) warnings.push('evaluation_plane')
+  if (!sameJson(left.configuration ?? {}, right.configuration ?? {})) warnings.push('configuration')
   return warnings
 }
 
@@ -1623,6 +1656,97 @@ function GroupPanel({
   )
 }
 
+function PositionManager({
+  system,
+  onAdd,
+  onDuplicate,
+  onUpdate,
+  onRemove,
+  onMove,
+}: {
+  system: OpticalSystem
+  onAdd: () => void
+  onDuplicate: (index: number) => void
+  onUpdate: (index: number, position: ZoomPosition) => void
+  onRemove: (index: number) => void
+  onMove: (index: number, direction: -1 | 1) => void
+}) {
+  const { t } = useTranslation(['settings'])
+  const positions = system.zoom_positions ?? []
+  const groups = system.groups ?? []
+  return (
+    <section className="position-manager" data-testid="position-manager">
+      <div className="panel-heading">
+        <div>
+          <h2>{t('settings:settings.position_manager')}</h2>
+          <p className="muted">{t('settings:settings.position_manager_detail')}</p>
+        </div>
+        <Button size="sm" kind="secondary" renderIcon={Add} onClick={onAdd}>{t('settings:settings.add_position')}</Button>
+      </div>
+      <InlineNotification
+        lowContrast
+        kind="info"
+        title={t('settings:settings.position_limits_title')}
+        subtitle={t('settings:settings.position_limits_detail')}
+      />
+      {positions.length ? <div className="position-list">
+        {positions.map((position, index) => (
+          <article className="position-row" data-testid="position-row" key={`${position.id}-${index}`}>
+            <div className="position-row__header">
+              <TextInput
+                id={`position-id-${index}`}
+                labelText={t('settings:settings.position_id')}
+                value={position.id}
+                onChange={(event) => onUpdate(index, { ...position, id: event.target.value })}
+              />
+              <NumberInput
+                id={`position-focal-${index}`}
+                label={t('settings:settings.nominal_focal_length_mm')}
+                value={position.focal_length_nominal_mm ?? 0}
+                step={0.1}
+                onChange={(_, data) => onUpdate(index, { ...position, focal_length_nominal_mm: numericInputValue(data.value, position.focal_length_nominal_mm ?? 0) })}
+              />
+              <div className="position-row__actions">
+                <Button hasIconOnly size="sm" kind="ghost" renderIcon={Copy} iconDescription={t('settings:settings.duplicate_position')} onClick={() => onDuplicate(index)} />
+                <Button hasIconOnly size="sm" kind="ghost" renderIcon={ArrowUp} iconDescription={t('settings:settings.move_position_up')} disabled={index === 0} onClick={() => onMove(index, -1)} />
+                <Button hasIconOnly size="sm" kind="ghost" renderIcon={ArrowDown} iconDescription={t('settings:settings.move_position_down')} disabled={index === positions.length - 1} onClick={() => onMove(index, 1)} />
+                <Button hasIconOnly size="sm" kind="ghost" renderIcon={TrashCan} iconDescription={t('settings:settings.remove_position')} onClick={() => onRemove(index)} />
+              </div>
+            </div>
+            {groups.length ? <div className="position-group-grid">
+              {groups.map((group) => {
+                const shifts = position.group_positions[group.id] ?? {}
+                return (
+                  <fieldset className="position-group" key={group.id}>
+                    <legend>{group.id}</legend>
+                    {(['x', 'y', 'z'] as const).map((axis) => {
+                      const key = `shift_${axis}_mm` as const
+                      return <NumberInput
+                        key={key}
+                        id={`position-${index}-${group.id}-${axis}`}
+                        label={t('settings:settings.position_shift_axis', { axis: axis.toUpperCase() })}
+                        value={shifts[key] ?? 0}
+                        step={0.1}
+                        onChange={(_, data) => onUpdate(index, {
+                          ...position,
+                          group_positions: {
+                            ...position.group_positions,
+                            [group.id]: { ...shifts, [key]: numericInputValue(data.value, shifts[key] ?? 0) },
+                          },
+                        })}
+                      />
+                    })}
+                  </fieldset>
+                )
+              })}
+            </div> : <p className="muted">{t('settings:settings.position_groups_empty')}</p>}
+          </article>
+        ))}
+      </div> : <p className="muted">{t('settings:settings.position_empty')}</p>}
+    </section>
+  )
+}
+
 function GroupMotionPanel({
   system,
   zoomPositionId,
@@ -1630,10 +1754,14 @@ function GroupMotionPanel({
   focusShiftMm,
   runtimeConfiguration,
   isPreviewing,
+  modified,
   onSetZoomPosition,
   onSetFocusGroup,
   onSetFocusShift,
   onCommit,
+  onUpdatePosition,
+  onSaveAsPosition,
+  onDiscardOffsets,
 }: {
   system: OpticalSystem
   zoomPositionId: string
@@ -1641,10 +1769,14 @@ function GroupMotionPanel({
   focusShiftMm: number
   runtimeConfiguration: RuntimeConfiguration
   isPreviewing: boolean
+  modified: boolean
   onSetZoomPosition: (id: string, commit?: boolean) => void
   onSetFocusGroup: (id: string, commit?: boolean) => void
   onSetFocusShift: (value: number, commit?: boolean) => void
   onCommit: () => void
+  onUpdatePosition: () => void
+  onSaveAsPosition: () => void
+  onDiscardOffsets: () => void
 }) {
   const { t } = useTranslation(['settings', 'units'])
   const zoomPositions = system.zoom_positions ?? []
@@ -1666,10 +1798,16 @@ function GroupMotionPanel({
     <section className="panel group-motion-panel">
       <div className="condition-heading">
         <h2>{t('settings:settings.group_motion')}</h2>
-        <Tag type={isPreviewing ? 'blue' : 'gray'}>{isPreviewing ? t('settings:settings.previewing') : t('settings:settings.preview_ready')}</Tag>
+        <div className="tag-row">
+          {modified ? <Tag type="magenta" data-testid="position-modified">{t('settings:settings.position_modified')}</Tag> : null}
+          <Tag type={isPreviewing ? 'blue' : 'gray'}>{isPreviewing ? t('settings:settings.previewing') : t('settings:settings.preview_ready')}</Tag>
+        </div>
       </div>
       {zoomPositions.length ? (
         <div className="slider-control">
+          <Select id="zoom-position-select" labelText={t('settings:settings.zoom_position')} value={zoomPositionId || zoomPositions[0].id} onChange={(event) => onSetZoomPosition(event.target.value, true)}>
+            {zoomPositions.map((position) => <SelectItem key={position.id} value={position.id} text={position.id} />)}
+          </Select>
           <label htmlFor="zoom-position-slider">{t('settings:settings.zoom_position')}</label>
           <input
             id="zoom-position-slider"
@@ -1718,6 +1856,11 @@ function GroupMotionPanel({
       <CodeSnippet type="single" hideCopyButton>
         {configJson}
       </CodeSnippet>
+      <div className="button-row position-runtime-actions">
+        <Button size="sm" kind="secondary" renderIcon={Save} disabled={!modified || !zoomPositionId} onClick={onUpdatePosition}>{t('settings:settings.update_position')}</Button>
+        <Button size="sm" kind="secondary" renderIcon={Add} onClick={onSaveAsPosition}>{t('settings:settings.save_as_position')}</Button>
+        <Button size="sm" kind="ghost" disabled={!modified} onClick={onDiscardOffsets}>{t('settings:settings.discard_offsets')}</Button>
+      </div>
       <p className="muted">{t('settings:settings.group_motion_debounce', { ms: sliderPreviewDebounceMs, rays: sliderPreviewSamplesPerField })}</p>
     </section>
   )
@@ -2150,11 +2293,35 @@ async function exportChart(chart: ExportChart, language: string, format: 'svg' |
   link.click()
 }
 
-function SnapshotList({ snapshots, onExport }: { snapshots: Snapshot[]; onExport: (snapshot: Snapshot) => void }) {
+function SnapshotList({
+  snapshots,
+  onExport,
+  onRestore,
+  onImport,
+}: {
+  snapshots: Snapshot[]
+  onExport: (snapshot: Snapshot) => void
+  onRestore: (snapshot: Snapshot) => void
+  onImport: (file: File) => void
+}) {
   const { t, i18n } = useTranslation(['analysis'])
-  if (!snapshots.length) return <p className="muted">{t('analysis.snapshot_empty')}</p>
   return (
-    <div className="snapshot-list">
+    <div className="snapshot-list" data-testid="snapshot-list">
+      <div className="snapshot-import">
+        <label htmlFor="snapshot-import-file">{t('analysis:analysis.import_snapshot')}</label>
+        <input
+          id="snapshot-import-file"
+          data-testid="snapshot-import-file"
+          type="file"
+          accept="application/json,.json"
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (file) onImport(file)
+            event.target.value = ''
+          }}
+        />
+      </div>
+      {!snapshots.length ? <p className="muted">{t('analysis.snapshot_empty')}</p> : null}
       {snapshots.map((snapshot) => (
         <div key={snapshot.id} className="snapshot-row">
           <div>
@@ -2164,9 +2331,10 @@ function SnapshotList({ snapshots, onExport }: { snapshots: Snapshot[]; onExport
             </p>
             {snapshot.partial ? <Tag type="magenta">{t('analysis:analysis.snapshot_partial')}</Tag> : null}
           </div>
-          <Button size="sm" kind="ghost" renderIcon={Download} onClick={() => onExport(snapshot)}>
-            JSON
-          </Button>
+          <div className="snapshot-actions">
+            <Button size="sm" kind="secondary" renderIcon={Renew} onClick={() => onRestore(snapshot)}>{t('analysis:analysis.restore_snapshot')}</Button>
+            <Button size="sm" kind="ghost" renderIcon={Download} onClick={() => onExport(snapshot)}>JSON</Button>
+          </div>
           <dl>
             {Object.entries(snapshot.metrics).map(([metric, value]) => (
               <div key={metric} className="metric-row">
@@ -2242,6 +2410,8 @@ function CompareView({
             <CompareMetric label="system_hash" left={left.system_hash?.slice(0, 12) ?? null} right={right.system_hash?.slice(0, 12) ?? null} />
             <CompareMetric label="fields" left={left.analysis.fields.length} right={right.analysis.fields.length} />
             <CompareMetric label="wavelengths" left={left.analysis.wavelengths.length} right={right.analysis.wavelengths.length} />
+            <CompareMetric label="zoom_position" left={left.configuration?.zoom_position} right={right.configuration?.zoom_position} />
+            <CompareMetric label="group_positions" left={JSON.stringify(left.configuration?.group_positions ?? {})} right={JSON.stringify(right.configuration?.group_positions ?? {})} />
             <CompareMetric label="evaluation_plane" left={formatFixed(left.analysis.evaluation_plane?.evaluation_plane_x_mm ?? 0, 4)} right={formatFixed(right.analysis.evaluation_plane?.evaluation_plane_x_mm ?? 0, 4)} />
           </section>
           <section className="panel compare-panel">
@@ -3128,6 +3298,8 @@ export function App() {
     window.localStorage.getItem(systemViewStorageKey) === 'split' ? 'split' : 'table'
   ))
   const [surfaceEditIssue, setSurfaceEditIssue] = useState<EngineIssue | null>(null)
+  const [positionSaveOpen, setPositionSaveOpen] = useState(false)
+  const [positionSaveId, setPositionSaveId] = useState('')
   const [analysisPanels, setAnalysisPanels] = useState<AnalysisChartKey[]>(() => {
     try {
       const saved = JSON.parse(window.localStorage.getItem(analysisPanelsStorageKey) ?? 'null')
@@ -3434,6 +3606,104 @@ export function App() {
     markSystemChanged(nextSystem)
     if (selectedGroupId === removedId) setSelectedGroupId('')
     scheduleSystemPreview(nextSystem)
+  }
+
+  const applyZoomPositions = (positions: ZoomPosition[], nextSelectedId = zoomPositionId) => {
+    const nextSystem = cloneSystem(system)
+    nextSystem.zoom_positions = positions
+    markSystemChanged(nextSystem)
+    const selectedId = positions.some((position) => position.id === nextSelectedId) ? nextSelectedId : positions[0]?.id ?? ''
+    setZoomPositionId(selectedId)
+    const nextConfiguration = cloneConfiguration(runtimeConfigurationRef.current)
+    if (selectedId) nextConfiguration.zoom_position = selectedId
+    else delete nextConfiguration.zoom_position
+    runtimeConfigurationRef.current = nextConfiguration
+    setRuntimeConfiguration(nextConfiguration)
+    scheduleSystemPreview(nextSystem)
+  }
+
+  const addPosition = () => {
+    const position: ZoomPosition = {
+      id: uniquePositionId(system),
+      group_positions: Object.fromEntries((system.groups ?? []).map((group) => [group.id, { shift_x_mm: 0, shift_y_mm: 0, shift_z_mm: 0 }])),
+    }
+    applyZoomPositions([...(system.zoom_positions ?? []), position], position.id)
+  }
+
+  const duplicatePosition = (index: number) => {
+    const source = system.zoom_positions?.[index]
+    if (!source) return
+    const position = { ...JSON.parse(JSON.stringify(source)), id: uniquePositionId(system, source.id) } as ZoomPosition
+    const positions = [...(system.zoom_positions ?? [])]
+    positions.splice(index + 1, 0, position)
+    applyZoomPositions(positions, position.id)
+  }
+
+  const updatePosition = (index: number, position: ZoomPosition) => {
+    const positions = [...(system.zoom_positions ?? [])]
+    const previousId = positions[index]?.id
+    positions[index] = position
+    applyZoomPositions(positions, zoomPositionId === previousId ? position.id : zoomPositionId)
+  }
+
+  const removePosition = (index: number) => {
+    const positions = (system.zoom_positions ?? []).filter((_, positionIndex) => positionIndex !== index)
+    applyZoomPositions(positions)
+  }
+
+  const movePosition = (index: number, direction: -1 | 1) => {
+    const target = index + direction
+    const positions = [...(system.zoom_positions ?? [])]
+    if (target < 0 || target >= positions.length) return
+    ;[positions[index], positions[target]] = [positions[target], positions[index]]
+    applyZoomPositions(positions)
+  }
+
+  const applySavedPosition = (id: string, replaceIndex?: number) => {
+    const saved = positionFromRuntime(system, runtimeConfigurationRef.current, id)
+    const positions = [...(system.zoom_positions ?? [])]
+    if (replaceIndex === undefined) positions.push(saved)
+    else positions[replaceIndex] = saved
+    const nextSystem = cloneSystem(system)
+    nextSystem.zoom_positions = positions
+    markSystemChanged(nextSystem)
+    setZoomPositionId(id)
+    setFocusShiftMm(0)
+    const nextDraft = { ...decenterTiltDraftRef.current, shiftY: 0, shiftZ: 0 }
+    decenterTiltDraftRef.current = nextDraft
+    setDecenterTiltDraft(nextDraft)
+    const nextConfiguration = cloneConfiguration(runtimeConfigurationRef.current)
+    nextConfiguration.zoom_position = id
+    delete nextConfiguration.group_positions
+    delete nextConfiguration.decenters
+    runtimeConfigurationRef.current = nextConfiguration
+    setRuntimeConfiguration(nextConfiguration)
+    setPositionSaveOpen(false)
+    scheduleMotionPreview(nextConfiguration, nextSystem)
+  }
+
+  const updateCurrentPosition = () => {
+    const index = (system.zoom_positions ?? []).findIndex((position) => position.id === zoomPositionId)
+    if (index >= 0) applySavedPosition(zoomPositionId, index)
+  }
+
+  const openSavePosition = () => {
+    setPositionSaveId(uniquePositionId(system))
+    setPositionSaveOpen(true)
+  }
+
+  const discardPositionOffsets = () => {
+    setFocusShiftMm(0)
+    const nextDraft = { ...decenterTiltDraftRef.current, shiftY: 0, shiftZ: 0 }
+    decenterTiltDraftRef.current = nextDraft
+    setDecenterTiltDraft(nextDraft)
+    const nextConfiguration = cloneConfiguration(runtimeConfigurationRef.current)
+    delete nextConfiguration.group_positions
+    delete nextConfiguration.decenters
+    runtimeConfigurationRef.current = nextConfiguration
+    setRuntimeConfiguration(nextConfiguration)
+    markAnalysisDirty()
+    scheduleMotionPreview(nextConfiguration)
   }
 
   const readImagePlanePolicyForm = () => {
@@ -3759,6 +4029,7 @@ export function App() {
       system_name: system.name,
       system_hash: systemHash,
       system: cloneSystem(system),
+      configuration: cloneConfiguration(runtimeConfiguration),
       analysis: {
         fields: cloneFields(analysisFields),
         wavelengths: wavelengths.map((sample) => ({ ...sample })),
@@ -3798,6 +4069,74 @@ export function App() {
     downloadText(`${snapshot.id}.json`, JSON.stringify(snapshot, null, 2), 'application/json')
   }
 
+  const restoreSnapshot = (snapshot: Snapshot) => {
+    const nextSystem = cloneSystem(snapshot.system)
+    markSystemChanged(nextSystem)
+    setAnalysisFields(cloneFields(snapshot.analysis.fields))
+    setWavelengths(snapshot.analysis.wavelengths.map((sample) => ({ ...sample })))
+    setSamplesPerField(snapshot.analysis.samples_per_field)
+    setPupilDistribution(snapshot.analysis.pupil_distribution)
+    setAimingMode(snapshot.analysis.aiming_mode)
+    setMtfMode(snapshot.analysis.mtf_mode)
+    setTrace(snapshot.results.trace)
+    setChartResult(snapshot.results.charts)
+    setFocusResult(snapshot.results.focus)
+    setEvaluationPlane(snapshot.analysis.evaluation_plane)
+    setFocusCurve(snapshot.results.focus?.focus_curve ?? snapshot.analysis.evaluation_plane?.focus_curve ?? [])
+    if (!snapshot.configuration) {
+      resetMotionControls(nextSystem)
+    } else {
+      const configuration = cloneConfiguration(snapshot.configuration)
+      const nextZoom = configuration.zoom_position ?? nextSystem.zoom_positions?.[0]?.id ?? ''
+      const nextGroup = Object.keys(configuration.group_positions ?? {})[0] ?? motionGroupIds(nextSystem)[0] ?? ''
+      const baseShift = zoomBaseShift(nextSystem, nextZoom, nextGroup)
+      const nextFocusShift = (configuration.group_positions?.[nextGroup]?.shift_x_mm ?? baseShift) - baseShift
+      const decenter = configuration.decenters?.[0]
+      const tilt = configuration.tilts?.[0]
+      const nextDraft: DecenterTiltDraft = {
+        targetGroupId: decenter?.group ?? tilt?.group ?? decenterTiltGroupIds(nextSystem)[0] ?? '',
+        shiftY: decenter?.shift_y_mm ?? 0,
+        shiftZ: decenter?.shift_z_mm ?? 0,
+        tiltY: tilt?.tilt_y_deg ?? 0,
+        tiltZ: tilt?.tilt_z_deg ?? 0,
+        rollX: tilt?.roll_x_deg ?? 0,
+        rotationReference: tilt?.rotation_center?.reference === 'to_surface_vertex' ? 'to_surface_vertex' : 'from_surface_vertex',
+      }
+      const nextIris = configuration.variables?.iris_radius_mm ?? apertureStopRadius(nextSystem) ?? 1
+      setZoomPositionId(nextZoom)
+      setFocusGroupId(nextGroup)
+      setFocusShiftMm(nextFocusShift)
+      setDecenterTiltDraft(nextDraft)
+      decenterTiltDraftRef.current = nextDraft
+      setIrisRadiusMm(nextIris)
+      irisRadiusRef.current = nextIris
+      runtimeConfigurationRef.current = configuration
+      setRuntimeConfiguration(configuration)
+    }
+    setAnalysisDirty(false)
+    setLastRequest(snapshot.configuration ?? {})
+    setLastResponse({ status: 'snapshot_restored', snapshot_id: snapshot.id })
+    setActiveTab('preview')
+  }
+
+  const importSnapshot = (file: File) => {
+    void file.text().then((text) => {
+      const parsed = JSON.parse(text) as Partial<Snapshot>
+      if (!parsed.id || !parsed.system || !parsed.analysis || !parsed.results || !parsed.metrics) throw new Error('invalid snapshot')
+      const imported = parsed as Snapshot
+      setSnapshots((current) => [imported, ...current.filter((snapshot) => snapshot.id !== imported.id)])
+      setCompareLeftId(imported.id)
+      restoreSnapshot(imported)
+    }).catch(() => {
+      setLastResponse({
+        code: 'optics_value_error',
+        params: { input: file.name, expected: 'snapshot JSON' },
+        message_en: 'Snapshot JSON is invalid or incomplete.',
+        severity: 'error',
+      })
+    })
+  }
+
   const writeBackSensor = () => {
     const offset = evaluationPlane?.solved_offset_from_sensor_mm ?? evaluationPlane?.offset_from_sensor_mm
     if (!Number.isFinite(offset)) return
@@ -3819,6 +4158,7 @@ export function App() {
   const selectedGroup = (system.groups ?? []).find((group) => group.id === selectedGroupId)
   const selectedSurfaceIndex = system.surfaces.findIndex((surface) => surface.id === selectedSurfaceId)
   const selectedSurface = selectedSurfaceIndex >= 0 ? system.surfaces[selectedSurfaceIndex] : undefined
+  const positionModified = Math.abs(focusShiftMm) > 1.0e-12 || Math.abs(decenterTiltDraft.shiftY) > 1.0e-12 || Math.abs(decenterTiltDraft.shiftZ) > 1.0e-12
   const selectedGroupRange = selectedGroup ? groupSurfaceRange(selectedGroup, system.surfaces) : undefined
   const selectedLayoutSurfaceIds = selectedSurfaceId
     ? [selectedSurfaceId]
@@ -4038,6 +4378,14 @@ export function App() {
                   }}
                   onOpenHelp={setHelpTermId}
                 />
+                <PositionManager
+                  system={system}
+                  onAdd={addPosition}
+                  onDuplicate={duplicatePosition}
+                  onUpdate={updatePosition}
+                  onRemove={removePosition}
+                  onMove={movePosition}
+                />
               </div>
               {systemViewMode === 'split' ? <aside className="panel system-mini-layout" data-testid="system-mini-layout">
                 <div className="panel-heading">
@@ -4244,7 +4592,7 @@ export function App() {
               <section className="panel large-panel">
                 <h2>{t('analysis:analysis.compare_placeholder_title')}</h2>
                 <p>{t('analysis:analysis.compare_placeholder')}</p>
-                <SnapshotList snapshots={snapshots} onExport={exportSnapshotJson} />
+                <SnapshotList snapshots={snapshots} onExport={exportSnapshotJson} onRestore={restoreSnapshot} onImport={importSnapshot} />
               </section>
               <CompareView snapshots={snapshots} leftId={compareLeftId} rightId={compareRightId} onSetLeft={setCompareLeftId} onSetRight={setCompareRightId} />
             </div>
@@ -4384,10 +4732,19 @@ export function App() {
             focusShiftMm={focusShiftMm}
             runtimeConfiguration={runtimeConfiguration}
             isPreviewing={sliderPreviewPending}
-            onSetZoomPosition={(id, commit) => setMotionConfiguration(id, focusGroupId, focusShiftMm, commit)}
+            modified={positionModified}
+            onSetZoomPosition={(id, commit) => {
+              const nextDraft = { ...decenterTiltDraftRef.current, shiftY: 0, shiftZ: 0 }
+              decenterTiltDraftRef.current = nextDraft
+              setDecenterTiltDraft(nextDraft)
+              setMotionConfiguration(id, focusGroupId, 0, commit)
+            }}
             onSetFocusGroup={(id, commit) => setMotionConfiguration(zoomPositionId, id, focusShiftMm, commit)}
             onSetFocusShift={(value, commit) => setMotionConfiguration(zoomPositionId, focusGroupId, value, commit)}
             onCommit={commitMotionConfiguration}
+            onUpdatePosition={updateCurrentPosition}
+            onSaveAsPosition={openSavePosition}
+            onDiscardOffsets={discardPositionOffsets}
           />
 
           <ApertureMotionPanel
@@ -4483,6 +4840,26 @@ export function App() {
           </Button>
         </div>
       ) : null}
+
+      <Modal
+        open={positionSaveOpen}
+        size="sm"
+        modalHeading={t('settings:settings.save_position_heading')}
+        primaryButtonText={t('settings:settings.save_position')}
+        secondaryButtonText={t('common.buttons.close')}
+        primaryButtonDisabled={!positionSaveId.trim() || (system.zoom_positions ?? []).some((position) => position.id === positionSaveId.trim())}
+        onRequestClose={() => setPositionSaveOpen(false)}
+        onSecondarySubmit={() => setPositionSaveOpen(false)}
+        onRequestSubmit={() => applySavedPosition(positionSaveId.trim())}
+      >
+        <TextInput
+          id="save-position-id"
+          labelText={t('settings:settings.position_id')}
+          value={positionSaveId}
+          onChange={(event) => setPositionSaveId(event.target.value)}
+        />
+        <p className="muted">{t('settings:settings.save_position_detail')}</p>
+      </Modal>
 
       <HelpDrawer termId={helpTermId} onClose={() => setHelpTermId(null)} onNavigate={setHelpTermId} />
     </div>

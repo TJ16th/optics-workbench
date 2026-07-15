@@ -1917,3 +1917,111 @@ test('R120 full-width surface table edits P009 through the inspector and persist
   await page.getByRole('button', { name: 'System', exact: true }).click()
   await expect(page.getByTestId('system-workspace')).toHaveAttribute('data-view-mode', 'split')
 })
+
+test('R121 Position Manager edits named positions and saves the current P013 focus shift', async ({ page }) => {
+  const registerRequests: unknown[] = []
+  await mockEngine(page, { registerRequests })
+  await page.goto('/?lng=en&fixture=all-presets')
+  await selectPresetOption(page, 'P013 7-Element Modified Double Gauss 50mm F1.4 Focus Demo')
+  await page.getByRole('button', { name: 'System', exact: true }).click()
+
+  const manager = page.getByTestId('position-manager')
+  await expect(manager.getByTestId('position-row')).toHaveCount(2)
+  await manager.getByRole('button', { name: 'Add position' }).click()
+  await expect(manager.getByTestId('position-row')).toHaveCount(3)
+  const added = manager.getByTestId('position-row').last()
+  await added.getByLabel('Position ID').fill('review_position')
+  await added.getByRole('button', { name: 'Duplicate position' }).click()
+  await expect(manager.getByTestId('position-row')).toHaveCount(4)
+  const duplicate = manager.getByTestId('position-row').nth(3)
+  await duplicate.getByRole('button', { name: 'Move position up' }).click()
+  await manager.getByTestId('position-row').nth(2).getByRole('button', { name: 'Remove position' }).click()
+  await expect(manager.getByTestId('position-row')).toHaveCount(3)
+
+  await page.getByRole('button', { name: 'Preview', exact: true }).click()
+  await openRuntimeControls(page)
+  await page.locator('#zoom-position-select').selectOption('close_focus_0_5m')
+  await page.locator('#focus-shift-slider').evaluate((node) => {
+    const input = node as HTMLInputElement
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, '1.2')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await expect(page.getByTestId('position-modified')).toContainText('modified')
+  await page.getByRole('button', { name: 'Save as' }).click()
+  await page.locator('#save-position-id').fill('saved_close')
+  await page.getByRole('button', { name: 'Save position' }).click()
+  await expect.poll(() => registerRequests.some((request) => (request as { zoom_positions?: Array<{ id?: string }> }).zoom_positions?.some((position) => position.id === 'saved_close')), { timeout: 3_000 }).toBe(true)
+  const registered = [...registerRequests].reverse().find((request) => (request as { zoom_positions?: Array<{ id?: string }> }).zoom_positions?.some((position) => position.id === 'saved_close')) as {
+    zoom_positions?: Array<{ id?: string; group_positions?: Record<string, { shift_x_mm?: number }> }>
+  }
+  expect(registered.zoom_positions?.find((position) => position.id === 'saved_close')?.group_positions?.FOCUS_G?.shift_x_mm).toBeCloseTo(-7.98)
+  await expect(page.locator('#zoom-position-select')).toHaveValue('saved_close')
+  await expect(page.getByTestId('position-modified')).toHaveCount(0)
+})
+
+test('R121 saves P003 Y/Z shifts and restores new and legacy snapshot JSON', async ({ page }) => {
+  const registerRequests: unknown[] = []
+  await mockEngine(page, { registerRequests })
+  await page.goto('/?lng=en')
+  await selectPresetOption(page, 'P003 Achromat Doublet 100mm Demo')
+  await openRuntimeControls(page)
+
+  const setRange = async (selector: string, value: string) => {
+    await page.locator(selector).evaluate((node, nextValue) => {
+      const input = node as HTMLInputElement
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, nextValue)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }, value)
+  }
+  await setRange('#shift-y-slider', '1.2')
+  await setRange('#shift-z-slider', '-0.8')
+  await page.getByRole('button', { name: 'Save as' }).click()
+  await page.locator('#save-position-id').fill('ois_saved')
+  await page.getByRole('button', { name: 'Save position' }).click()
+  await expect.poll(() => registerRequests.some((request) => (request as { zoom_positions?: Array<{ id?: string }> }).zoom_positions?.some((position) => position.id === 'ois_saved')), { timeout: 3_000 }).toBe(true)
+  const savedSystem = [...registerRequests].reverse().find((request) => (request as { zoom_positions?: Array<{ id?: string }> }).zoom_positions?.some((position) => position.id === 'ois_saved')) as {
+    zoom_positions?: Array<{ id?: string; group_positions?: Record<string, { shift_y_mm?: number; shift_z_mm?: number }> }>
+  }
+  const savedOis = savedSystem.zoom_positions?.find((position) => position.id === 'ois_saved')?.group_positions?.OIS_G
+  expect(savedOis?.shift_y_mm).toBeCloseTo(1.2)
+  expect(savedOis?.shift_z_mm).toBeCloseTo(-0.8)
+
+  await setRange('#focus-shift-slider', '0.7')
+  await setRange('#shift-y-slider', '0.4')
+  await page.getByRole('button', { name: 'Run Preview' }).click()
+  await page.getByRole('button', { name: 'Save Snapshot' }).click()
+  await page.getByTestId('snapshot-toast').getByRole('button', { name: 'Open in Compare' }).click()
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByTestId('snapshot-list').locator('button').filter({ hasText: 'JSON' }).click()
+  const download = await downloadPromise
+  const stream = await download.createReadStream()
+  const chunks: Buffer[] = []
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk))
+  const exported = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  expect(exported.configuration.zoom_position).toBe('ois_saved')
+  expect(exported.configuration.group_positions.FOCUS_G.shift_x_mm).toBeCloseTo(0.7)
+  expect(exported.configuration.decenters[0].shift_y_mm).toBeCloseTo(0.4)
+
+  exported.id = 'imported-configuration'
+  await page.getByTestId('snapshot-import-file').setInputFiles({
+    name: 'imported-configuration.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(exported)),
+  })
+  await expect(page.getByRole('button', { name: 'Preview', exact: true })).toHaveAttribute('aria-current', 'page')
+  await openRuntimeControls(page)
+  await expect(page.locator('#zoom-position-select')).toHaveValue('ois_saved')
+  await expect(page.locator('#focus-shift-slider')).toHaveValue('0.7')
+  await expect(page.locator('#shift-y-slider')).toHaveValue('0.4')
+
+  const legacy = { ...exported, id: 'legacy-snapshot' }
+  delete legacy.configuration
+  await page.getByRole('button', { name: 'Compare', exact: true }).click()
+  await page.getByTestId('snapshot-import-file').setInputFiles({
+    name: 'legacy-snapshot.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(legacy)),
+  })
+  await openRuntimeControls(page)
+  await expect(page.locator('#zoom-position-select')).toHaveValue('infinity')
+})
