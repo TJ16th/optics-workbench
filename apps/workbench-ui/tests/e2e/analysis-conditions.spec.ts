@@ -683,6 +683,7 @@ test('R110 expanded spot modal preserves layout size and distinguishes fields an
   await page.goto('/?lng=en&fixture=all-presets')
   await selectPresetOption(page, 'P003 Achromat Doublet 100mm Demo')
   await page.getByRole('button', { name: 'Run Preview' }).click()
+  await expect.poll(async () => Number(await page.locator('#spot-svg').getAttribute('data-point-count'))).toBeGreaterThan(0)
 
   const layout = page.locator('#layout-svg')
   const compactSpot = page.locator('#spot-svg')
